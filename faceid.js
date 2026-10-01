@@ -1,9 +1,15 @@
-// 生体認証ロック（Face ID / Touch ID / Windows Hello）
-// 端末の生体認証（WebAuthn）で「この端末のロック解除」を行います。
-// ※ログインそのもの（Firebase）とは別の、端末ごとの鍵です。
+// 生体認証ロック（WebAuthn）
+// 端末ごとのロック解除用。ログイン自体はFirebase側
 const KEY = "secsearch.webauthn.v1";
-const enc = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const dec = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+const enc = (buf) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+const dec = (s) =>
+  Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) =>
+    c.charCodeAt(0),
+  );
 const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
 
 export function supported() {
@@ -11,18 +17,28 @@ export function supported() {
 }
 export async function platformAvailable() {
   if (!supported()) return false;
-  try { return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch { return false; }
+  try {
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
 }
 export function registered() {
-  try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; }
+  try {
+    return JSON.parse(localStorage.getItem(KEY) || "null");
+  } catch {
+    return null;
+  }
 }
 export function settings() {
   const r = registered();
   return { lockMin: r?.lockMin ?? 30 };
 }
 export function setLockMin(min) {
-  const r = registered(); if (!r) return;
-  r.lockMin = min; localStorage.setItem(KEY, JSON.stringify(r));
+  const r = registered();
+  if (!r) return;
+  r.lockMin = min;
+  localStorage.setItem(KEY, JSON.stringify(r));
 }
 
 export async function register(label = "セクション検索") {
@@ -32,8 +48,15 @@ export async function register(label = "セクション検索") {
       challenge: rand(32),
       rp: { name: "セクション検索" },
       user: { id: rand(16), name: label, displayName: label },
-      pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },
+        { type: "public-key", alg: -257 },
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: "platform",
+        userVerification: "required",
+        residentKey: "discouraged",
+      },
       timeout: 60000,
       attestation: "none",
     },
@@ -56,4 +79,6 @@ export async function verify() {
   return true;
 }
 
-export function unregister() { localStorage.removeItem(KEY); }
+export function unregister() {
+  localStorage.removeItem(KEY);
+}
