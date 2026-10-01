@@ -43,7 +43,7 @@ function demoStore() {
   let authCb = null,
     user = null;
   try {
-    if (sessionStorage.getItem("secsearch.demo.login") || localStorage.getItem("secsearch.demo.login"))
+    if (sessionStorage.getItem("secsearch.demo.login"))
       user = { uid: "demo", email: "demo@example.com" };
   } catch {}
 
@@ -85,14 +85,14 @@ function demoStore() {
     async login(email) {
       user = { uid: "demo", email: email || "demo@example.com" };
       try {
-        localStorage.setItem("secsearch.demo.login", "1");
+        sessionStorage.setItem("secsearch.demo.login", "1");
       } catch {}
       authCb && authCb(user);
     },
     async logout() {
       user = null;
       try {
-        localStorage.removeItem("secsearch.demo.login");
+        sessionStorage.removeItem("secsearch.demo.login");
       } catch {}
       authCb && authCb(null);
     },
@@ -151,7 +151,8 @@ async function firebaseStore() {
   const app = initializeApp(FIREBASE);
   const auth = A.getAuth(app);
   try {
-    await A.setPersistence(auth, A.browserLocalPersistence);
+    // タブを閉じたらログアウト扱いにする
+    await A.setPersistence(auth, A.browserSessionPersistence);
   } catch {}
   const db = D.getDatabase(app);
   const R = (p) => D.ref(db, p ? `${ROOT_PATH}/${p}` : ROOT_PATH);
