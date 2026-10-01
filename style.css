@@ -1599,6 +1599,20 @@ img.blur {
 
 /* ---- iPhone / スマホ ---- */
 @media (max-width: 760px) {
+  /* ホーム画面から開いたとき、時計・電池の下から表示する */
+  #app,
+  .gate {
+    padding-top: env(safe-area-inset-top);
+  }
+  .side::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 120px;
+    background: inherit;
+  }
   :root {
     --navh: 58px;
   }
