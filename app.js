@@ -200,7 +200,7 @@ function teardown() { unsubs.forEach((u) => typeof u === "function" && u()); uns
 function startData() {
   const onErr = (e) => toast(e.message, true);
   const sub = (path, key, after) => unsubs.push(store.sub(path, (v) => { st[key] = v || {}; st.loaded[key] = true; after && after(); onData(key); }, onErr));
-  sub("parts", "parts", () => { st.partList = vals(st.parts).map(S.indexPart); });
+  sub("parts", "parts", () => { st.partList = vals(st.parts).map(S.indexPart); if (setting("autoDedupe", true) !== false) autoDedupe(); });
   sub("kata", "kata");
   sub("memos", "memos");
   sub("history", "history");
@@ -222,6 +222,47 @@ function onData(key) {
     else if (st.editTab === "io" && ["parts", "kata"].includes(key) && !modalOpen()) editIO();
   }
 }
+
+/* ============================================================
+   重複の自動削除
+   同じ「セクション＋部品コード＋部品名」の部品が2件以上あれば、1件だけ残して消す。
+   残すのは ★頻出あり → 備考が長い → 先に登録したもの の順。消す側の頻出・備考・メモは残す側へ引き継ぐ。
+   ============================================================ */
+const partSig = (p) => `${S.norm(p.sec)}|${S.norm(p.code)}|${S.norm(p.name)}`;
+function findDupes() {
+  const groups = new Map();
+  for (const p of st.partList) { const k = partSig(p); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+  return [...groups.values()].filter((g) => g.length > 1);
+}
+let dedupeBusy = false;
+async function dedupe(manual = false) {
+  if (dedupeBusy || !st.loaded.parts) return 0;
+  const dupes = findDupes();
+  if (!dupes.length) { if (manual) toast("重複している部品はありません"); return 0; }
+  const upd = {}, memoUpd = {}; let n = 0;
+  for (const g of dupes) {
+    g.sort((a, b) => (!!b.hot - !!a.hot) || ((b.note || "").length - (a.note || "").length) || (a.id < b.id ? -1 : 1));
+    const keep = g[0];
+    let hot = keep.hot || "", note = keep.note || "";
+    for (const d of g.slice(1)) {
+      if (!hot && d.hot) hot = d.hot;
+      if (d.note && !note.includes(d.note)) note = note ? `${note}\n${d.note}` : d.note;
+      upd[d.id] = null; n++;
+      for (const m of memosForPart(d.id)) { memoUpd[`${m.id}/partId`] = keep.id; }
+    }
+    if (hot !== (keep.hot || "")) upd[`${keep.id}/hot`] = hot;
+    if (note !== (keep.note || "")) upd[`${keep.id}/note`] = note;
+  }
+  dedupeBusy = true;
+  try {
+    if (Object.keys(memoUpd).length) await store.update("memos", memoUpd);
+    await store.update("parts", upd);
+    toast(`重複していた部品 ${n}件 を自動で削除しました`);
+  } catch (e) { toast("重複の削除に失敗しました：" + e.message, true); }
+  finally { dedupeBusy = false; }
+  return n;
+}
+const autoDedupe = debounce(() => dedupe(false), 1200);
 
 /* ============================================================
    画面の骨組み
@@ -340,7 +381,7 @@ function renderResults() {
     const q = st.q.trim();
     box.innerHTML = `<div class="panel"><h3>「${esc(q)}」は見つかりませんでした</h3>
       <p style="margin:0 0 12px;font-size:12.5px;color:var(--mu);line-height:1.7">言い方を変える（例：フィルター → エレメント）か、短くしてみてください。よく使う言い換えは「データ編集 → 設定 → 言い換えリスト」に登録できます。</p>
-      <div class="flex-wrap"><button class="btn" data-google="${esc(q)}">${IC.search} Googleで「${esc(setting("googlePrefix", "日産"))} ${esc(q)}」</button><button class="btn" data-addpart="${esc(q)}">＋ 部品データに追加</button></div></div>`;
+      <div class="flex-wrap"><button class="btn" data-google="${esc(`${setting("googlePrefix", "")} ${q}`.trim())}">${IC.search} Googleで「${esc(`${setting("googlePrefix", "")} ${q}`.trim())}」</button><button class="btn" data-addpart="${esc(q)}">＋ 部品データに追加</button></div></div>`;
     return;
   }
   if (st.sel >= Math.min(n, st.limit)) st.sel = 0;
@@ -382,7 +423,7 @@ function markSel() {
 function googleOpen(q) { window.open("https://www.google.com/search?q=" + encodeURIComponent(q), "_blank", "noopener"); }
 function googlePart(p) {
   histTyping.flush();
-  googleOpen(`${setting("googlePrefix", "日産")} ${p.name}`.trim());
+  googleOpen(`${setting("googlePrefix", "")} ${p.name}`.trim());
   bumpSec(p.sec);
 }
 function bumpSec(sec) {
@@ -462,7 +503,7 @@ function renderKataResult() {
     return;
   }
   const r = S.parseKata(raw, st.kata);
-  const gq = `${setting("googlePrefix", "日産")} ${r.input}`.trim();
+  const gq = `${setting("googlePrefix", "")} ${r.input}`.trim();
   const segs = `<div class="split">
       <div class="seg dim"><b>${esc(r.prefix || "—")}</b><small>規制などの記号<br>（判定に使わない）</small></div>
       <div class="seg"><b>${esc(r.mid || "—")}</b><small>エンジン・駆動などの<br>違い</small></div>
@@ -678,7 +719,8 @@ function renderEdit() {
   ({ parts: editParts, kata: editKata, io: editIO, settings: editSettings })[st.editTab]();
 }
 function editParts() {
-  $("#ebody").innerHTML = `<div class="toolbar"><input class="inp" id="eq" placeholder="部品名・コード・セクションで絞り込み" value="${esc(st.editQ)}" data-live="1"><span class="stat" id="estat"></span><span class="sp"></span><button class="btn pri" data-addpart="">＋ 部品を追加</button></div><div id="etbl"></div>`;
+  $("#ebody").innerHTML = `<div class="toolbar"><input class="inp" id="eq" placeholder="部品名・コード・セクションで絞り込み" value="${esc(st.editQ)}" data-live="1"><span class="stat" id="estat"></span><span class="sp"></span><button class="btn" id="dedupe-now" title="同じセクション・部品コード・部品名のものを1件にまとめます">重複をチェック</button><button class="btn pri" data-addpart="">＋ 部品を追加</button></div><div id="etbl"></div>`;
+  $("#dedupe-now").addEventListener("click", () => dedupe(true));
   $("#eq").addEventListener("input", (e) => { st.editQ = e.target.value; editPartsTable(); });
   editPartsTable();
 }
@@ -704,6 +746,8 @@ async function partForm(p = {}, title = "部品を追加") {
   const d = r.data, norm = (s) => String(s || "").normalize("NFKC").trim();
   const rec = { sec: norm(d.sec), code: norm(d.code), name: norm(d.name).replace(/\s+/g, " "), note: norm(d.note), updatedAt: Date.now() };
   if (norm(d.hot)) rec.hot = norm(d.hot);
+  const same = st.partList.find((x) => x.id !== p.id && partSig(x) === partSig(rec));
+  if (same) { toast(`同じ部品がすでにあります（SEC ${same.sec} / ${same.code} ${same.name}）`, true); return; }
   try {
     if (p.id) await store.set(`parts/${p.id}`, rec); else await store.push("parts", rec);
     toast(p.id ? "保存しました" : `「${rec.name}」を追加しました`);
@@ -929,8 +973,10 @@ async function editSettings() {
       <p>この端末の生体認証（顔・指紋・PIN）でアプリのロックを解除します。端末ごとに設定します。<br>${reg ? `<b style="color:var(--ok)">この端末は設定済み</b>（${fmtDay(reg.at)}）` : av ? "この端末で使えます。" : '<span style="color:var(--ac2)">この端末・ブラウザでは使えません（httpsで開いているか確認してください）</span>'}</p>
       <div class="row2">${reg ? `<button class="btn" id="fid-test">ロックを試す</button><button class="btn danger" id="fid-off">解除する</button>` : `<button class="btn pri" id="fid-on" ${av ? "" : "disabled"}>この端末に設定する</button>`}</div>
       ${reg ? `<div class="field" style="margin-top:12px"><label>自動ロックまでの時間（操作なし・画面を離れていたとき）</label><select class="inp" id="fid-min" style="max-width:200px">${[5, 15, 30, 60, 180].map((m) => `<option value="${m}" ${FID.settings().lockMin === m ? "selected" : ""}>${m}分</option>`).join("")}</select></div>` : ""}</div>
-    <div class="card"><h4>Google検索</h4><p>部品名の前に付ける言葉です（例：日産 → 「日産 オイルエレメント」で検索）。</p>
-      <div class="row2"><input class="inp" id="g-prefix" style="max-width:200px" value="${esc(setting("googlePrefix", "日産"))}"><button class="btn" id="g-prefix-save">保存</button></div></div>
+    <div class="card"><h4>重複の自動削除</h4><p>「セクション・部品コード・部品名」がすべて同じ部品が2件以上あると、自動で1件にまとめます。頻出★・備考・メモは残す側に引き継ぎます。<br>（同じ部品名でも、セクションや部品コードが違うものは消しません）</p>
+      <label class="switch"><input type="checkbox" id="dd-auto" ${setting("autoDedupe", true) !== false ? "checked" : ""}> 自動で削除する</label></div>
+    <div class="card"><h4>Google検索</h4><p>部品名の前に付ける言葉です。空欄なら部品名だけで検索します（例：「日産」と入れると「日産 オイルエレメント」で検索）。</p>
+      <div class="row2"><input class="inp" id="g-prefix" style="max-width:200px" placeholder="空欄（付けない）" value="${esc(setting("googlePrefix", ""))}"><button class="btn" id="g-prefix-save">保存</button></div></div>
     <div class="card"><h4>Google検索の埋め込み（型式画面）</h4><p>Googleの「プログラム可能な検索エンジン」で作った<b>検索エンジンID</b>を入れると、未登録の型式を調べるとき結果がアプリ内に表示されます。空なら新しいタブで開きます。</p>
       <div class="row2"><input class="inp mono" id="cse-id" placeholder="例：a1b2c3d4e5f6g7h8i" value="${esc(setting("cseId", ""))}" style="max-width:260px"><button class="btn" id="cse-save">保存</button></div></div>
     <div class="card" style="grid-column:1/-1"><h4>言い換えリスト</h4><p>1行に1組、「=」でつなぎます。片方で検索すると、もう片方の名前もヒットします。（例：「オイルフィルター」で「オイルエレメント」が出る）</p>
@@ -950,6 +996,7 @@ async function editSettings() {
   $("#g-prefix-save").addEventListener("click", () => sset("googlePrefix", $("#g-prefix").value.trim()));
   $("#cse-save").addEventListener("click", () => { const v = $("#cse-id").value.trim(); if (v && !/^[\w:-]+$/.test(v)) return toast("IDの形式が正しくありません", true); sset("cseId", v); if (csePromise) toast("反映するには一度ページを再読み込みしてください"); });
   $("#syn-save").addEventListener("click", () => sset("synonyms", $("#syn").value));
+  $("#dd-auto").addEventListener("change", (e) => { sset("autoDedupe", e.target.checked, e.target.checked ? "自動削除をONにしました" : "自動削除をOFFにしました"); if (e.target.checked) dedupe(false); });
   $("#syn-reset").addEventListener("click", () => { $("#syn").value = S.DEFAULT_SYNONYMS; });
   $("#pw-reset")?.addEventListener("click", async () => { try { await store.resetPassword(st.user.email); toast("再設定メールを送りました"); } catch (e) { toast(e.message, true); } });
   $("#logout2").addEventListener("click", async () => { if (await confirmBox("ログアウトしますか？", "ログアウト")) store.logout(); });
