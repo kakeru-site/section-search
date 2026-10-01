@@ -69,6 +69,7 @@ function demoStore() {
       localStorage.setItem(KEY, JSON.stringify(tree));
     } catch (e) {
       console.warn(e);
+      throw new Error("ブラウザの保存容量がいっぱいです（デモモードは画像を数枚しか保存できません）");
     }
     for (const [p, set] of subs) {
       const v = get(p);
@@ -127,6 +128,10 @@ function demoStore() {
       put(path + "/" + k, v);
       save();
       return k;
+    },
+    async get(path) {
+      const v = get(path);
+      return v === undefined ? null : clean(v);
     },
     async inc(path, by = 1) {
       put(path, (get(path) || 0) + by);
@@ -205,6 +210,7 @@ async function firebaseStore() {
       return r.key;
     }),
     inc: wrap((p, by = 1) => D.set(R(p), D.increment(by))),
+    get: wrap(async (p) => (await D.get(R(p))).val()),
   };
 }
 
