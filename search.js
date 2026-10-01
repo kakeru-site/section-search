@@ -1,6 +1,19 @@
-// 検索ロジック（あいまい検索・ハイライト・型式判定）
+// 検索・型式判定
 
-const SMALL = { "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ッ": "ツ", "ヮ": "ワ", "ヵ": "カ", "ヶ": "ケ" };
+const SMALL = {
+  ァ: "ア",
+  ィ: "イ",
+  ゥ: "ウ",
+  ェ: "エ",
+  ォ: "オ",
+  ャ: "ヤ",
+  ュ: "ユ",
+  ョ: "ヨ",
+  ッ: "ツ",
+  ヮ: "ワ",
+  ヵ: "カ",
+  ヶ: "ケ",
+};
 const DROP = /[\s・･\-‐‑‒–—―−ーｰ〜~_.,、。]/;
 
 /** 1文字を検索用に正規化（ひらがな→カタカナ、全角→半角、小文字化、小さいカナ→大きいカナ、長音・記号は消す） */
@@ -19,13 +32,19 @@ function normChar(c) {
 /** 文字列を正規化（元の文字位置の対応表つき） */
 export function normIndexed(str) {
   str = String(str ?? "");
-  let n = "", map = [];
+  let n = "",
+    map = [];
   for (let i = 0; i < str.length; i++) {
     let ch = str[i];
     // サロゲートペア
-    if (/[\uD800-\uDBFF]/.test(ch) && i + 1 < str.length) { ch += str[i + 1]; }
+    if (/[\uD800-\uDBFF]/.test(ch) && i + 1 < str.length) {
+      ch += str[i + 1];
+    }
     const t = normChar(ch);
-    for (const x of t) { n += x; map.push(i); }
+    for (const x of t) {
+      n += x;
+      map.push(i);
+    }
     if (ch.length === 2) i++;
   }
   return { n, map };
@@ -36,7 +55,12 @@ export const norm = (s) => normIndexed(String(s ?? "").normalize("NFKC")).n;
 export function parseSynonyms(text) {
   return String(text || "")
     .split(/\r?\n/)
-    .map((l) => l.split(/[=＝,，、]/).map((w) => w.trim()).filter(Boolean))
+    .map((l) =>
+      l
+        .split(/[=＝,，、]/)
+        .map((w) => w.trim())
+        .filter(Boolean),
+    )
     .filter((g) => g.length >= 2)
     .map((g) => g.map(norm).filter(Boolean));
 }
@@ -72,7 +96,8 @@ export function secKey(sec) {
   return /^\d/.test(s) && !isNaN(f) ? [0, f, s] : [1, 0, s];
 }
 export function cmpSec(a, b) {
-  const x = secKey(a), y = secKey(b);
+  const x = secKey(a),
+    y = secKey(b);
   return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2], "ja");
 }
 
@@ -105,17 +130,30 @@ export function indexPart(p) {
  * @returns [{p, score, ranges:[[s,e],...]}]
  */
 export function searchParts(list, query, groups, opt = {}) {
-  const toks = String(query || "").normalize("NFKC").trim().split(/\s+/).filter(Boolean);
+  const toks = String(query || "")
+    .normalize("NFKC")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   const out = [];
   const tokAlts = toks.map((t) => expand(t, groups)).filter((a) => a.length);
   for (const p of list) {
     if (opt.sec && String(p.sec) !== String(opt.sec)) continue;
     if (opt.group && opt.group !== "all") {
-      if (opt.group === "hot") { if (!p.hot) continue; }
-      else { const g = GROUPS.find((x) => x.id === opt.group); if (g && g.test && !g.test(String(p.sec))) continue; }
+      if (opt.group === "hot") {
+        if (!p.hot) continue;
+      } else {
+        const g = GROUPS.find((x) => x.id === opt.group);
+        if (g && g.test && !g.test(String(p.sec))) continue;
+      }
     }
-    if (!tokAlts.length) { out.push({ p, score: p.hot ? 0 : 1, ranges: [] }); continue; }
-    let score = 0, ok = true; const ranges = [];
+    if (!tokAlts.length) {
+      out.push({ p, score: p.hot ? 0 : 1, ranges: [] });
+      continue;
+    }
+    let score = 0,
+      ok = true;
+    const ranges = [];
     for (const alts of tokAlts) {
       let best = 99;
       for (const a of alts) {
@@ -133,23 +171,37 @@ export function searchParts(list, query, groups, opt = {}) {
         else if (a.length >= 2 && p._sec.startsWith(a)) best = Math.min(best, 2);
         if (p._note.includes(a)) best = Math.min(best, 3);
       }
-      if (best === 99) { ok = false; break; }
+      if (best === 99) {
+        ok = false;
+        break;
+      }
       score += best;
     }
     if (ok) out.push({ p, score: score - (p.hot ? 0.2 : 0), ranges: mergeRanges(ranges) });
   }
-  out.sort((a, b) => a.score - b.score || cmpSec(a.p.sec, b.p.sec) || String(a.p.code).localeCompare(String(b.p.code)));
+  out.sort(
+    (a, b) =>
+      a.score - b.score || cmpSec(a.p.sec, b.p.sec) || String(a.p.code).localeCompare(String(b.p.code)),
+  );
   return out;
 }
 function mergeRanges(r) {
   r.sort((a, b) => a[0] - b[0]);
   const o = [];
-  for (const x of r) { if (o.length && x[0] <= o[o.length - 1][1]) o[o.length - 1][1] = Math.max(o[o.length - 1][1], x[1]); else o.push([...x]); }
+  for (const x of r) {
+    if (o.length && x[0] <= o[o.length - 1][1]) o[o.length - 1][1] = Math.max(o[o.length - 1][1], x[1]);
+    else o.push([...x]);
+  }
   return o;
 }
 
-/* ---------------- 型式 ---------------- */
-export const normKata = (s) => String(s || "").normalize("NFKC").toUpperCase().replace(/[\s　]/g, "").replace(/[‐‑‒–—―−ー]/g, "-");
+// 型式
+export const normKata = (s) =>
+  String(s || "")
+    .normalize("NFKC")
+    .toUpperCase()
+    .replace(/[\s　]/g, "")
+    .replace(/[‐‑‒–—―−ー]/g, "-");
 
 /**
  * 型式を解析
@@ -166,8 +218,23 @@ export function parseKata(input, table) {
     if (code && body.endsWith(code) && (!best || code.length > best.length)) best = code;
   }
   const guess = (body.match(/[A-Z]\d{2,3}[A-Z]?$/) || body.match(/[A-Z]{1,2}\d{1,3}[A-Z]?$/) || [""])[0];
-  if (best) return { input: s, prefix, mid: body.slice(0, body.length - best.length), key: best, found: table[best], guess: best };
-  return { input: s, prefix, mid: guess ? body.slice(0, body.length - guess.length) : body, key: "", found: null, guess };
+  if (best)
+    return {
+      input: s,
+      prefix,
+      mid: body.slice(0, body.length - best.length),
+      key: best,
+      found: table[best],
+      guess: best,
+    };
+  return {
+    input: s,
+    prefix,
+    mid: guess ? body.slice(0, body.length - guess.length) : body,
+    key: "",
+    found: null,
+    guess,
+  };
 }
 
 /** 車種名から型式を逆引き */
