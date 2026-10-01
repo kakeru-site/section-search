@@ -67,14 +67,6 @@ const IC = {
   ext: '<svg viewBox="0 0 24 24" class="ic" style="width:12px;height:12px"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
-const HELLO = [
-  "締め付けトルクは守ろう",
-  "品番は声に出してもう一度",
-  "迷ったら型式から確認",
-  "左右・前後の聞き忘れに注意",
-  "今日も1件ずつ、正確に",
-];
-
 // ---- 状態 ----
 let store;
 const st = {
@@ -119,10 +111,7 @@ const st = {
   editTab: "parts",
   editQ: "",
   kataQ: "",
-  hello: HELLO[Math.floor(Math.random() * HELLO.length)],
   lastHist: null,
-  lastActive: Date.now(),
-  hiddenAt: 0,
 };
 const setting = (k, d) =>
   st.settings && st.settings[k] != null && st.settings[k] !== "" ? st.settings[k] : d;
@@ -281,7 +270,6 @@ function showLock() {
     try {
       await FID.verify();
       st.locked = false;
-      st.lastActive = Date.now();
       l.innerHTML = "";
       route();
       toast("ロックを解除しました");
@@ -305,24 +293,6 @@ function lockNow() {
   st.locked = true;
   route();
 }
-// 自動ロック（一定時間操作なし / 一定時間画面を離れていた）
-["pointerdown", "keydown", "wheel"].forEach((ev) =>
-  addEventListener(
-    ev,
-    () => {
-      st.lastActive = Date.now();
-    },
-    { passive: true },
-  ),
-);
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) st.hiddenAt = Date.now();
-  else if (st.hiddenAt && Date.now() - st.hiddenAt > FID.settings().lockMin * 60000) lockNow();
-});
-setInterval(() => {
-  if (Date.now() - st.lastActive > FID.settings().lockMin * 60000) lockNow();
-}, 30000);
-
 // ---- データ購読 ----
 let unsubs = [];
 function teardown() {
@@ -472,7 +442,7 @@ async function renderFid() {
   const reg = FID.registered();
   if (reg) {
     c.className = "faceid on";
-    c.innerHTML = `${IC.face}<div><b>生体認証ロック ON</b>${FID.settings().lockMin}分操作なしでロック</div>`;
+    c.innerHTML = `${IC.face}<div><b>生体認証ロック ON</b>開くときだけ確認</div>`;
   } else {
     const av = await FID.platformAvailable();
     c.className = "faceid";
@@ -530,17 +500,8 @@ function renderRight() {
 
 // ---- セクション検索 ----
 function renderSec() {
-  const hot = st.partList.filter((p) => p.hot);
-  const tip =
-    hot.length && Math.random() < 0.6
-      ? (() => {
-          const p = hot[Math.floor(Math.random() * hot.length)];
-          return `${p.name}は「${p.hot}」`;
-        })()
-      : st.hello;
   $("#main").innerHTML = `<div class="view-head"><div><h1 class="h1">セクション検索</h1>
     <div class="tip">部品名の一部・ひらがなでもOK ／ <kbd>/</kbd> 検索欄へ ／ <kbd>↑↓</kbd> 選択 ／ <kbd>Enter</kbd> Google ／ <kbd>Ctrl</kbd>+<kbd>Enter</kbd> メモ</div></div></div>
-    <p class="hello">今日のひとこと：${esc(tip)}</p>
     <label class="search">${IC.search}<input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="部品名・部品コード・セクションで検索（例：べると、15208）" value="${esc(st.q)}" data-live="1"><span class="cnt" id="qcnt"></span><button class="clear" id="qclear" title="消す（Esc）" aria-label="検索語を消す">×</button></label>
     <div class="chips" id="chips"></div>
     <div id="results"></div>`;
@@ -757,7 +718,6 @@ const histKata = debounce(() => {
 function renderKata() {
   $("#main").innerHTML = `<div class="view-head"><div><h1 class="h1">型式 → 車種</h1>
     <div class="tip">車検証の型式をそのまま入力（例：DAA-HFC27）／ ハイフンより前の記号は自動で無視 ／ 車種名を入れると逆引き</div></div></div>
-    <p class="hello">&nbsp;</p>
     <label class="search">${IC.search}<input id="kq" type="search" autocomplete="off" spellcheck="false" placeholder="型式（例：DBA-C26、5AA-GFC27）または車種名" value="${esc(st.kq)}" data-live="1"><span class="cnt" id="kcnt"></span><button class="clear" id="kclear" aria-label="消す">×</button></label>
     <div id="kres"></div>`;
   const k = $("#kq");
@@ -1620,9 +1580,8 @@ async function editSettings() {
     av = await FID.platformAvailable();
   $("#ebody").innerHTML = `<div class="card-grid">
     <div class="card"><h4>生体認証ロック（Face ID / Windows Hello）</h4>
-      <p>この端末の生体認証（顔・指紋・PIN）でアプリのロックを解除します。端末ごとに設定します。<br>${reg ? `<b style="color:var(--ok)">この端末は設定済み</b>（${fmtDay(reg.at)}）` : av ? "この端末で使えます。" : '<span style="color:var(--ac2)">この端末・ブラウザでは使えません（httpsで開いているか確認してください）</span>'}</p>
-      <div class="row2">${reg ? `<button class="btn" id="fid-test">ロックを試す</button><button class="btn danger" id="fid-off">解除する</button>` : `<button class="btn pri" id="fid-on" ${av ? "" : "disabled"}>この端末に設定する</button>`}</div>
-      ${reg ? `<div class="field" style="margin-top:12px"><label>自動ロックまでの時間（操作なし・画面を離れていたとき）</label><select class="inp" id="fid-min" style="max-width:200px">${[5, 15, 30, 60, 180].map((m) => `<option value="${m}" ${FID.settings().lockMin === m ? "selected" : ""}>${m}分</option>`).join("")}</select></div>` : ""}</div>
+      <p>アプリを開くときに、この端末の生体認証（顔・指紋・PIN）で本人確認します。使っている途中で勝手にロックされることはありません。端末ごとに設定します。<br>${reg ? `<b style="color:var(--ok)">この端末は設定済み</b>（${fmtDay(reg.at)}）` : av ? "この端末で使えます。" : '<span style="color:var(--ac2)">この端末・ブラウザでは使えません（httpsで開いているか確認してください）</span>'}</p>
+      <div class="row2">${reg ? `<button class="btn" id="fid-test">ロックを試す</button><button class="btn danger" id="fid-off">解除する</button>` : `<button class="btn pri" id="fid-on" ${av ? "" : "disabled"}>この端末に設定する</button>`}</div></div>
     <div class="card"><h4>重複の自動削除</h4><p>「セクション・部品コード・部品名」がすべて同じ部品が2件以上あると、自動で1件にまとめます。頻出★・備考・メモは残す側に引き継ぎます。<br>（同じ部品名でも、セクションや部品コードが違うものは消しません）</p>
       <label class="switch"><input type="checkbox" id="dd-auto" ${setting("autoDedupe", true) !== false ? "checked" : ""}> 自動で削除する</label></div>
     <div class="card"><h4>Google検索</h4><p>部品名の前に付ける言葉です。空欄なら部品名だけで検索します（例：「日産」と入れると「日産 オイルエレメント」で検索）。</p>
@@ -1665,11 +1624,6 @@ async function editSettings() {
     }
   });
   $("#fid-test")?.addEventListener("click", lockNow);
-  $("#fid-min")?.addEventListener("change", (e) => {
-    FID.setLockMin(+e.target.value);
-    renderFid();
-    toast("保存しました");
-  });
   $("#g-prefix-save").addEventListener("click", () => sset("googlePrefix", $("#g-prefix").value.trim()));
   $("#cse-save").addEventListener("click", () => {
     const v = $("#cse-id").value.trim();
