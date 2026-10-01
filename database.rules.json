@@ -1,0 +1,20 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "sectionApp": {
+      ".read": "auth != null && auth.uid === 'ここに自分のUIDを貼る'",
+      ".write": "auth != null && auth.uid === 'ここに自分のUIDを貼る'",
+      "parts": {
+        "$id": {
+          ".validate": "newData.hasChildren(['sec', 'code', 'name'])"
+        }
+      },
+      "kata": {
+        "$code": {
+          ".validate": "newData.hasChildren(['name']) && $code.matches(/^[0-9A-Z]+$/)"
+        }
+      }
+    }
+  }
+}
