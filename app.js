@@ -2,6 +2,7 @@
 import { createStore, DEMO, localKey } from "./store.js";
 import * as S from "./search.js";
 import * as FID from "./faceid.js";
+import * as IMG from "./imgtools.js";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -57,6 +58,11 @@ const IC = {
   note: '<svg viewBox="0 0 24 24" class="ic"><path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 11h8M8 15h8M8 7h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   face: '<svg viewBox="0 0 24 24" class="ic"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 9v1.5M15 9v1.5M12 9v4h-1M9 16c1.8 1.4 4.2 1.4 6 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   logo: '<svg viewBox="0 0 24 24" class="ic"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  pic: '<svg viewBox="0 0 24 24" class="ic"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="2" fill="currentColor"/><path d="M4 18l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  clock:
+    '<svg viewBox="0 0 24 24" class="ic" style="width:13px;height:13px"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  car: '<svg viewBox="0 0 24 24" class="ic"><path d="M5 11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11M4 11h16v5a1 1 0 0 1-1 1h-1v2h-3v-2H9v2H6v-2H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="8" cy="14" r="1.2" fill="currentColor"/><circle cx="16" cy="14" r="1.2" fill="currentColor"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   star: '<svg viewBox="0 0 24 24" class="ic" style="width:12px;height:12px"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor"/></svg>',
   ext: '<svg viewBox="0 0 24 24" class="ic" style="width:12px;height:12px"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
@@ -94,6 +100,12 @@ const st = {
   results: [],
   // 型式
   kq: "",
+  // イラスト帳
+  images: {},
+  imode: "list",
+  iq: "",
+  ifilter: "all",
+  rev: null,
   // メモ
   memoFilter: "open",
   memoQ: "",
@@ -346,6 +358,7 @@ function startData() {
     st.syn = S.parseSynonyms(setting("synonyms", S.DEFAULT_SYNONYMS));
   });
   sub("stats", "stats");
+  sub("images", "images");
 }
 function onData(key) {
   if (!st.booted) return;
@@ -356,6 +369,7 @@ function onData(key) {
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
+  else if (v === "illust" && ["images", "parts"].includes(key) && !modalOpen()) renderIllust(false);
   else if (v === "edit") {
     if (st.editTab === "parts" && key === "parts" && $("#etbl")) editPartsTable();
     else if (st.editTab === "kata" && key === "kata" && $("#ktbl")) editKataTable();
@@ -420,12 +434,14 @@ async function dedupe(manual = false) {
 const autoDedupe = debounce(() => dedupe(false), 1200);
 
 // ---- 画面の骨組み ----
+// [id, PCの表示, キー, スマホの表示, アイコン]
 const NAV = [
-  ["sec", "セクション検索", "S"],
-  ["kata", "型式 → 車種", "K"],
-  ["memo", "メモ", "M"],
-  ["hist", "検索履歴", "H"],
-  ["edit", "データ編集", "E"],
+  ["sec", "セクション検索", "S", "検索", "search"],
+  ["kata", "型式 → 車種", "K", "型式", "car"],
+  ["memo", "メモ", "M", "メモ", "note"],
+  ["illust", "イラスト帳", "I", "図", "pic"],
+  ["hist", "検索履歴", "H", "履歴", "clock"],
+  ["edit", "データ編集", "E", "設定", "gear"],
 ];
 function renderShell() {
   $("#app").innerHTML = `<div class="stripe"></div><div class="shell">
@@ -444,9 +460,10 @@ function renderShell() {
 }
 function renderNav() {
   const open = vals(st.memos).filter((m) => !m.done).length;
+  const badge = (k) => (k === "memo" && open ? `<span class="badge">${open}</span>` : "");
   $("#nav").innerHTML = NAV.map(
-    ([k, l, key]) =>
-      `<button class="nav ${st.view === k ? "on" : ""}" data-view="${k}"><span>${l}${k === "memo" && open ? `<span class="badge">${open}</span>` : ""}</span><kbd>${key}</kbd></button>`,
+    ([k, l, key, short, icon]) =>
+      `<button class="nav ${st.view === k ? "on" : ""}" data-view="${k}"><span class="nlong">${l}${badge(k)}</span><span class="nshort">${IC[icon]}<i>${short}</i>${badge(k)}</span><kbd>${key}</kbd></button>`,
   ).join("");
 }
 async function renderFid() {
@@ -472,6 +489,7 @@ function go(view, opt = {}) {
   else if (view === "kata") renderKata();
   else if (view === "memo") renderMemo(true);
   else if (view === "hist") renderHist();
+  else if (view === "illust") renderIllust(true);
   else if (view === "edit") renderEdit();
   renderRight();
 }
@@ -618,7 +636,7 @@ function renderResults() {
       <div><div class="pname">${highlight(p.name, r.ranges)}</div>${p.note ? `<div class="pnote">${esc(p.note)}</div>` : ""}${p.hot ? `<div class="phot">${IC.star}頻出：${esc(p.hot)}</div>` : ""}</div>
       <div><button class="sec" data-sec="${esc(p.sec)}" title="このセクションの部品を一覧">SEC<b>${esc(p.sec)}</b></button></div>
       <div class="pcode">${esc(p.code)}</div>
-      <div class="acts"><button class="btn" data-act="google" title="Googleで検索（Enter）">${IC.search}Google</button><button class="btn ${mc ? "has" : ""}" data-act="memo" title="メモ（Ctrl+Enter）">${IC.note}メモ${mc ? `<span class="cnt">${mc}</span>` : ""}</button></div></div>`;
+      <div class="acts">${picsFor(p.id).length ? `<button class="btn has" data-act="pics" title="登録した図を見る">${IC.pic}図<span class="cnt">${picsFor(p.id).length}</span></button>` : ""}<button class="btn" data-act="google" title="Googleで検索（Enter）">${IC.search}Google</button><button class="btn ${mc ? "has" : ""}" data-act="memo" title="メモ（Ctrl+Enter）">${IC.note}メモ${mc ? `<span class="cnt">${mc}</span>` : ""}</button></div></div>`;
     })
     .join("");
   box.innerHTML =
@@ -1320,7 +1338,13 @@ function strip(o) {
   }
   return r;
 }
-function saveBackup() {
+async function saveBackup() {
+  let imageData = {};
+  try {
+    imageData = (await store.get("imageData")) || {};
+  } catch (e) {
+    toast("画像本体を読めなかったので、画像は一覧だけ保存します", true);
+  }
   download(
     `section-search-backup-${stamp()}.json`,
     JSON.stringify(
@@ -1331,6 +1355,8 @@ function saveBackup() {
         kata: st.kata,
         memos: st.memos,
         settings: st.settings,
+        images: st.images,
+        imageData,
       },
       null,
       1,
@@ -1371,6 +1397,8 @@ async function restoreBackup(file) {
       kata: j.kata || null,
       memos: j.memos || null,
       settings: j.settings || null,
+      images: j.images || null,
+      imageData: j.imageData || null,
     });
     toast("復元しました");
   } catch (e) {
@@ -1674,6 +1702,442 @@ async function editSettings() {
   });
 }
 
+// ---- イラスト帳 ----
+// 画像はDBに直接入れる（Storageは無料プランだと使えないため）
+// images/{id} に一覧用の情報とサムネ、imageData/{id} に本体
+const picsFor = (partId) =>
+  vals(st.images)
+    .filter((im) => im.partId === partId)
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+const fmtFull = (t) => `${fmtDay(t)} ${fmtHM(t)}`;
+const LV = ["まだ", "1", "2", "3", "4", "覚えた"];
+
+function imgMatches(im) {
+  if (st.ifilter === "noname" && im.name) return false;
+  if (st.ifilter === "weak" && (im.review?.level || 0) >= 3) return false;
+  if (st.ifilter === "unlinked" && im.partId) return false;
+  const q = S.norm(st.iq);
+  if (!q) return true;
+  return S.norm(`${im.name} ${im.sec} ${im.code} ${im.memo}`).includes(q);
+}
+
+function renderIllust(full) {
+  const main = $("#main");
+  if (full || !$("#ibody")) {
+    main.innerHTML = `<div class="view-head"><div><h1 class="h1">イラスト帳</h1>
+      <div class="tip">DocuWorksのコピー・PDF・スクショを貼って、部品名とセットで覚える ／ <kbd>Ctrl</kbd>+<kbd>V</kbd> で貼り付け</div></div>
+      <div class="chips" style="margin:0"><button class="chip ${st.imode === "list" ? "on" : ""}" data-imode="list">一覧</button><button class="chip ${st.imode === "review" ? "on" : ""}" data-imode="review">復習する</button></div></div>
+      <div id="ibody"></div>`;
+  }
+  if (st.imode === "review") return renderReview();
+  const body = $("#ibody");
+  if (!$("#igrid")) {
+    body.innerHTML = `<div class="drop" id="drop">
+        ${IC.pic}<div class="pc-only"><b>ここに画像をドラッグ</b>、または <kbd>Ctrl</kbd>+<kbd>V</kbd> で貼り付け<br>
+        <small>PNG・JPEG・PDF などOK。DocuWorksは範囲を選んでコピー → ここで貼り付け が確実です</small></div>
+        <div class="sp-only"><b>写真を追加</b><br><small>カメラで撮る・写真から選ぶ・PDF</small></div>
+        <input type="file" id="ifile" accept="image/*,.pdf" multiple hidden><button class="btn" data-pick="ifile"><span class="pc-only">ファイルを選ぶ</span><span class="sp-only">選ぶ</span></button></div>
+      <div class="toolbar" style="margin-top:14px"><input class="inp" id="iq" placeholder="部品名・セクション・メモで探す" value="${esc(st.iq)}" data-live="1">
+        <div class="chips" id="ichips" style="margin:0"></div><span class="sp"></span><span class="stat" id="istat"></span></div>
+      <div class="igrid" id="igrid"></div>`;
+    $("#iq").addEventListener("input", (e) => {
+      st.iq = e.target.value;
+      renderIllustGrid();
+    });
+    $("#ifile").addEventListener("change", (e) => {
+      takeFiles([...e.target.files]);
+      e.target.value = "";
+    });
+    const drop = $("#drop");
+    drop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      drop.classList.add("over");
+    });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.classList.remove("over");
+      takeFiles([...(e.dataTransfer?.files || [])]);
+    });
+  }
+  renderIllustGrid();
+}
+
+function renderIllustGrid() {
+  const all = vals(st.images);
+  const counts = {
+    all: all.length,
+    noname: all.filter((i) => !i.name).length,
+    unlinked: all.filter((i) => !i.partId).length,
+    weak: all.filter((i) => (i.review?.level || 0) < 3).length,
+  };
+  $("#ichips").innerHTML = [
+    ["all", "すべて"],
+    ["weak", "うろ覚え"],
+    ["noname", "名前なし"],
+    ["unlinked", "未登録"],
+  ]
+    .map(
+      ([k, l]) =>
+        `<button class="chip ${st.ifilter === k ? "on" : ""}" data-ifilter="${k}">${l} ${counts[k]}</button>`,
+    )
+    .join("");
+  const list = all.filter(imgMatches).sort((a, b) => b.createdAt - a.createdAt);
+  $("#istat").textContent = `${list.length} / ${all.length}枚`;
+  if (!all.length) {
+    $("#igrid").innerHTML =
+      `<p class="empty">まだ画像がありません。上の枠にドラッグするか、Ctrl+Vで貼り付けてください。</p>`;
+    return;
+  }
+  $("#igrid").innerHTML =
+    list
+      .map((im) => {
+        const lv = im.review?.level || 0;
+        return `<button class="icard" data-pic="${esc(im.id)}">
+        <div class="ithumb"><img src="${esc(im.thumb)}" alt="" loading="lazy"></div>
+        <div class="iname">${im.name ? esc(im.name) : '<span style="color:var(--mu2)">名前なし</span>'}</div>
+        <div class="imeta">${im.sec ? `<span class="sec sm">SEC<b>${esc(im.sec)}</b></span>` : ""}${im.code ? `<span class="mono">${esc(im.code)}</span>` : ""}${im.partId ? '<span class="linked" title="セクション検索に登録済み">登録済</span>' : ""}</div>
+        ${im.memo ? `<div class="imemo">${esc(im.memo)}</div>` : ""}
+        <div class="ifoot"><time>${fmtWhen(im.createdAt)}</time><span class="lv lv${lv}" title="復習の習熟度">${LV[lv]}</span></div></button>`;
+      })
+      .join("") || '<p class="empty">条件に合う画像はありません</p>';
+}
+
+// ドロップ・貼り付け・ファイル選択の入口
+async function takeFiles(files) {
+  if (!files.length) return;
+  for (const f of files) {
+    const kind = IMG.kindOf(f);
+    try {
+      if (kind === "image") {
+        const img = await IMG.fileToImage(f);
+        const ok = await picForm({ src: img, fileName: f.name });
+        if (ok === "stop") break;
+      } else if (kind === "pdf") {
+        const ok = await pdfFlow(f);
+        if (ok === "stop") break;
+      } else if (kind === "docuworks") {
+        toast(
+          "DocuWorks文書（.xdw）はそのまま読めません。DocuWorksで範囲を選んでコピーし、ここでCtrl+Vしてください",
+          true,
+        );
+      } else {
+        toast(`${f.name} は画像として読めませんでした`, true);
+      }
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+}
+
+async function pdfFlow(file) {
+  toast("PDFを読み込んでいます…");
+  const pdf = await IMG.openPdf(file);
+  let page = 1;
+  if (pdf.pages > 1) {
+    const r = await modal(`<h3>どのページを取り込みますか？</h3><form>
+      <p style="margin:0 0 10px;font-size:12.5px;color:var(--mu)">${esc(file.name)}（全${pdf.pages}ページ）</p>
+      <div class="field"><label>ページ番号</label><input class="inp mono" name="page" type="number" min="1" max="${pdf.pages}" value="1" required autofocus style="max-width:120px"></div></form>
+      <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok">このページを取り込む</button></div>`);
+    if (!r) return;
+    page = Math.min(pdf.pages, Math.max(1, +r.data.page || 1));
+  }
+  const canvas = await pdf.render(page);
+  return picForm({ src: canvas, fileName: `${file.name} p.${page}` });
+}
+
+// 部品名の候補（datalist）
+function partOptions() {
+  return st.partList
+    .slice()
+    .sort((a, b) => S.cmpSec(a.sec, b.sec))
+    .map((p) => `<option value="${esc(p.name)}">SEC ${esc(p.sec)} / ${esc(p.code)}</option>`)
+    .join("");
+}
+
+// 登録・編集フォーム（新規は src、編集は im を渡す）
+async function picForm({ src, fileName, im }) {
+  const isNew = !im;
+  const made = isNew ? IMG.makeImages(src) : null;
+  const now = Date.now();
+  im = im || { createdAt: now, name: "", sec: "", code: "", memo: "" };
+  const linked = im.partId && st.parts[im.partId];
+  const r = await modal(
+    `<h3>${isNew ? "画像を登録" : "画像の情報を編集"}</h3><form>
+    <div class="pf-top"><img class="pf-img" src="${esc(isNew ? made.full : im.thumb)}" alt="">
+      <div class="pf-when">${IC.clock}${fmtFull(im.createdAt)}${isNew ? "（自動）" : ""}${fileName ? `<br><small>${esc(fileName)}・${IMG.sizeKB(made.full)}KB</small>` : ""}</div></div>
+    <div class="field"><label>部品名（候補から選ぶとセクション・コードも入ります）</label><input class="inp" name="name" list="pf-parts" value="${esc(im.name)}" autocomplete="off" autofocus></div>
+    <datalist id="pf-parts">${partOptions()}</datalist>
+    <div class="grid2"><div class="field"><label>セクション</label><input class="inp mono" name="sec" value="${esc(im.sec)}"></div>
+    <div class="field"><label>部品コード</label><input class="inp mono" name="code" value="${esc(im.code)}"></div></div>
+    <div class="field"><label>メモ（任意）</label><textarea class="inp" name="memo" rows="3" placeholder="覚え方、見分け方、どこに付いているか など">${esc(im.memo)}</textarea></div>
+    <label class="switch"><input type="checkbox" name="reg" ${linked ? "checked disabled" : ""}> ${linked ? "セクション検索に登録済み" : "セクション検索にも登録する"}</label>
+    <div class="pf-hint" id="pf-hint"></div></form>
+    <div class="modal-foot">${isNew ? '<button class="btn left" data-m="stop">残りもやめる</button>' : '<button class="btn danger left" data-m="delete">削除</button>'}<button class="btn" data-m="cancel">${isNew ? "スキップ" : "キャンセル"}</button><button class="btn pri" data-m="ok">保存</button></div>`,
+    {
+      onOpen(bg) {
+        const f = $("form", bg);
+        const hint = $("#pf-hint", bg);
+        const check = () => {
+          const reg = f.reg.checked && !f.reg.disabled;
+          for (const k of ["name", "sec", "code"]) f[k].required = reg;
+          const same = st.partList.find(
+            (p) => partSig(p) === partSig({ name: f.name.value, sec: f.sec.value, code: f.code.value }),
+          );
+          hint.textContent =
+            reg && same
+              ? "同じ部品がすでにあるので、新しくは作らずに紐付けます"
+              : reg
+                ? "部品名・セクション・部品コードの3つが必要です"
+                : "";
+        };
+        f.name.addEventListener("input", () => {
+          const hit = st.partList.find((p) => p.name === f.name.value.trim());
+          if (hit) {
+            f.sec.value = hit.sec;
+            f.code.value = hit.code;
+          }
+          check();
+        });
+        f.sec.addEventListener("input", check);
+        f.code.addEventListener("input", check);
+        f.reg.addEventListener("change", check);
+      },
+    },
+  );
+  if (!r) return null;
+  if (r.act === "stop") return "stop";
+  if (r.act === "delete") return delPic(im.id);
+
+  const clean = (v) =>
+    String(v || "")
+      .normalize("NFKC")
+      .trim();
+  const rec = {
+    name: clean(r.data.name).replace(/\s+/g, " "),
+    sec: clean(r.data.sec),
+    code: clean(r.data.code),
+    memo: String(r.data.memo || "").trim(),
+    updatedAt: Date.now(),
+  };
+  try {
+    if (r.data.reg === "on" && rec.name && rec.sec && rec.code) {
+      const same = st.partList.find((p) => partSig(p) === partSig(rec));
+      rec.partId = same
+        ? same.id
+        : await store.push("parts", {
+            sec: rec.sec,
+            code: rec.code,
+            name: rec.name,
+            note: "",
+            updatedAt: Date.now(),
+          });
+      if (!same) toast(`「${rec.name}」をセクション検索に登録しました`);
+    } else if (linked) {
+      // 名前などを変えたら、紐付けはそのまま残す
+      rec.partId = im.partId;
+    }
+    if (isNew) {
+      const id = localKey();
+      await store.set(`imageData/${id}`, made.full);
+      await store.set(`images/${id}`, {
+        ...rec,
+        createdAt: im.createdAt,
+        thumb: made.thumb,
+        w: made.w,
+        h: made.h,
+      });
+      toast("画像を保存しました");
+    } else {
+      await store.update(`images/${im.id}`, rec);
+      toast("保存しました");
+    }
+  } catch (e) {
+    toast("保存できませんでした：" + e.message, true);
+  }
+  return "ok";
+}
+
+async function delPic(id) {
+  if (!(await confirmBox("この画像を削除しますか？（セクション検索の部品データは消えません）", "削除", true)))
+    return;
+  await store.remove(`images/${id}`);
+  await store.remove(`imageData/${id}`);
+  toast("削除しました");
+}
+
+// 画像を大きく見る
+async function openPic(id) {
+  const im = st.images[id] && { id, ...st.images[id] };
+  if (!im) return;
+  const part = im.partId && st.parts[im.partId];
+  const r = await modal(
+    `<div class="viewer">
+      <div class="vimg"><img id="v-img" src="${esc(im.thumb)}" alt="" class="blur"></div>
+      <div class="vinfo"><div class="vname">${im.name ? esc(im.name) : '<span style="color:var(--mu2)">名前なし</span>'}</div>
+        <div class="imeta">${im.sec ? `<span class="sec">SEC<b>${esc(im.sec)}</b></span>` : ""}${im.code ? `<span class="pcode">${esc(im.code)}</span>` : ""}</div>
+        ${im.memo ? `<div class="vmemo">${esc(im.memo)}</div>` : ""}
+        <div class="stat">${IC.clock} ${fmtFull(im.createdAt)}　${part ? "／ セクション検索に登録済み" : ""}</div></div></div>
+    <div class="modal-foot"><button class="btn danger left" data-m="delete">削除</button>${im.name ? '<button class="btn" data-m="search">セクション検索で開く</button>' : ""}<button class="btn" data-m="edit">編集</button><button class="btn pri" data-m="cancel">閉じる</button></div>`,
+    {
+      async onOpen(bg) {
+        $(".modal", bg).classList.add("wide");
+        try {
+          const full = await store.get(`imageData/${id}`);
+          const el = $("#v-img", bg);
+          if (full && el) {
+            el.src = full;
+            el.classList.remove("blur");
+          }
+        } catch (e) {
+          toast("画像本体を読めませんでした：" + e.message, true);
+        }
+      },
+    },
+  );
+  if (!r) return;
+  if (r.act === "delete") return delPic(id);
+  if (r.act === "edit") return picForm({ im });
+  if (r.act === "search") {
+    st.q = im.name;
+    st.sec = "";
+    st.group = "all";
+    st.sel = 0;
+    go("sec");
+  }
+}
+
+// ---- 復習 ----
+// 名前が付いている画像を、覚えていない順に出す
+function buildQueue() {
+  return vals(st.images)
+    .filter((im) => im.name)
+    .sort(
+      (a, b) =>
+        (a.review?.level || 0) - (b.review?.level || 0) || (a.review?.last || 0) - (b.review?.last || 0),
+    );
+}
+
+function renderReview() {
+  const body = $("#ibody");
+  if (!st.rev) st.rev = { queue: buildQueue().map((i) => i.id), idx: 0, shown: false, done: 0, ok: 0 };
+  const rv = st.rev;
+  const total = vals(st.images).filter((i) => i.name).length;
+  if (!total) {
+    body.innerHTML = `<div class="panel"><h3>復習できる画像がありません</h3><p style="margin:0;font-size:12.5px;color:var(--mu)">部品名を付けた画像が復習に出てきます。</p></div>`;
+    return;
+  }
+  const id = rv.queue[rv.idx];
+  const im = id && st.images[id] && { id, ...st.images[id] };
+  if (!im) {
+    body.innerHTML = `<div class="panel center" style="padding:30px"><h3 style="justify-content:center">おつかれさま！</h3>
+      <p style="font-size:14px;margin:0 0 16px">${rv.done}枚 復習して、${rv.ok}枚 覚えていました。</p>
+      <button class="btn pri" data-revagain="1">もう一周する</button></div>`;
+    return;
+  }
+  const lv = im.review?.level || 0;
+  body.innerHTML = `<div class="review">
+    <div class="rhead"><span>${rv.idx + 1} / ${rv.queue.length}</span><span class="lv lv${lv}">習熟度：${LV[lv]}</span></div>
+    <div class="rimg"><img id="r-img" src="${esc(im.thumb)}" alt="" class="blur"></div>
+    <div class="rans ${rv.shown ? "" : "hide"}">
+      ${
+        rv.shown
+          ? `<div class="vname">${esc(im.name)}</div><div class="imeta">${im.sec ? `<span class="sec">SEC<b>${esc(im.sec)}</b></span>` : ""}${im.code ? `<span class="pcode">${esc(im.code)}</span>` : ""}</div>${im.memo ? `<div class="vmemo">${esc(im.memo)}</div>` : ""}`
+          : `<div class="rq">この部品は？（名前・セクション・コード）</div>`
+      }
+    </div>
+    <div class="ractions">${
+      rv.shown
+        ? `<button class="btn" data-rev="ng">もう一回 <kbd>1</kbd></button><button class="btn pri" data-rev="ok">覚えた <kbd>2</kbd></button>`
+        : `<button class="btn pri wide" data-rev="show">答えを見る <kbd>Space</kbd></button>`
+    }</div></div>`;
+  store
+    .get(`imageData/${id}`)
+    .then((full) => {
+      const el = $("#r-img");
+      if (full && el && st.rev?.queue[st.rev.idx] === id) {
+        el.src = full;
+        el.classList.remove("blur");
+      }
+    })
+    .catch(() => {});
+}
+
+async function reviewAnswer(kind) {
+  const rv = st.rev;
+  if (!rv) return;
+  if (kind === "show") {
+    rv.shown = true;
+    return renderReview();
+  }
+  const id = rv.queue[rv.idx];
+  const im = st.images[id];
+  if (!im) return;
+  const r = im.review || { level: 0, ok: 0, ng: 0 };
+  const next = {
+    level: kind === "ok" ? Math.min(5, (r.level || 0) + 1) : 0,
+    ok: (r.ok || 0) + (kind === "ok" ? 1 : 0),
+    ng: (r.ng || 0) + (kind === "ng" ? 1 : 0),
+    last: Date.now(),
+  };
+  rv.done++;
+  if (kind === "ok") rv.ok++;
+  rv.idx++;
+  rv.shown = false;
+  try {
+    await store.set(`images/${id}/review`, next);
+  } catch (e) {
+    toast(e.message, true);
+  }
+  renderReview();
+}
+
+function reviewKeys(e) {
+  if (!st.rev || modalOpen()) return false;
+  if (!st.rev.shown && (e.key === " " || e.key === "Enter")) {
+    e.preventDefault();
+    reviewAnswer("show");
+    return true;
+  }
+  if (st.rev.shown && (e.key === "1" || e.key === "2")) {
+    e.preventDefault();
+    reviewAnswer(e.key === "2" ? "ok" : "ng");
+    return true;
+  }
+  return false;
+}
+
+// 貼り付け（Ctrl+V）
+document.addEventListener("paste", (e) => {
+  if (!st.user || st.locked || st.view !== "illust" || modalOpen()) return;
+  const t = e.target;
+  if (t && /INPUT|TEXTAREA/.test(t.tagName)) return;
+  const files = [...(e.clipboardData?.items || [])]
+    .filter((i) => i.kind === "file")
+    .map((i) => i.getAsFile())
+    .filter(Boolean);
+  if (!files.length) {
+    toast("画像が見つかりませんでした。DocuWorksなら範囲を選んで「コピー」してから貼ってください", true);
+    return;
+  }
+  e.preventDefault();
+  if (st.imode !== "list") {
+    st.imode = "list";
+    renderIllust(true);
+  }
+  takeFiles(files);
+});
+// 枠の外に落としても、ブラウザで画像が開いてしまわないように
+document.addEventListener("dragover", (e) => {
+  if (st.view === "illust") e.preventDefault();
+});
+document.addEventListener("drop", (e) => {
+  if (st.view !== "illust" || e.defaultPrevented) return;
+  e.preventDefault();
+  takeFiles([...(e.dataTransfer?.files || [])]);
+});
+
 // ---- クリック ----
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("button,[data-pid]");
@@ -1690,6 +2154,7 @@ document.addEventListener("click", async (e) => {
     if (!p) return;
     st.sel = +row.dataset.i;
     markSel();
+    if (d.act === "pics") return openPic(picsFor(p.id)[0].id);
     return d.act === "google" ? googlePart(p) : openMemoForPart(p);
   }
   if (d.sec !== undefined) {
@@ -1818,6 +2283,21 @@ document.addEventListener("click", async (e) => {
     return renderEdit();
   }
   if (d.pick) return $("#" + d.pick)?.click();
+  if (d.pic) return openPic(d.pic);
+  if (d.ifilter) {
+    st.ifilter = d.ifilter;
+    return renderIllustGrid();
+  }
+  if (d.imode) {
+    st.imode = d.imode;
+    st.rev = null;
+    return renderIllust(true);
+  }
+  if (d.rev) return reviewAnswer(d.rev);
+  if (d.revagain) {
+    st.rev = null;
+    return renderReview();
+  }
 });
 document.addEventListener("change", async (e) => {
   const v = e.target.dataset.kver;
@@ -1840,12 +2320,13 @@ document.addEventListener("keydown", (e) => {
     ($("#q") || $("#kq"))?.focus();
     return;
   }
-  const map = { s: "sec", k: "kata", m: "memo", h: "hist", e: "edit" };
+  const map = { s: "sec", k: "kata", m: "memo", i: "illust", h: "hist", e: "edit" };
   if (map[k]) {
     e.preventDefault();
     go(map[k]);
     return;
   }
+  if (st.view === "illust" && st.imode === "review" && reviewKeys(e)) return;
   const onBody = !document.activeElement || document.activeElement === document.body;
   if (onBody && st.view === "sec" && ["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) {
     secKeys(e);
