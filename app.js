@@ -1,10 +1,10 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261003f";
-import * as S from "./search.js?v=20261003f";
-import * as FID from "./faceid.js?v=20261003f";
-import * as IMG from "./imgtools.js?v=20261003f";
-import * as CAT from "./catalog.js?v=20261003f";
-import * as TOOLS from "./tools.js?v=20261003f";
+import { createStore, DEMO, localKey } from "./store.js?v=20261003g";
+import * as S from "./search.js?v=20261003g";
+import * as FID from "./faceid.js?v=20261003g";
+import * as IMG from "./imgtools.js?v=20261003g";
+import * as CAT from "./catalog.js?v=20261003g";
+import * as TOOLS from "./tools.js?v=20261003g";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -885,7 +885,8 @@ function renderKataResult() {
       <div class="hacts"><button class="btn" data-google="${esc(gq)}">${IC.search} Googleで「${esc(gq)}」</button>
         <button class="btn ${mc ? "has" : ""}" data-katamemo="${esc(r.key)}">${IC.note} この車種のメモ${mc ? `<span class="cnt">${mc}</span>` : ""}</button>
         ${f.verified ? "" : `<button class="btn" data-verify="${esc(r.key)}">✓ 確認済みにする</button>`}
-        <button class="btn" data-editkata="${esc(r.key)}">編集</button></div></div>`;
+        <button class="btn" data-editkata="${esc(r.key)}">編集</button></div>
+      ${kataMemoList(r.key)}</div>`;
     fillKataPhotos(box);
     return;
   }
@@ -935,6 +936,21 @@ function wireRegPhoto() {
     wrap.innerHTML = photoBox(regPhoto);
     wireRegPhoto();
   });
+}
+// 判定結果の下に、その車種のメモを中身ごと出す
+function kataMemoList(code) {
+  const ms = memosForKata(code)
+    .filter((m) => (m.title || "").trim() || (m.body || "").trim())
+    .sort((a, b) => !!a.done - !!b.done || (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!ms.length) return "";
+  return `<div class="kmemos"><div class="kmt">${IC.note} この車種のメモ <span class="num">${ms.length}件</span></div>
+    ${ms
+      .map(
+        (m) => `<button class="kmemo ${m.done ? "done" : ""}" data-memo="${esc(m.id)}" title="メモを開く">
+        <div class="kmh"><b>${esc(m.title || "（無題）")}</b>${m.done ? '<span class="vtag ok">解決</span>' : ""}<time>${fmtWhen(m.updatedAt || m.createdAt)}</time></div>
+        ${m.body?.trim() ? `<div class="kmb">${esc(m.body.trim())}</div>` : ""}</button>`,
+      )
+      .join("")}</div>`;
 }
 async function saveKata(code, data) {
   await store.set(`kata/${code}`, {

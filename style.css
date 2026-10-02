@@ -3075,3 +3075,88 @@ img.blur {
 .toast-btn {
   pointer-events: auto;
 }
+
+/* 型式：その車種のメモ */
+.kmemos {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--ln);
+  padding-top: 12px;
+}
+.kmt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--mu);
+}
+.kmt .ic {
+  width: 14px;
+  height: 14px;
+}
+.kmemo {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--in);
+  border: 1px solid var(--ln);
+  border-left: 3px solid var(--ac);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: var(--tx);
+}
+.kmemo:hover {
+  border-color: var(--ac);
+}
+.kmemo.done {
+  border-left-color: var(--ok);
+  opacity: 0.8;
+}
+.kmh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.kmh .vtag {
+  margin: 0;
+}
+.kmh time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--mu2);
+  white-space: nowrap;
+}
+.kmb {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--tx);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 11.5em;
+  overflow: auto;
+}
+@media (max-width: 760px) {
+  .kmemos {
+    grid-column: auto;
+  }
+}
+.hit:has(.kmemos) .car {
+  grid-row: span 3;
+}
+@media (max-width: 760px) {
+  .hit:has(.kmemos) .car {
+    grid-row: auto;
+  }
+}
+@media (max-width: 760px) {
+  .kph.add {
+    aspect-ratio: auto;
+    max-width: none;
+    padding: 12px;
+  }
+}
