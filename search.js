@@ -14,7 +14,7 @@ const SMALL = {
   ヵ: "カ",
   ヶ: "ケ",
 };
-const DROP = /[\s・･\-‐‑‒–—―−ーｰ〜~_.,、。]/;
+const DROP = /[\s・･\-‐‑‒–—―−ーｰ〜~_.,、。/()（）［］\[\]]/;
 
 /** 1文字を検索用に正規化（ひらがな→カタカナ、全角→半角、小文字化、小さいカナ→大きいカナ、長音・記号は消す） */
 function normChar(c) {
@@ -66,7 +66,7 @@ export function parseSynonyms(text) {
 }
 export const DEFAULT_SYNONYMS = [
   "フィルター=エレメント",
-  "リア=リヤ",
+  "リア=リヤ=RR",
   "ランプ=ライト",
   "パッキン=ガスケット",
   "ブッシュ=ブッシング",
@@ -74,10 +74,15 @@ export const DEFAULT_SYNONYMS = [
   "パワステ=パワーステアリング",
   "ワイパー=ブレード",
   "エアコン=クーラー",
+  "アッセンブリ=アッシー=ASSY=ASY",
+  "RH=右=ミギ",
+  "LH=左=ヒダリ",
+  "フロント=FR",
+  "ヘキサゴン=ヘクサゴン=六角",
 ].join("\n");
 
 /** 1語 → 言い換えを含めた候補（正規化済み） */
-function expand(tok, groups) {
+export function expand(tok, groups) {
   const t = norm(tok);
   if (!t) return [];
   const alts = new Set([t]);

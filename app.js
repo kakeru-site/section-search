@@ -1,8 +1,9 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js";
-import * as S from "./search.js";
-import * as FID from "./faceid.js";
-import * as IMG from "./imgtools.js";
+import { createStore, DEMO, localKey } from "./store.js?v=20261002f";
+import * as S from "./search.js?v=20261002f";
+import * as FID from "./faceid.js?v=20261002f";
+import * as IMG from "./imgtools.js?v=20261002f";
+import * as CAT from "./catalog.js?v=20261002f";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -98,6 +99,23 @@ const st = {
   iq: "",
   ifilter: "all",
   rev: null,
+  // 品番辞書
+  catalog: {},
+  catList: [],
+  catState: "idle",
+  catVer: null,
+  catBusy: false,
+  catResults: [],
+  catLimit: 50,
+  catMemo: (() => {
+    try {
+      return localStorage.getItem("secsearch.catmemo") === "1";
+    } catch {
+      return false;
+    }
+  })(),
+  catQ: "",
+  catEditLimit: 100,
   // メモ
   memoFilter: "open",
   memoQ: "",
@@ -300,6 +318,10 @@ function teardown() {
   unsubs = [];
   st.booted = false;
   st.loaded = {};
+  st.catalog = {};
+  st.catList = [];
+  st.catVer = null;
+  st.catState = "idle";
   $("#app").innerHTML = "";
 }
 function startData() {
@@ -329,6 +351,17 @@ function startData() {
   });
   sub("stats", "stats");
   sub("images", "images");
+  // 品番辞書は版数だけ見張って、変わったら取り直す
+  unsubs.push(
+    store.sub(
+      "catalogMeta",
+      (v) => {
+        const ver = v?.version || 0;
+        if (ver !== st.catVer && !st.catBusy) loadCatalog(ver);
+      },
+      onErr,
+    ),
+  );
 }
 function onData(key) {
   if (!st.booted) return;
@@ -510,6 +543,7 @@ function renderSec() {
     st.q = q.value;
     st.sel = 0;
     st.limit = 60;
+    st.catLimit = 50;
     renderResults();
     histTyping();
   });
@@ -541,6 +575,9 @@ function renderChips() {
     ).join("") +
     (st.sec
       ? `<button class="chip secf" data-secoff="1" title="セクションの絞り込みを解除">SEC ${esc(st.sec)} ×</button>`
+      : "") +
+    (st.catList.length
+      ? `<button class="chip ${st.catMemo ? "on" : ""}" data-catmemo="1" title="品番辞書のメモの中身も検索する">${IC.note} 品番メモも検索</button>`
       : "");
 }
 function highlight(text, ranges) {
@@ -563,48 +600,86 @@ function renderResults() {
     box.innerHTML = '<p class="empty">読み込み中…</p>';
     return;
   }
-  if (!st.partList.length) {
-    cnt.textContent = "";
-    box.innerHTML = `<div class="panel"><h3>部品データがまだありません</h3><p style="margin:0 0 12px;font-size:13px;color:var(--mu);line-height:1.7">「データ編集 → 取り込み・書き出し」から、parts.json か Excel（部品マスタ）を取り込んでください。</p><button class="btn pri" data-go="edit:io">取り込み画面へ</button></div>`;
-    return;
-  }
-  const home = !st.q.trim() && st.group === "all" && !st.sec;
+  const q = st.q.trim();
+  const home = !q && st.group === "all" && !st.sec;
   if (home) {
-    cnt.textContent = `全${st.partList.length}件`;
+    cnt.textContent = `全${st.partList.length}件${st.catList.length ? `＋品番${st.catList.length.toLocaleString()}件` : ""}`;
     cnt.className = "cnt";
-    box.innerHTML = homePanels();
     st.results = [];
+    if (!st.partList.length && !st.catList.length) {
+      box.innerHTML = `<div class="panel"><h3>データがまだありません</h3><p style="margin:0 0 12px;font-size:13px;color:var(--mu);line-height:1.7">「データ編集」から、部品データ（parts.json など）や品番辞書（Excel）を取り込んでください。</p><button class="btn pri" data-go="edit:io">取り込み画面へ</button></div>`;
+      return;
+    }
+    box.innerHTML = homePanels();
     return;
   }
-  st.results = S.searchParts(st.partList, st.q, st.syn, { group: st.group, sec: st.sec });
+  st.results = st.partList.length
+    ? S.searchParts(st.partList, st.q, st.syn, { group: st.group, sec: st.sec })
+    : [];
+  const catOn = !!q && st.group === "all" && !st.sec;
+  st.catResults =
+    catOn && st.catList.length ? CAT.searchCatalog(st.catList, q, st.syn, { memo: st.catMemo }) : [];
   const n = st.results.length;
-  cnt.textContent = n ? `${n}件ヒット` : "見つかりません";
-  cnt.className = "cnt " + (n ? "" : "ng");
-  if (!n) {
-    const q = st.q.trim();
+  const m = st.catResults.length;
+  cnt.textContent = n || m ? `セクション${n}件・品番${m}件` : "見つかりません";
+  cnt.className = "cnt " + (n || m ? "" : "ng");
+  if (!n && !m) {
+    const gq = `${setting("googlePrefix", "")} ${q}`.trim();
     box.innerHTML = `<div class="panel"><h3>「${esc(q)}」は見つかりませんでした</h3>
       <p style="margin:0 0 12px;font-size:12.5px;color:var(--mu);line-height:1.7">言い方を変える（例：フィルター → エレメント）か、短くしてみてください。よく使う言い換えは「データ編集 → 設定 → 言い換えリスト」に登録できます。</p>
-      <div class="flex-wrap"><button class="btn" data-google="${esc(`${setting("googlePrefix", "")} ${q}`.trim())}">${IC.search} Googleで「${esc(`${setting("googlePrefix", "")} ${q}`.trim())}」</button><button class="btn" data-addpart="${esc(q)}">＋ 部品データに追加</button></div></div>`;
+      <div class="flex-wrap"><button class="btn" data-google="${esc(gq)}">${IC.search} Googleで「${esc(gq)}」</button><button class="btn" data-addpart="${esc(q)}">＋ 部品データに追加</button></div></div>${catalogBlock(catOn)}`;
     return;
   }
-  if (st.sel >= Math.min(n, st.limit)) st.sel = 0;
-  const rows = st.results
-    .slice(0, st.limit)
-    .map((r, i) => {
-      const p = r.p,
-        mc = memosForPart(p.id).length;
-      return `<div class="row ${i === st.sel ? "sel" : ""}" data-pid="${esc(p.id)}" data-i="${i}">
+  let html = "";
+  if (n) {
+    if (st.sel >= Math.min(n, st.limit)) st.sel = 0;
+    const rows = st.results
+      .slice(0, st.limit)
+      .map((r, i) => {
+        const p = r.p,
+          mc = memosForPart(p.id).length;
+        return `<div class="row ${i === st.sel ? "sel" : ""}" data-pid="${esc(p.id)}" data-i="${i}">
       <div><div class="pname">${highlight(p.name, r.ranges)}</div>${p.note ? `<div class="pnote">${esc(p.note)}</div>` : ""}${p.hot ? `<div class="phot">${IC.star}頻出：${esc(p.hot)}</div>` : ""}</div>
       <div><button class="sec" data-sec="${esc(p.sec)}" title="このセクションの部品を一覧">SEC<b>${esc(p.sec)}</b></button></div>
       <div class="pcode">${esc(p.code)}</div>
       <div class="acts">${picsFor(p.id).length ? `<button class="btn has" data-act="pics" title="登録した図を見る">${IC.pic}図<span class="cnt">${picsFor(p.id).length}</span></button>` : ""}<button class="btn" data-act="google" title="Googleで検索（Enter）">${IC.search}Google</button><button class="btn ${mc ? "has" : ""}" data-act="memo" title="メモ（Ctrl+Enter）">${IC.note}メモ${mc ? `<span class="cnt">${mc}</span>` : ""}</button></div></div>`;
+      })
+      .join("");
+    html +=
+      `<div class="blk-head">セクション（厳選）<small>${n}件</small></div>` +
+      `<div class="thead"><span>部品名</span><span>セクション</span><span>部品コード</span><span>ジャンプ</span></div><div class="rows">${rows}</div>` +
+      (n > st.limit
+        ? `<div class="more-row"><button class="btn" data-more="1">さらに表示（残り${n - st.limit}件）</button></div>`
+        : "");
+  }
+  html += catalogBlock(catOn);
+  box.innerHTML = html;
+}
+
+// 品番辞書の検索結果
+function catalogBlock(on) {
+  if (!on) return "";
+  if (st.catState === "loading")
+    return `<div class="blk-head">品番辞書<small>読み込み中…（初回は少し時間がかかります）</small></div>`;
+  if (!st.catList.length) return "";
+  const res = st.catResults;
+  if (!res.length)
+    return `<div class="blk-head">品番辞書<small>該当なし</small><button class="more" data-cedit="">＋ 品番を追加</button></div>`;
+  const rows = res
+    .slice(0, st.catLimit)
+    .map(({ it, ranges }) => {
+      return `<div class="crow">
+      <button class="ccode" data-cgo="${esc(it.key)}" title="Googleで「${esc(it.c)}」を検索">${esc(it.c)}${IC.ext}</button>
+      <div class="cname">${highlight(it.n, ranges)}${it.a ? `<small class="calt">別名：${esc(it.a)}</small>` : ""}${it.m ? `<div class="cmemo">${IC.note}${esc(it.m)}</div>` : ""}</div>
+      <div class="cacts"><button class="btn sm" data-ccopy="${esc(it.key)}" title="品番をコピー">コピー</button><button class="btn sm ${it.m ? "has" : ""}" data-cedit="${esc(it.key)}">${IC.note}メモ</button></div></div>`;
     })
     .join("");
-  box.innerHTML =
-    `<div class="thead"><span>部品名</span><span>セクション</span><span>部品コード</span><span>ジャンプ</span></div><div class="rows">${rows}</div>` +
-    (n > st.limit
-      ? `<div class="more-row"><button class="btn" data-more="1">さらに表示（残り${n - st.limit}件）</button></div>`
-      : "");
+  return (
+    `<div class="blk-head">品番辞書<small>${res.length.toLocaleString()}件 ／ 品番を押すとGoogle検索</small><button class="more" data-cedit="">＋ 品番を追加</button></div><div class="crows">${rows}</div>` +
+    (res.length > st.catLimit
+      ? `<div class="more-row"><button class="btn" data-catmore="1">さらに表示（残り${(res.length - st.catLimit).toLocaleString()}件）</button></div>`
+      : "")
+  );
 }
 function homePanels() {
   const stats = vals(st.stats.sections)
@@ -1110,6 +1185,7 @@ function rerun(id) {
 // ---- データ編集 ----
 const ETABS = [
   ["parts", "部品データ"],
+  ["cat", "品番辞書"],
   ["kata", "型式対応表"],
   ["io", "取り込み・書き出し"],
   ["settings", "設定"],
@@ -1118,7 +1194,7 @@ function renderEdit() {
   $("#main").innerHTML =
     `<div class="view-head"><div><h1 class="h1">データ編集</h1><div class="tip">部品データ・型式対応表の追加・修正・削除、取り込み、各種設定</div></div></div>
     <div class="subtabs">${ETABS.map(([k, l]) => `<button class="subtab ${st.editTab === k ? "on" : ""}" data-etab="${k}">${l}</button>`).join("")}</div><div id="ebody"></div>`;
-  ({ parts: editParts, kata: editKata, io: editIO, settings: editSettings })[st.editTab]();
+  ({ parts: editParts, cat: editCat, kata: editKata, io: editIO, settings: editSettings })[st.editTab]();
 }
 function editParts() {
   $("#ebody").innerHTML =
@@ -1317,6 +1393,7 @@ async function saveBackup() {
         settings: st.settings,
         images: st.images,
         imageData,
+        catalog: st.catalog,
       },
       null,
       1,
@@ -1359,6 +1436,7 @@ async function restoreBackup(file) {
       settings: j.settings || null,
       images: j.images || null,
       imageData: j.imageData || null,
+      ...(j.catalog ? { catalog: j.catalog, catalogMeta: { version: Date.now() } } : {}),
     });
     toast("復元しました");
   } catch (e) {
@@ -2092,6 +2170,320 @@ document.addEventListener("drop", (e) => {
   takeFiles([...(e.dataTransfer?.files || [])]);
 });
 
+// ---- 品番辞書 ----
+const catCacheKey = () => `catalog:${st.user?.uid || "x"}`;
+
+async function loadCatalog(ver) {
+  st.catState = "loading";
+  refreshCat();
+  try {
+    let data = {};
+    if (ver) {
+      const cached = await CAT.cacheGet(catCacheKey());
+      if (cached && cached.version === ver) data = cached.data || {};
+      else {
+        data = (await store.get("catalog")) || {};
+        await CAT.cacheSet(catCacheKey(), { version: ver, data });
+      }
+    }
+    st.catalog = data;
+    st.catVer = ver;
+    rebuildCat();
+    st.catState = "ready";
+  } catch (e) {
+    st.catState = "error";
+    toast("品番辞書を読み込めませんでした：" + e.message, true);
+  }
+  refreshCat();
+}
+function rebuildCat() {
+  st.catList = Object.entries(st.catalog).map(([k, v]) => CAT.indexItem(k, v));
+}
+function refreshCat() {
+  if (!st.booted) return;
+  if (st.view === "sec") renderResults();
+  if (st.view === "edit" && st.editTab === "cat" && $("#cattbl")) editCatTable();
+}
+// 自分で書いたあとは、手元の控えと版数をそろえる（全件の取り直しをしないため）
+async function catBump() {
+  const v = Date.now();
+  st.catVer = v;
+  await CAT.cacheSet(catCacheKey(), { version: v, data: st.catalog });
+  await store.set("catalogMeta/version", v);
+}
+async function catWrite(obj) {
+  st.catBusy = true;
+  try {
+    await store.update("catalog", obj);
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === null) delete st.catalog[k];
+      else st.catalog[k] = v;
+    }
+    await catBump();
+  } finally {
+    st.catBusy = false;
+  }
+  rebuildCat();
+  refreshCat();
+}
+function catRecord({ c, n, a, m }) {
+  const rec = { c: CAT.cleanText(c), n: CAT.cleanName(n) || "(名称なし)", u: Date.now() };
+  if (CAT.cleanText(a)) rec.a = CAT.cleanText(a);
+  if (String(m || "").trim()) rec.m = String(m).trim();
+  return rec;
+}
+
+function catGoogle(key) {
+  const it = st.catalog[key];
+  if (!it) return;
+  histTyping.flush();
+  googleOpen(`${setting("googlePrefix", "")} ${it.c}`.trim());
+}
+async function catCopy(key) {
+  const code = st.catalog[key]?.c;
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch {
+    const t = document.createElement("textarea");
+    t.value = code;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+  toast(`${code} をコピーしました`);
+}
+
+async function catForm(key) {
+  const it = key ? st.catalog[key] : null;
+  const v = it || { c: "", n: "", a: "", m: "" };
+  const r = await modal(
+    `<h3>${it ? "品番の詳細" : "品番を追加"}</h3><form>
+    <div class="grid2"><div class="field"><label>部品番号</label><input class="inp mono" name="c" required value="${esc(v.c)}" ${it ? "" : "autofocus"}></div>
+    <div class="field"><label>部品名</label><input class="inp" name="n" required value="${esc(v.n)}"></div></div>
+    <div class="field"><label>別名（任意・スペース区切り）</label><input class="inp" name="a" value="${esc(v.a)}" placeholder="例：フランジボルト"></div>
+    <div class="field"><label>メモ（任意）</label><textarea class="inp" name="m" rows="4" ${it ? "autofocus" : ""} placeholder="適合、注意点、よく聞かれること など">${esc(v.m)}</textarea></div>
+    ${it?.u ? `<div class="stat">最終更新 ${fmtWhen(it.u)}</div>` : ""}</form>
+    <div class="modal-foot">${it ? '<button class="btn danger left" data-m="delete">削除</button><button class="btn" data-m="google">Google</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`,
+  );
+  if (!r) return;
+  if (r.act === "delete") return catDelete(key);
+  if (r.act === "google") return catGoogle(key);
+  const rec = catRecord(r.data);
+  const nk = CAT.catKey(rec.c);
+  if (!nk) return toast("部品番号に英数字が入っていません", true);
+  if (nk !== key && st.catalog[nk]) {
+    const ok = await confirmBox(
+      `${st.catalog[nk].c}（${st.catalog[nk].n}）はすでにあります。上書きしますか？`,
+      "上書き",
+    );
+    if (!ok) return;
+  }
+  const obj = { [nk]: rec };
+  if (key && key !== nk) obj[key] = null;
+  try {
+    await catWrite(obj);
+    toast("保存しました");
+  } catch (e) {
+    toast("保存できませんでした：" + e.message, true);
+  }
+}
+
+async function catDelete(key) {
+  const old = st.catalog[key];
+  if (!old) return;
+  try {
+    await catWrite({ [key]: null });
+  } catch (e) {
+    return toast("削除できませんでした：" + e.message, true);
+  }
+  toastAction(`${old.c} を削除しました`, "元に戻す", () =>
+    catWrite({ [key]: old }).then(() => toast("元に戻しました")),
+  );
+}
+
+function toastAction(msg, label, fn) {
+  $(".toast")?.remove();
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<span></span><button class="toast-btn"></button>`;
+  el.firstChild.textContent = msg;
+  el.lastChild.textContent = label;
+  el.lastChild.addEventListener("click", () => {
+    el.remove();
+    fn();
+  });
+  document.body.appendChild(el);
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.remove(), 6000);
+}
+
+// データ編集 → 品番辞書
+function editCat() {
+  $("#ebody").innerHTML =
+    `<div class="toolbar"><input class="inp" id="cq" placeholder="品番・部品名・メモで絞り込み" value="${esc(st.catQ)}" data-live="1">
+    <span class="stat" id="cstat"></span><span class="sp"></span>
+    <input type="file" id="fcat" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-pick="fcat">Excelから取り込み</button>
+    <button class="btn" id="cat-csv">CSVで保存</button><button class="btn pri" data-cedit="">＋ 品番を追加</button></div>
+    <div id="cattbl"></div>`;
+  $("#cq").addEventListener("input", (e) => {
+    st.catQ = e.target.value;
+    st.catEditLimit = 100;
+    editCatTable();
+  });
+  $("#fcat").addEventListener("change", (e) =>
+    importCatalog(e.target.files[0]).finally(() => (e.target.value = "")),
+  );
+  $("#cat-csv").addEventListener("click", saveCatCsv);
+  editCatTable();
+}
+function editCatTable() {
+  const box = $("#cattbl");
+  if (!box) return;
+  if (st.catState === "loading") {
+    box.innerHTML = '<p class="empty">読み込み中…</p>';
+    return;
+  }
+  const q = st.catQ.trim();
+  const list = q
+    ? CAT.searchCatalog(st.catList, q, st.syn, { memo: true }).map((r) => r.it)
+    : [...st.catList].sort((a, b) => b.u - a.u || a.c.localeCompare(b.c));
+  $("#cstat").textContent = `${list.length.toLocaleString()} / ${st.catList.length.toLocaleString()}件`;
+  if (!st.catList.length) {
+    box.innerHTML = `<div class="panel"><h3>品番辞書は空です</h3><p style="margin:0;font-size:12.5px;color:var(--mu);line-height:1.7">「Excelから取り込み」で、部品番号と部品名の列があるExcelを読み込んでください。半角カナは全角に、品番の重複は1件にまとめて取り込みます。</p></div>`;
+    return;
+  }
+  const rows = list
+    .slice(0, st.catEditLimit)
+    .map(
+      (
+        it,
+      ) => `<tr><td class="c-code">${esc(it.c)}</td><td>${esc(it.n)}</td><td class="c-note">${esc(it.a)}</td><td class="c-note">${esc(it.m)}</td>
+      <td class="c-act"><button class="btn sm" data-cedit="${esc(it.key)}">編集</button> <button class="btn sm danger" data-cdel="${esc(it.key)}">削除</button></td></tr>`,
+    )
+    .join("");
+  box.innerHTML =
+    `<table class="tbl"><thead><tr><th>部品番号</th><th>部品名</th><th>別名</th><th>メモ</th><th></th></tr></thead><tbody>${rows}</tbody></table>` +
+    (list.length > st.catEditLimit
+      ? `<div class="more-row"><button class="btn" data-cateditmore="1">さらに表示（残り${(list.length - st.catEditLimit).toLocaleString()}件）</button></div>`
+      : "") +
+    (list.length ? "" : '<p class="empty">該当なし</p>');
+}
+function saveCatCsv() {
+  const q = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const rows = [...st.catList]
+    .sort((a, b) => a.c.localeCompare(b.c))
+    .map((it) => [it.c, it.n, it.a, it.m].map(q).join(","));
+  download(
+    `catalog-${stamp()}.csv`,
+    "﻿" + ["部品番号,部品名,別名,メモ"].concat(rows).join("\r\n"),
+    "text/csv",
+  );
+}
+
+async function readCatalogFile(file) {
+  if (file.name.toLowerCase().endsWith(".csv")) return CAT.rowsToCatalog(parseCsv(await file.text()));
+  const X = await loadXlsx();
+  const wb = X.read(await file.arrayBuffer(), { type: "array" });
+  let lastErr;
+  for (const n of wb.SheetNames) {
+    try {
+      // raw:false で、品番の頭の0が消えないように表示どおりの文字で読む
+      const rows = X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" });
+      const res = CAT.rowsToCatalog(rows);
+      if (res.unique) return res;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("品番データが見つかりませんでした");
+}
+
+async function importCatalog(file) {
+  if (!file) return;
+  toast("読み込んでいます…");
+  let res;
+  try {
+    res = await readCatalogFile(file);
+  } catch (e) {
+    return toast("取り込めませんでした：" + e.message, true);
+  }
+  const items = res.items;
+  let fresh = 0,
+    changed = 0,
+    same = 0;
+  for (const [k, v] of Object.entries(items)) {
+    const cur = st.catalog[k];
+    if (!cur) fresh++;
+    else if (cur.n !== v.n || cur.c !== v.c || (cur.a || "") !== (v.a || "")) changed++;
+    else same++;
+  }
+  const r = await modal(`<h3>品番辞書の取り込み</h3><form>
+    <p style="margin:0 0 10px;font-size:13px;line-height:1.8">${esc(file.name)}<br>
+      読み込み ${res.read.toLocaleString()}行 → 重複を除いて <b>${res.unique.toLocaleString()}件</b><br>
+      新しい品番 <b>${fresh.toLocaleString()}</b>件 ／ 名前などが変わる <b>${changed.toLocaleString()}</b>件 ／ 変更なし ${same.toLocaleString()}件</p>
+    <div class="radio" style="flex-direction:column;gap:8px">
+      <label><input type="radio" name="mode" value="add" checked> 新しい品番だけ追加する</label>
+      <label><input type="radio" name="mode" value="merge"> 追加＋変わったものは上書き（メモは残す）</label>
+      <label><input type="radio" name="mode" value="replace"> 全部入れ替える（ファイルにない品番は消える。メモは残せるものは残す）</label>
+    </div></form>
+    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok">取り込む</button></div>`);
+  if (!r) return;
+  const mode = r.data.mode;
+  const now = Date.now();
+  const write = {};
+  for (const [k, v] of Object.entries(items)) {
+    const cur = st.catalog[k];
+    if (mode === "add" && cur) continue;
+    const rec = { c: v.c, n: v.n, u: now };
+    if (v.a) rec.a = v.a;
+    if (cur?.m) rec.m = cur.m;
+    if (cur && mode !== "replace" && cur.n === rec.n && cur.c === rec.c && (cur.a || "") === (rec.a || ""))
+      continue;
+    write[k] = rec;
+  }
+  if (mode === "replace") {
+    for (const k of Object.keys(st.catalog)) if (!items[k]) write[k] = null;
+  }
+  const keys = Object.keys(write);
+  if (!keys.length) return toast("変更はありませんでした");
+  if (
+    mode === "replace" &&
+    !(await confirmBox(
+      `品番辞書を入れ替えます（${keys.length.toLocaleString()}件を書き込み・削除）。よろしいですか？`,
+      "入れ替える",
+      true,
+    ))
+  )
+    return;
+
+  st.catBusy = true;
+  try {
+    const CHUNK = 1500;
+    for (let i = 0; i < keys.length; i += CHUNK) {
+      const part = {};
+      for (const k of keys.slice(i, i + CHUNK)) part[k] = write[k];
+      await store.update("catalog", part);
+      toast(
+        `取り込み中… ${Math.min(i + CHUNK, keys.length).toLocaleString()} / ${keys.length.toLocaleString()}`,
+      );
+    }
+    for (const k of keys) {
+      if (write[k] === null) delete st.catalog[k];
+      else st.catalog[k] = write[k];
+    }
+    await catBump();
+    rebuildCat();
+    toast(`取り込みました（${keys.length.toLocaleString()}件）`);
+  } catch (e) {
+    toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
+  } finally {
+    st.catBusy = false;
+  }
+  refreshCat();
+}
+
 // ---- クリック ----
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("button,[data-pid]");
@@ -2237,6 +2629,26 @@ document.addEventListener("click", async (e) => {
     return renderEdit();
   }
   if (d.pick) return $("#" + d.pick)?.click();
+  if (d.cgo) return catGoogle(d.cgo);
+  if (d.ccopy) return catCopy(d.ccopy);
+  if (d.cedit !== undefined) return catForm(d.cedit || null);
+  if (d.cdel) return catDelete(d.cdel);
+  if (d.catmore) {
+    st.catLimit += 100;
+    return renderResults();
+  }
+  if (d.catmemo) {
+    st.catMemo = !st.catMemo;
+    try {
+      localStorage.setItem("secsearch.catmemo", st.catMemo ? "1" : "0");
+    } catch {}
+    renderResults();
+    return $("#q")?.focus();
+  }
+  if (d.cateditmore) {
+    st.catEditLimit += 100;
+    return editCatTable();
+  }
   if (d.pic) return openPic(d.pic);
   if (d.ifilter) {
     st.ifilter = d.ifilter;
