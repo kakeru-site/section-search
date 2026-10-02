@@ -575,9 +575,6 @@ function renderChips() {
     ).join("") +
     (st.sec
       ? `<button class="chip secf" data-secoff="1" title="セクションの絞り込みを解除">SEC ${esc(st.sec)} ×</button>`
-      : "") +
-    (st.catList.length
-      ? `<button class="chip ${st.catMemo ? "on" : ""}" data-catmemo="1" title="品番辞書のメモの中身も検索する">${IC.note} 品番メモも検索</button>`
       : "");
 }
 function highlight(text, ranges) {
@@ -617,8 +614,7 @@ function renderResults() {
     ? S.searchParts(st.partList, st.q, st.syn, { group: st.group, sec: st.sec })
     : [];
   const catOn = !!q && st.group === "all" && !st.sec;
-  st.catResults =
-    catOn && st.catList.length ? CAT.searchCatalog(st.catList, q, st.syn, { memo: st.catMemo }) : [];
+  st.catResults = catOn && st.catList.length ? CAT.searchCatalog(st.catList, q, st.syn, { memo: true }) : [];
   const n = st.results.length;
   const m = st.catResults.length;
   cnt.textContent = n || m ? `セクション${n}件・品番${m}件` : "見つかりません";
