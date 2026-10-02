@@ -72,6 +72,11 @@ export function makeImages(src) {
   return { full: full.url, thumb: thumb.url, w: full.w, h: full.h };
 }
 
+// 型式の車の写真（1枚だけ・小さめ）
+export function carPhoto(src) {
+  return shrink(src, 640, 0.8).url;
+}
+
 // PDFを開いて、ページを描画できるようにする
 export async function openPdf(file) {
   const lib = await loadPdfJs();

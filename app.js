@@ -1,10 +1,10 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261003e";
-import * as S from "./search.js?v=20261003e";
-import * as FID from "./faceid.js?v=20261003e";
-import * as IMG from "./imgtools.js?v=20261003e";
-import * as CAT from "./catalog.js?v=20261003e";
-import * as TOOLS from "./tools.js?v=20261003e";
+import { createStore, DEMO, localKey } from "./store.js?v=20261003f";
+import * as S from "./search.js?v=20261003f";
+import * as FID from "./faceid.js?v=20261003f";
+import * as IMG from "./imgtools.js?v=20261003f";
+import * as CAT from "./catalog.js?v=20261003f";
+import * as TOOLS from "./tools.js?v=20261003f";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -821,6 +821,7 @@ function renderKata() {
       e.preventDefault();
       st.kq = "";
       k.value = "";
+      regPhoto = null;
       renderKataResult();
     }
   });
@@ -828,6 +829,7 @@ function renderKata() {
     e.preventDefault();
     st.kq = "";
     k.value = "";
+    regPhoto = null;
     renderKataResult();
     k.focus();
   });
@@ -836,7 +838,8 @@ function renderKata() {
 }
 const memosForKata = (code) => vals(st.memos).filter((m) => m.kataCode === code);
 let lastCseQ = "",
-  pendingCse = null;
+  pendingCse = null,
+  regPhoto = null; // 未登録フォームで貼った写真（登録するまで持っておく）
 function renderKataResult() {
   const box = $("#kres"),
     cnt = $("#kcnt");
@@ -857,8 +860,9 @@ function renderKataResult() {
     cnt.textContent = list.length ? `${list.length}件` : "見つかりません";
     cnt.className = "cnt " + (list.length ? "ok" : "ng");
     box.innerHTML = list.length
-      ? `<div class="panel"><h3>「${esc(raw)}」の型式</h3><div class="flex-wrap">${list.map((k) => `<button class="qchip" data-kq="${esc(k.code)}"><b>${esc(k.code)}</b>${esc(k.name)}${k.verified ? "" : " <small>未確認</small>"}</button>`).join("")}</div></div>`
+      ? `<div class="panel"><h3>「${esc(raw)}」の型式</h3><div class="flex-wrap">${list.map((k) => `<button class="qchip ${k.photo ? "wp" : ""}" data-kq="${esc(k.code)}">${k.photo ? `<span class="kph sm"><img data-kphoto="${esc(k.code)}" alt=""></span>` : ""}<b>${esc(k.code)}</b>${esc(k.name)}${k.verified ? "" : " <small>未確認</small>"}</button>`).join("")}</div></div>`
       : `<div class="panel"><h3>対応表に「${esc(raw)}」はありません</h3><button class="btn" data-google="${esc(raw + " 型式")}">${IC.search} Googleで調べる</button></div>`;
+    fillKataPhotos(box);
     return;
   }
   pendingCse = null;
@@ -874,7 +878,7 @@ function renderKataResult() {
     cnt.textContent = "対応表にあり";
     cnt.className = "cnt ok";
     box.innerHTML = `<div class="hit">
-      <div class="car"><small>判定結果</small><div class="cn">${esc(f.name)}</div><div class="cg">${esc(r.key)}型</div>
+      <div class="car">${f.photo ? `<button class="kph" data-kview="${esc(r.key)}" title="大きく見る"><img data-kphoto="${esc(r.key)}" alt=""></button>` : `<button class="kph add" data-kadd="${esc(r.key)}" title="写真を追加"><span>${IC.pic}写真を追加<small class="pc-only">Ctrl+Vでも貼れます</small></span></button>`}<small>判定結果</small><div class="cn">${esc(f.name)}</div><div class="cg">${esc(r.key)}型</div>
         <span class="vtag ${f.verified ? "ok" : "ng"}">${f.verified ? "確認済み" : "未確認"}</span>
         ${f.note ? `<div style="font-size:11.5px;color:var(--mu);margin-top:8px;white-space:pre-line">${esc(f.note)}</div>` : ""}</div>
       ${segs}
@@ -882,6 +886,7 @@ function renderKataResult() {
         <button class="btn ${mc ? "has" : ""}" data-katamemo="${esc(r.key)}">${IC.note} この車種のメモ${mc ? `<span class="cnt">${mc}</span>` : ""}</button>
         ${f.verified ? "" : `<button class="btn" data-verify="${esc(r.key)}">✓ 確認済みにする</button>`}
         <button class="btn" data-editkata="${esc(r.key)}">編集</button></div></div>`;
+    fillKataPhotos(box);
     return;
   }
   cnt.textContent = "対応表に未登録";
@@ -895,6 +900,7 @@ function renderKataResult() {
       <form class="reg" id="kreg"><div class="rl">結果を見て、対応表に登録</div>
         <div class="field"><label>型式コード（車種・世代の部分）</label><input class="inp mono" name="code" required value="${esc(r.input.slice(r.prefix.length).replace(/[^0-9A-Z]/g, ""))}" pattern="[0-9A-Za-z]+" title="英数字のみ"></div>
         <div class="field"><label>車種名</label><input class="inp" name="name" required placeholder="例：ノート"></div>
+        <div id="kreg-photo">${photoBox(regPhoto)}</div>
         <label class="switch" style="margin:2px 0 8px"><input type="checkbox" name="verified"> 車検証・EPCで確認済み</label>
         <button class="btn pri" type="submit">登録する</button><small>次回からはすぐ車種名が表示されます</small></form>
     </div></div>`;
@@ -908,21 +914,140 @@ function renderKataResult() {
       !(await confirmBox(`${code} は「${st.kata[code].name}」で登録済みです。上書きしますか？`, "上書き"))
     )
       return;
+    const photo = regPhoto;
     await saveKata(code, {
       name: f.name.value.trim(),
       verified: f.verified.checked,
       note: st.kata[code]?.note || "",
     });
-    toast(`${code} を「${f.name.value.trim()}」で登録しました`);
+    if (photo) await saveKataPhoto(code, photo);
+    regPhoto = null;
+    toast(`${code} を「${f.name.value.trim()}」で登録しました${photo ? "（写真つき）" : ""}`);
   });
+  wireRegPhoto();
   if (cx) mountCse(cx, gq);
+}
+function wireRegPhoto() {
+  const wrap = $("#kreg-photo");
+  if (!wrap) return;
+  wirePhotoBox($(".kdrop", wrap), (url) => {
+    regPhoto = url;
+    wrap.innerHTML = photoBox(regPhoto);
+    wireRegPhoto();
+  });
 }
 async function saveKata(code, data) {
   await store.set(`kata/${code}`, {
     name: data.name,
     verified: !!data.verified,
     note: data.note || "",
+    photo: data.photo ?? st.kata[code]?.photo ?? null,
     updatedAt: Date.now(),
+  });
+}
+
+// ---- 型式の車の写真 ----
+async function viewKataPhoto(code) {
+  const url = await kataPhoto(code);
+  if (!url) return;
+  const r =
+    await modal(`<h3>${esc(st.kata[code]?.name)} <span class="mono" style="color:var(--mu);font-size:14px">${esc(code)}</span></h3>
+    <img src="${url}" alt="" style="width:100%;border-radius:8px;display:block">
+    <div class="modal-foot"><button class="btn left" data-m="edit">差し替え・削除</button><button class="btn pri" data-m="cancel">閉じる</button></div>`);
+  if (r?.act === "edit") kataForm(code);
+}
+// kata/{code}/photo に更新時刻だけ、本体は kataPhoto/{code}
+const photoCache = new Map();
+function kataPhoto(code) {
+  const k = st.kata[code];
+  if (!k?.photo) return Promise.resolve(null);
+  const hit = photoCache.get(code);
+  if (hit && hit.v === k.photo) return hit.p;
+  const p = store.get(`kataPhoto/${code}`).catch(() => null);
+  photoCache.set(code, { v: k.photo, p });
+  return p;
+}
+// 画面にある <img data-kphoto="CODE"> を埋める
+function fillKataPhotos(root = document) {
+  $$("img[data-kphoto]", root).forEach(async (img) => {
+    const url = await kataPhoto(img.dataset.kphoto);
+    if (url) img.src = url;
+    else img.closest(".kph")?.remove();
+  });
+}
+async function blobToPhoto(blob) {
+  if (!blob || !blob.type.startsWith("image/")) throw new Error("画像ではありませんでした");
+  return IMG.carPhoto(await IMG.fileToImage(blob));
+}
+// クリップボードから画像を読む（iPhoneの「ペースト」ボタン用）
+async function clipboardPhoto() {
+  if (!navigator.clipboard?.read)
+    throw new Error("このブラウザはボタンからの貼り付けに対応していません。Ctrl+Vで貼ってください");
+  const items = await navigator.clipboard.read();
+  for (const it of items) {
+    const t = it.types.find((x) => x.startsWith("image/"));
+    if (t) return blobToPhoto(await it.getType(t));
+  }
+  throw new Error("コピーされた画像が見つかりません。画像を「コピー」してから押してください");
+}
+const pasteFile = (e) =>
+  [...(e.clipboardData?.items || [])]
+    .find((i) => i.kind === "file" && i.type.startsWith("image/"))
+    ?.getAsFile();
+async function saveKataPhoto(code, url) {
+  const v = Date.now();
+  if (url) {
+    await store.set(`kataPhoto/${code}`, url);
+    photoCache.set(code, { v, p: Promise.resolve(url) });
+    await store.set(`kata/${code}/photo`, v);
+  } else {
+    await store.remove(`kataPhoto/${code}`);
+    photoCache.delete(code);
+    await store.set(`kata/${code}/photo`, null);
+  }
+}
+// 写真の入れ物（登録フォーム・編集画面で共通）
+function photoBox(url) {
+  return `<div class="kdrop ${url ? "has" : ""}" tabindex="0">
+    ${url ? `<img src="${url}" alt=""><button type="button" class="kdel" data-kp="del" title="写真を外す">×</button>` : `<div class="kdhint">${IC.pic}<b>車の写真（任意）</b><span class="pc-only">画像を右クリック→「画像をコピー」して <kbd>Ctrl</kbd>+<kbd>V</kbd><br>ドラッグ＆ドロップでもOK</span></div>`}
+    <div class="kdbtn"><button type="button" class="btn sm" data-kp="paste">貼り付け</button><button type="button" class="btn sm" data-kp="pick">写真を選ぶ</button></div>
+    <input type="file" accept="image/*" hidden></div>`;
+}
+// 入れ物の操作を受ける。onSet(url|null) で結果を返す
+function wirePhotoBox(box, onSet) {
+  const take = async (getter) => {
+    try {
+      onSet(await getter());
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-kp]");
+    if (!b) return;
+    e.preventDefault();
+    if (b.dataset.kp === "del") onSet(null);
+    if (b.dataset.kp === "pick") $("input[type=file]", box).click();
+    if (b.dataset.kp === "paste") take(clipboardPhoto);
+  });
+  $("input[type=file]", box).addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (f) take(() => blobToPhoto(f));
+  });
+  box.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    box.classList.add("over");
+  });
+  box.addEventListener("dragleave", () => box.classList.remove("over"));
+  box.addEventListener("drop", (e) => {
+    e.preventDefault();
+    box.classList.remove("over");
+    const f = [...(e.dataTransfer?.files || [])].find((x) => x.type.startsWith("image/"));
+    if (f) return take(() => blobToPhoto(f));
+    toast(
+      "画像をそのまま持ってこられませんでした。右クリック→「画像をコピー」してCtrl+Vで貼ってください",
+      true,
+    );
   });
 }
 
@@ -1325,12 +1450,44 @@ function editKataTable() {
 }
 async function kataForm(code) {
   const k = code ? { id: code, ...st.kata[code] } : {};
-  const r = await modal(`<h3>${code ? "型式を編集" : "型式を追加"}</h3><form>
+  let photo = null,
+    changed = false;
+  const r = await modal(
+    `<h3>${code ? "型式を編集" : "型式を追加"}</h3><form>
     <div class="grid2"><div class="field"><label>型式コード（例：C27）</label><input class="inp mono" name="code" required pattern="[0-9A-Za-z]+" value="${esc(k.id)}" ${code ? "readonly" : "autofocus"}></div>
     <div class="field"><label>車種名</label><input class="inp" name="name" required value="${esc(k.name)}" ${code ? "autofocus" : ""}></div></div>
     <div class="field"><label>メモ（年式・仕様など）</label><textarea class="inp" name="note" rows="2">${esc(k.note)}</textarea></div>
+    <div class="field"><label>車の写真（1枚）</label><div id="kf-photo">${photoBox(null)}</div></div>
     <label class="switch"><input type="checkbox" name="verified" ${k.verified ? "checked" : ""}> 車検証・EPCで確認済み</label></form>
-    <div class="modal-foot">${code ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`);
+    <div class="modal-foot">${code ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`,
+    {
+      onOpen(bg) {
+        const wrap = $("#kf-photo", bg);
+        const draw = () => {
+          wrap.innerHTML = photoBox(photo);
+          wirePhotoBox($(".kdrop", wrap), (url) => {
+            photo = url;
+            changed = true;
+            draw();
+          });
+        };
+        draw();
+        if (code) kataPhoto(code).then((u) => !changed && u && ((photo = u), draw()));
+        bg.addEventListener("paste", async (e) => {
+          const f = pasteFile(e);
+          if (!f) return;
+          e.preventDefault();
+          try {
+            photo = await blobToPhoto(f);
+            changed = true;
+            draw();
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      },
+    },
+  );
   if (!r) return;
   if (r.act === "delete") return delKata(code);
   const c = S.normKata(r.data.code).replace(/[^0-9A-Z]/g, "");
@@ -1345,11 +1502,14 @@ async function kataForm(code) {
     note: (r.data.note || "").trim(),
     verified: r.data.verified === "on",
   });
+  if (changed) await saveKataPhoto(c, photo);
   toast("保存しました");
 }
 async function delKata(code) {
   if (!(await confirmBox(`${code}（${st.kata[code]?.name}）を削除しますか？`, "削除", true))) return;
   await store.remove(`kata/${code}`);
+  await store.remove(`kataPhoto/${code}`);
+  photoCache.delete(code);
   toast("削除しました");
 }
 
@@ -1403,9 +1563,11 @@ function strip(o) {
   return r;
 }
 async function saveBackup() {
-  let imageData = {};
+  let imageData = {},
+    kataPhotos = {};
   try {
     imageData = (await store.get("imageData")) || {};
+    kataPhotos = (await store.get("kataPhoto")) || {};
   } catch (e) {
     toast("画像本体を読めなかったので、画像は一覧だけ保存します", true);
   }
@@ -1421,6 +1583,7 @@ async function saveBackup() {
         settings: st.settings,
         images: st.images,
         imageData,
+        kataPhoto: kataPhotos,
         catalog: st.catalog,
       },
       null,
@@ -1464,6 +1627,7 @@ async function restoreBackup(file) {
       settings: j.settings || null,
       images: j.images || null,
       imageData: j.imageData || null,
+      kataPhoto: j.kataPhoto || null,
       ...(j.catalog ? { catalog: j.catalog, catalogMeta: { version: Date.now() } } : {}),
     });
     toast("復元しました");
@@ -2174,6 +2338,34 @@ function reviewKeys(e) {
   return false;
 }
 
+// 型式画面での Ctrl+V：未登録なら登録フォームへ、登録済みならその型式の写真に
+document.addEventListener("paste", async (e) => {
+  if (!st.user || st.locked || st.view !== "kata" || modalOpen()) return;
+  const f = pasteFile(e);
+  if (!f) return;
+  e.preventDefault();
+  try {
+    const url = await blobToPhoto(f);
+    if ($("#kreg-photo")) {
+      regPhoto = url;
+      $("#kreg-photo").innerHTML = photoBox(url);
+      wireRegPhoto();
+      return toast("写真を入れました。車種名を入れて「登録する」を押してください");
+    }
+    const r = S.parseKata(st.kq, st.kata);
+    if (!r?.found) return toast("先に型式を入力してください", true);
+    if (
+      st.kata[r.key].photo &&
+      !(await confirmBox(`${r.key}（${r.found.name}）の写真を差し替えますか？`, "差し替える"))
+    )
+      return;
+    await saveKataPhoto(r.key, url);
+    toast(`${r.found.name} の写真を登録しました`);
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
 // 貼り付け（Ctrl+V）
 document.addEventListener("paste", (e) => {
   if (!st.user || st.locked || st.view !== "illust" || modalOpen()) return;
@@ -2608,6 +2800,8 @@ document.addEventListener("click", async (e) => {
   if (d.editkata !== undefined) return kataForm(d.editkata);
   if (d.delkata) return delKata(d.delkata);
   if (d.katamemo) return openMemoForKata(d.katamemo);
+  if (d.kview) return viewKataPhoto(d.kview);
+  if (d.kadd) return kataForm(d.kadd);
   if (d.memo) {
     st.memoSel = d.memo;
     if (st.view !== "memo") {
