@@ -1,9 +1,10 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261003a";
-import * as S from "./search.js?v=20261003a";
-import * as FID from "./faceid.js?v=20261003a";
-import * as IMG from "./imgtools.js?v=20261003a";
-import * as CAT from "./catalog.js?v=20261003a";
+import { createStore, DEMO, localKey } from "./store.js?v=20261003b";
+import * as S from "./search.js?v=20261003b";
+import * as FID from "./faceid.js?v=20261003b";
+import * as IMG from "./imgtools.js?v=20261003b";
+import * as CAT from "./catalog.js?v=20261003b";
+import * as TOOLS from "./tools.js?v=20261003b";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -65,6 +66,7 @@ const IC = {
   car: '<svg viewBox="0 0 24 24" class="ic"><path d="M5 11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11M4 11h16v5a1 1 0 0 1-1 1h-1v2h-3v-2H9v2H6v-2H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="8" cy="14" r="1.2" fill="currentColor"/><circle cx="16" cy="14" r="1.2" fill="currentColor"/></svg>',
   gear: '<svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   star: '<svg viewBox="0 0 24 24" class="ic" style="width:12px;height:12px"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor"/></svg>',
+  calc: '<svg viewBox="0 0 24 24" class="ic"><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 7h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="15" cy="12" r="1.2" fill="currentColor"/><circle cx="9" cy="16" r="1.2" fill="currentColor"/><circle cx="12" cy="16" r="1.2" fill="currentColor"/><circle cx="15" cy="16" r="1.2" fill="currentColor"/></svg>',
   ext: '<svg viewBox="0 0 24 24" class="ic" style="width:12px;height:12px"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
@@ -95,6 +97,7 @@ const st = {
   kq: "",
   // イラスト帳
   images: {},
+  bulbs: {},
   imode: "list",
   iq: "",
   ifilter: "all",
@@ -355,6 +358,7 @@ function startData() {
   });
   sub("stats", "stats");
   sub("images", "images");
+  sub("bulbs", "bulbs");
   // 品番辞書は版数だけ見張って、変わったら取り直す
   unsubs.push(
     store.sub(
@@ -376,6 +380,7 @@ function onData(key) {
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
+  else if (v === "tool") TOOLS.onData(key);
   else if (v === "illust" && ["images", "parts"].includes(key) && !modalOpen()) renderIllust(false);
   else if (v === "edit") {
     if (st.editTab === "parts" && key === "parts" && $("#etbl")) editPartsTable();
@@ -447,6 +452,7 @@ const NAV = [
   ["kata", "型式 → 車種", "K", "型式", "car"],
   ["memo", "メモ", "M", "メモ", "note"],
   ["illust", "イラスト帳", "I", "図", "pic"],
+  ["tool", "ツール", "T", "ツール", "calc"],
   ["hist", "検索履歴", "H", "履歴", "clock"],
   ["edit", "データ編集", "E", "設定", "gear"],
 ];
@@ -498,6 +504,8 @@ function go(view, opt = {}) {
   else if (view === "hist") renderHist();
   else if (view === "illust") renderIllust(true);
   else if (view === "edit") renderEdit();
+  else if (view === "tool") TOOLS.render(m);
+  $(".shell")?.classList.toggle("wide", view === "tool");
   renderRight();
 }
 
@@ -538,7 +546,8 @@ function renderRight() {
 // ---- セクション検索 ----
 function renderSec() {
   $("#main").innerHTML = `<div class="view-head"><div><h1 class="h1">セクション検索</h1>
-    <div class="tip">部品名の一部・ひらがなでもOK ／ <kbd>/</kbd> 検索欄へ ／ <kbd>↑↓</kbd> 選択 ／ <kbd>Enter</kbd> Google ／ <kbd>Ctrl</kbd>+<kbd>Enter</kbd> メモ</div></div></div>
+    <div class="tip">部品名の一部・ひらがなでもOK ／ <kbd>/</kbd> 検索欄へ ／ <kbd>↑↓</kbd> 選択 ／ <kbd>Enter</kbd> Google ／ <kbd>Ctrl</kbd>+<kbd>Enter</kbd> メモ</div></div>
+    <button class="btn sm sp-only hist-btn" data-view="hist">${IC.clock} 履歴</button></div>
     <label class="search">${IC.search}<input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="部品名・部品コード・セクションで検索（例：べると、15208）" value="${esc(st.q)}" data-live="1"><span class="cnt" id="qcnt"></span><button class="clear" id="qclear" title="消す（Esc）" aria-label="検索語を消す">×</button></label>
     <div class="chips" id="chips"></div>
     <div id="results"></div>`;
@@ -2692,7 +2701,7 @@ document.addEventListener("keydown", (e) => {
     ($("#q") || $("#kq"))?.focus();
     return;
   }
-  const map = { s: "sec", k: "kata", m: "memo", i: "illust", h: "hist", e: "edit" };
+  const map = { s: "sec", k: "kata", m: "memo", i: "illust", t: "tool", h: "hist", e: "edit" };
   if (map[k]) {
     e.preventDefault();
     go(map[k]);
@@ -2705,4 +2714,32 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const t = document.createElement("textarea");
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+}
+
+TOOLS.setup({
+  st,
+  get store() {
+    return store;
+  },
+  setting,
+  toast,
+  modal,
+  confirmBox,
+  copyText,
+  googleOpen,
+  loadXlsx,
+  localKey,
+  IC,
+});
 boot();

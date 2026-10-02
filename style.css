@@ -2066,3 +2066,776 @@ img.blur {
   font-weight: 700;
   padding: 0;
 }
+
+/* ---------- ツール ---------- */
+.shell.wide {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+.shell.wide .right {
+  display: none;
+}
+.hist-btn {
+  display: none;
+}
+.tool-tabs {
+  margin-bottom: 12px;
+}
+.tbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 22px;
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.tfield label {
+  display: block;
+  font-size: 11px;
+  color: var(--mu);
+  margin-bottom: 6px;
+}
+.tnote {
+  font-size: 12px;
+  color: var(--mu);
+  line-height: 1.6;
+}
+.tnote b {
+  color: var(--ac);
+}
+.seg2,
+.segs {
+  display: inline-flex;
+  background: var(--in);
+  border: 1px solid var(--ln);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.seg2 button,
+.segs button {
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 12px;
+  color: var(--mu);
+  font-weight: 700;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.segs button {
+  padding: 6px 9px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.seg2 button.on,
+.segs button.on {
+  background: var(--ac);
+  color: var(--onac);
+}
+.rate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.rate-row .chip {
+  font-family: var(--mono);
+}
+.pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pin i {
+  font-style: normal;
+  color: var(--mu);
+}
+.inp.sm {
+  width: 70px;
+  padding: 6px 8px;
+}
+.inp.num {
+  font-family: var(--mono);
+  text-align: right;
+}
+
+/* 表 */
+.tgrid {
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--card);
+}
+.tgrid .th,
+.tgrid .tr {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+}
+.tgrid.sale .th,
+.tgrid.sale .tr {
+  grid-template-columns: 26px minmax(120px, 1.4fr) 112px 112px 96px 112px 118px 26px;
+}
+.tgrid.cost .th,
+.tgrid.cost .tr {
+  grid-template-columns: 26px minmax(120px, 1.6fr) 120px 64px 120px 26px;
+}
+.tgrid.cost.in .th,
+.tgrid.cost.in .tr {
+  grid-template-columns: 26px minmax(120px, 1.6fr) 120px 64px 110px 120px 26px;
+}
+.tgrid .th {
+  background: var(--card2);
+  font-size: 11px;
+  color: var(--mu);
+  font-weight: 700;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.tgrid .th span:nth-child(n + 3) {
+  text-align: right;
+}
+.tgrid .th .opt {
+  color: var(--mu2);
+}
+.tgrid .tr {
+  border-top: 1px solid var(--ln);
+}
+.tgrid .tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.015);
+}
+.tgrid .tr:focus-within {
+  background: rgba(242, 194, 48, 0.07);
+}
+.tgrid .tr.bad {
+  background: rgba(255, 107, 91, 0.09);
+}
+.tgrid .no {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mu2);
+  text-align: right;
+}
+.tgrid .inp {
+  padding: 6px 8px;
+  border-color: transparent;
+  background: var(--in);
+}
+.tgrid .inp:focus {
+  border-color: var(--ac);
+}
+.tgrid .inp.nm {
+  font-size: 12.5px;
+}
+.tgrid .inp.qty {
+  text-align: center;
+}
+.tgrid .sale.mark .th span:nth-child(3) {
+  color: var(--mu2);
+}
+.tgrid output {
+  font-family: var(--mono);
+  text-align: right;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.tgrid output small {
+  display: block;
+  font-size: 10px;
+  color: var(--mu);
+}
+.tgrid .o-sale,
+.tgrid .o-sub {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--ac);
+}
+.tgrid .o-buy small {
+  color: var(--mu2);
+}
+.tgrid .tr.bad .o-gain {
+  color: var(--ng);
+  font-weight: 700;
+}
+.tgrid .outs {
+  display: contents;
+}
+.tgrid .x {
+  background: none;
+  border: 0;
+  color: var(--mu2);
+  font-size: 15px;
+  padding: 4px;
+  border-radius: 5px;
+  opacity: 0;
+}
+.tgrid .tr:hover .x,
+.tgrid .tr:focus-within .x {
+  opacity: 1;
+}
+.tgrid .x:hover {
+  color: var(--ng);
+  background: var(--card2);
+}
+
+/* 合計バー（下に貼りつく） */
+.tfoot {
+  position: sticky;
+  bottom: 8px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: var(--card2);
+  border: 1px solid var(--ln2);
+  border-radius: var(--r);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
+}
+.sum {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.sum small {
+  color: var(--mu);
+  font-size: 10.5px;
+}
+.sum b {
+  font-family: var(--mono);
+  font-size: 15px;
+}
+.sum.hl b {
+  color: var(--ac);
+  font-size: 19px;
+}
+.sum.big b {
+  font-size: 24px;
+}
+.sum b.ok {
+  color: var(--ok);
+}
+.sum b.ng,
+.sum.warn {
+  color: var(--ng);
+}
+.sum.warn {
+  font-weight: 800;
+  margin-left: auto;
+}
+.tacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.tacts .sp {
+  flex: 1;
+}
+
+/* パッド・ローター */
+.pad-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.pad-grid .card {
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.pad-grid h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.inp.big {
+  font-size: 18px;
+  padding: 9px 12px;
+}
+.pad-set {
+  font-size: 11.5px;
+  color: var(--mu);
+  line-height: 1.8;
+  margin: 4px 0 10px;
+}
+.pad-set b {
+  color: var(--tx);
+  font-family: var(--mono);
+}
+.pad-res {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pres {
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-top: 4px solid var(--ln2);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.pres.ok {
+  border-top-color: var(--ok);
+}
+.pres.warn {
+  border-top-color: var(--ac);
+}
+.pres.ng {
+  border-top-color: var(--ng);
+}
+.pres h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  display: flex;
+  justify-content: space-between;
+}
+.pres h4 .mono {
+  color: var(--mu);
+}
+.pres.empty p {
+  color: var(--mu);
+  font-size: 12.5px;
+  margin: 0;
+}
+.verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--in);
+  margin-bottom: 10px;
+}
+.verdict b {
+  font-size: 15px;
+}
+.verdict small {
+  flex-basis: 100%;
+  color: var(--mu);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.verdict.ok b {
+  color: var(--ok);
+}
+.verdict.warn b {
+  color: var(--ac);
+}
+.verdict.ng b {
+  color: var(--ng);
+}
+.lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.lamp.g {
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+.lamp.a {
+  background: var(--ac);
+  box-shadow: 0 0 8px var(--ac);
+}
+.lamp.r {
+  background: var(--ng);
+  box-shadow: 0 0 8px var(--ng);
+}
+.kv {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.kv td {
+  padding: 7px 4px;
+  border-top: 1px solid var(--ln);
+}
+.kv td:nth-child(n + 2) {
+  text-align: right;
+}
+.kv .mono {
+  font-family: var(--mono);
+}
+.kv tr.hl td:nth-child(2) {
+  color: var(--ac);
+  font-weight: 800;
+  font-size: 18px;
+}
+.kv tr:first-child td:nth-child(2) {
+  font-size: 18px;
+  font-weight: 800;
+}
+.kv tr.tot td {
+  font-weight: 800;
+}
+.kv .g {
+  color: var(--ok);
+  font-size: 12px;
+}
+.kv .g.ng {
+  color: var(--ng);
+}
+.kv small {
+  color: var(--mu);
+  font-size: 10.5px;
+  margin-left: 2px;
+}
+.kv .save {
+  color: var(--ac2);
+  font-weight: 800;
+}
+.pad-rule {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--mu);
+}
+.pad-rule summary {
+  cursor: pointer;
+}
+.pad-rule ol {
+  line-height: 1.8;
+  margin: 8px 0 0;
+}
+
+/* バルブ */
+.chip-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--ln);
+  margin: 0 4px;
+}
+#blist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.brow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 10px 14px;
+}
+.bloc small {
+  display: block;
+  font-size: 10px;
+  color: var(--mu);
+}
+.bloc b {
+  font-family: var(--mono);
+  font-size: 17px;
+  color: var(--ac);
+  letter-spacing: 0.02em;
+}
+.bt1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 9px;
+}
+.bt1 b {
+  font-size: 15px;
+}
+.shape {
+  background: var(--ac);
+  color: var(--onac);
+  font-weight: 900;
+  font-family: var(--mono);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+.bt1 .cat {
+  font-size: 11.5px;
+  color: var(--mu);
+  border: 1px solid var(--ln2);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+.bt1 .hot {
+  font-size: 11.5px;
+  color: var(--ac2);
+  font-weight: 700;
+}
+.buse {
+  font-size: 12.5px;
+  color: var(--mu);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.bside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.bside small {
+  font-size: 10.5px;
+  color: var(--mu);
+}
+.bcode {
+  background: var(--in);
+  border: 1px solid var(--ln);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  padding: 4px 9px;
+}
+.bcode:hover {
+  border-color: var(--ac);
+  color: var(--ac);
+}
+.bbtn {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 1100px) {
+  .shell.wide {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+  .pad-res {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell.wide {
+    grid-template-columns: 1fr;
+  }
+  .nav[data-view="hist"] {
+    display: none;
+  }
+  .hist-btn {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+  }
+  .tbar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .tfield {
+    width: 100%;
+  }
+  .seg2 {
+    display: flex;
+    width: 100%;
+  }
+  .seg2 button {
+    flex: 1;
+    padding: 9px 4px;
+    white-space: normal;
+  }
+  .segs {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    width: 100%;
+  }
+  .segs button {
+    padding: 8px 0;
+  }
+  .rate-row .chip {
+    padding: 7px 10px;
+  }
+
+  /* 表はカードに */
+  .tgrid {
+    border: 0;
+    background: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tgrid .th {
+    display: none;
+  }
+  .tgrid .tr,
+  .tgrid.sale .tr,
+  .tgrid.cost .tr,
+  .tgrid.cost.in .tr {
+    border: 1px solid var(--ln);
+    border-radius: var(--r);
+    background: var(--card) !important;
+    padding: 8px 10px;
+    gap: 6px 8px;
+    grid-template-columns: 22px 1fr 1fr 30px;
+  }
+  .tgrid .tr {
+    grid-template-areas:
+      "no nm nm x"
+      "no a b x";
+  }
+  .tgrid .tr:focus-within {
+    border-color: var(--ac);
+  }
+  .tgrid .tr.bad {
+    border-color: var(--ng);
+  }
+  .tgrid .no {
+    grid-area: no;
+    align-self: start;
+    padding-top: 9px;
+  }
+  .tgrid .inp.nm {
+    grid-area: nm;
+    padding: 6px 8px;
+  }
+  .tgrid .inp.num {
+    padding: 9px 10px;
+    font-size: 17px !important;
+  }
+  .tgrid .x {
+    grid-area: x;
+    opacity: 1;
+    align-self: start;
+  }
+  .tgrid.cost .tr,
+  .tgrid.cost.in .tr {
+    grid-template-columns: 22px 1fr 80px 30px;
+  }
+  .tgrid .tr .inp.num:nth-of-type(2) {
+    grid-area: a;
+  }
+  .tgrid .tr .inp.num:nth-of-type(3) {
+    grid-area: b;
+  }
+  /* 結果は入力のある行だけ */
+  .tgrid .tr .outs {
+    display: none;
+  }
+  .tgrid .tr.filled {
+    grid-template-areas:
+      "no nm nm x"
+      "no a b x"
+      "no r r x";
+  }
+  .tgrid .tr.filled .outs {
+    grid-area: r;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 2px 0;
+    border-top: 1px dashed var(--ln);
+  }
+  .tgrid .tr.filled .outs output {
+    text-align: left;
+  }
+  .tgrid .tr.filled .outs output:last-child {
+    text-align: right;
+  }
+  .tgrid .tr.filled output {
+    display: block;
+    font-size: 13px;
+  }
+  .tgrid .tr.filled .o-sale,
+  .tgrid .tr.filled .o-sub {
+    font-size: 20px;
+  }
+  .tgrid .tr output::before {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    color: var(--mu);
+    font-weight: 400;
+  }
+  .tgrid .o-buy::before {
+    content: "仕入れ掛";
+  }
+  .tgrid .o-sale::before {
+    content: "売価";
+  }
+  .tgrid .o-gain::before {
+    content: "粗利";
+  }
+  .tgrid .o-ex::before {
+    content: "税抜き単価";
+  }
+  .tgrid .o-sub::before {
+    content: "小計";
+  }
+
+  .tfoot {
+    bottom: calc(var(--navh) + env(safe-area-inset-bottom) + 6px);
+    gap: 6px 16px;
+    padding: 9px 12px;
+  }
+  .sum.hl b {
+    font-size: 18px;
+  }
+  .tfoot {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .sum.minor,
+  .sum .how {
+    display: none;
+  }
+  .sum.warn {
+    margin-left: 0;
+    font-size: 11px;
+  }
+  .sum.big b {
+    font-size: 22px;
+  }
+  .tacts .btn {
+    flex: 1;
+    padding: 11px 8px;
+  }
+  .tacts .sp {
+    display: none;
+  }
+
+  .pad-grid {
+    grid-template-columns: 1fr;
+  }
+  .inp.big {
+    font-size: 20px !important;
+  }
+  .brow {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "m l"
+      "s s";
+    gap: 8px;
+    padding: 11px 12px;
+  }
+  .bmain {
+    grid-area: m;
+  }
+  .bloc {
+    grid-area: l;
+    text-align: right;
+  }
+  .bside {
+    grid-area: s;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--ln);
+    padding-top: 8px;
+  }
+  .bside small {
+    flex: 1;
+  }
+  .bbtn .btn {
+    padding: 8px 12px;
+  }
+}
