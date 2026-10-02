@@ -876,7 +876,7 @@ function renderKataResult() {
     <div class="ugrid">
       ${cx ? `<div class="gbox" id="gbox"></div>` : `<div class="gbox off"><p>Google検索の結果をここに表示するには、<br>「データ編集 → 設定 → Google検索の埋め込み」で<br>検索エンジンIDを登録してください。</p><button class="btn" data-google="${esc(gq)}">${IC.search} 新しいタブで検索</button></div>`}
       <form class="reg" id="kreg"><div class="rl">結果を見て、対応表に登録</div>
-        <div class="field"><label>型式コード（車種・世代の部分）</label><input class="inp mono" name="code" required value="${esc(r.guess || "")}" pattern="[0-9A-Za-z]+" title="英数字のみ"></div>
+        <div class="field"><label>型式コード（車種・世代の部分）</label><input class="inp mono" name="code" required value="${esc(r.input.slice(r.prefix.length).replace(/[^0-9A-Z]/g, ""))}" pattern="[0-9A-Za-z]+" title="英数字のみ"></div>
         <div class="field"><label>車種名</label><input class="inp" name="name" required placeholder="例：ノート"></div>
         <label class="switch" style="margin:2px 0 8px"><input type="checkbox" name="verified"> 車検証・EPCで確認済み</label>
         <button class="btn pri" type="submit">登録する</button><small>次回からはすぐ車種名が表示されます</small></form>
@@ -1615,7 +1615,8 @@ async function importKata(file) {
     }
     if (!Array.isArray(list)) throw new Error("型式データの形式ではありません");
     const obj = {};
-    let skip = 0;
+    let skip = 0,
+      upd = 0;
     const now = Date.now();
     for (const k of list) {
       const code = S.normKata(k.code).replace(/[^0-9A-Z]/g, ""),
@@ -1623,10 +1624,13 @@ async function importKata(file) {
           .normalize("NFKC")
           .trim();
       if (!code || !name || /^(型式|CODE)/i.test(code)) continue;
-      if (st.kata[code] || obj[code]) {
+      const cur = st.kata[code];
+      // 未確認の下書きは、確認済みのデータで上書きする
+      if (obj[code] || (cur && (cur.verified || !k.verified))) {
         skip++;
         continue;
       }
+      if (cur) upd++;
       obj[code] = { name, verified: !!k.verified, note: String(k.note || ""), updatedAt: now };
     }
     const n = Object.keys(obj).length;
@@ -1636,13 +1640,13 @@ async function importKata(file) {
     }
     if (
       !(await confirmBox(
-        `${n}件 の型式を追加します。${skip ? `\n（登録済みの ${skip}件 は飛ばします）` : ""}${list.some((k) => !k.verified) ? "\n\n※「未確認」として入ります。確かめたら確認済みにしてください。" : ""}`,
+        `${n - upd}件 の型式を追加${upd ? `、未確認だった ${upd}件 を確認済みのデータで上書き` : ""}します。${skip ? `\n（登録済みの ${skip}件 は飛ばします）` : ""}${list.some((k) => !k.verified) ? "\n\n※「未確認」として入ります。確かめたら確認済みにしてください。" : ""}`,
         "追加する",
       ))
     )
       return;
     await store.update("kata", obj);
-    toast(`${n}件 追加しました`);
+    toast(`${n}件 取り込みました`);
   } catch (e) {
     toast("取り込めませんでした：" + e.message, true);
   }
