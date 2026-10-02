@@ -1,6 +1,6 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261003b";
+import * as S from "./search.js?v=20261003c";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -109,9 +109,9 @@ const T = Object.assign(
       rate: 85,
       mark: 15,
       round: "up5",
-      rows: blank(20, () => ({ n: "", l: "", c: "" })),
+      rows: blank(20, () => ({ l: "", c: "" })),
     },
-    cost: { mode: "ex", rows: blank(20, () => ({ n: "", p: "", q: "" })) },
+    cost: { mode: "ex", rows: blank(20, () => ({ p: "", q: "" })) },
     pad: { pad: "", padCost: "", rotorCost: "", rotorList: "" },
     bulb: { q: "", shape: "", volt: "" },
   },
@@ -133,6 +133,8 @@ const padSets = () => ({
   kei: +setting("padSetKei", 10000) || 10000,
 });
 const padMargin = () => +setting("padMargin", 10) || 10;
+// 値引きが必要なときの提案：パッド原価にいくら乗せるか
+const padPlus = () => [+setting("padPlus1", 500) || 500, +setting("padPlus2", 1000) || 1000];
 
 // ---- 画面 ----
 const TABS = [
@@ -231,7 +233,7 @@ const showNum = (v) => {
 function renderSale() {
   const box = fresh();
   const s = T.sale;
-  const rates = [70, 75, 80, 85, 90, 95, 100];
+  const rates = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
   box.innerHTML = `<div class="tbar">
       <div class="seg2" role="tablist"><button class="${s.mode === "rate" ? "on" : ""}" data-smode="rate">掛け率で</button><button class="${s.mode === "mark" ? "on" : ""}" data-smode="mark">利益上乗せで</button></div>
       ${
@@ -246,7 +248,7 @@ function renderSale() {
       <div class="tfield"><label>端数</label><div class="segs">${ROUNDS.map((r) => `<button class="${s.round === r.id ? "on" : ""}" data-round="${r.id}">${r.label}</button>`).join("")}</div></div>
     </div>
     <div class="tgrid sale ${s.mode}" id="sgrid">
-      <div class="th"><span>#</span><span>品名・品番（任意）</span>${s.mode === "rate" ? "<span>定価</span>" : "<span class='opt'>定価（任意）</span>"}<span>原価</span><span>仕入れ掛</span><span>売価</span><span>粗利</span><span></span></div>
+      <div class="th"><span>#</span>${s.mode === "rate" ? "<span>定価</span>" : ""}<span>原価</span>${s.mode === "rate" ? "<span>仕入れ掛</span>" : ""}<span>売価</span><span>粗利</span><span></span></div>
       ${s.rows.map((r, i) => saleRow(r, i)).join("")}
     </div>
     <div class="tfoot" id="sfoot"></div>
@@ -255,11 +257,11 @@ function renderSale() {
   calcSale();
 }
 function saleRow(r, i) {
+  const rate = T.sale.mode === "rate";
   return `<div class="tr" data-row="${i}"><span class="no">${i + 1}</span>
-    <input class="inp nm" data-r="${i}" data-k="n" value="${esc(r.n)}" placeholder="—" autocomplete="off">
-    <input class="inp num" data-r="${i}" data-k="l" value="${esc(showNum(r.l))}" inputmode="numeric" placeholder="定価" autocomplete="off">
+    ${rate ? `<input class="inp num" data-r="${i}" data-k="l" value="${esc(showNum(r.l))}" inputmode="numeric" placeholder="定価" autocomplete="off">` : ""}
     <input class="inp num" data-r="${i}" data-k="c" value="${esc(showNum(r.c))}" inputmode="numeric" placeholder="原価" autocomplete="off">
-    <div class="outs"><output class="o-buy"></output><output class="o-sale"></output><output class="o-gain"></output></div>
+    <div class="outs">${rate ? '<output class="o-buy"></output>' : ""}<output class="o-sale"></output><output class="o-gain"></output></div>
     <button class="x" data-delrow="${i}" title="この行を消す" aria-label="この行を消す">×</button></div>`;
 }
 function wireSale(box) {
@@ -274,10 +276,10 @@ function wireSale(box) {
       if (s.mode === "rate" && s.round === "up10") s.round = "up5";
     } else if (d.rate) s.rate = +d.rate;
     else if (d.round) s.round = d.round;
-    else if (d.add) s.rows.push(...blank(20, () => ({ n: "", l: "", c: "" })));
+    else if (d.add) s.rows.push(...blank(20, () => ({ l: "", c: "" })));
     else if (d.delrow) {
       s.rows.splice(+d.delrow, 1);
-      if (s.rows.length < 20) s.rows.push({ n: "", l: "", c: "" });
+      if (s.rows.length < 20) s.rows.push({ l: "", c: "" });
     } else if (d.clear) return clearRows("sale");
     else if (d.copy) return copyCol("sale");
     else return;
@@ -304,9 +306,9 @@ function wireSale(box) {
     calcSale();
   });
   gridKeys(grid, (r0, k0, lines) => {
-    const cols = ["n", "l", "c"];
+    const cols = s.mode === "rate" ? ["l", "c"] : ["c"];
     const c0 = cols.indexOf(k0);
-    while (s.rows.length < r0 + lines.length) s.rows.push(...blank(20, () => ({ n: "", l: "", c: "" })));
+    while (s.rows.length < r0 + lines.length) s.rows.push(...blank(20, () => ({ l: "", c: "" })));
     lines.forEach((cells, i) =>
       cells.forEach((v, j) => cols[c0 + j] && (s.rows[r0 + i][cols[c0 + j]] = v.trim())),
     );
@@ -323,7 +325,7 @@ function saleCalcRow(r) {
   let sale = null;
   if (s.mode === "rate" && l != null) sale = salePrice(l, s.rate, s.round);
   if (s.mode === "mark" && c != null) sale = markupPrice(c, s.mark, s.round);
-  const buy = l && c != null ? (c / l) * 100 : null;
+  const buy = s.mode === "rate" && l && c != null ? (c / l) * 100 : null;
   const gain = sale != null && c != null ? sale - c : null;
   return { l, c, sale, buy, gain, gp: gain != null && sale ? (gain / sale) * 100 : null };
 }
@@ -336,12 +338,13 @@ function calcSale() {
     ts = 0,
     tg = 0,
     warn = 0;
-  T.sale.rows.forEach((r, i) => {
+  const s = T.sale;
+  s.rows.forEach((r, i) => {
     const row = $(`.tr[data-row="${i}"]`, grid);
     if (!row) return;
     const x = saleCalcRow(r);
-    $(".o-buy", row).innerHTML =
-      x.buy != null ? `${pct(x.buy)}<small>${(x.buy / 10).toFixed(1)}掛</small>` : "";
+    const ob = $(".o-buy", row);
+    if (ob) ob.innerHTML = x.buy != null ? `${pct(x.buy)}<small>${(x.buy / 10).toFixed(1)}掛</small>` : "";
     $(".o-sale", row).textContent = x.sale != null ? yen(x.sale) : "";
     $(".o-gain", row).innerHTML = x.gain != null ? `${yen(x.gain)}<small>${pct(x.gp)}</small>` : "";
     const bad = x.gain != null && x.gain < 0;
@@ -350,19 +353,18 @@ function calcSale() {
     if (x.sale != null) {
       n++;
       ts += x.sale;
-      if (x.l != null) tl += x.l;
+      if (x.l != null && s.mode === "rate") tl += x.l;
       if (x.c != null) tc += x.c;
       if (x.gain != null) tg += x.gain;
       if (bad) warn++;
     }
   });
-  const s = T.sale;
   const how =
     s.mode === "rate"
       ? `定価 × ${s.rate}% → ${roundOf(s.round).label}`
       : `原価 ×（100＋${s.mark}）% → ${roundOf(s.round).label}`;
   $("#sfoot").innerHTML = `<div class="sum"><span>${n}件</span><small class="how">${esc(how)}</small></div>
-    <div class="sum minor"><small>定価計</small><b>${yen(tl)}</b></div><div class="sum minor"><small>原価計</small><b>${yen(tc)}</b></div>
+    ${s.mode === "rate" ? `<div class="sum minor"><small>定価計</small><b>${yen(tl)}</b></div>` : ""}<div class="sum minor"><small>原価計</small><b>${yen(tc)}</b></div>
     <div class="sum hl"><small>売価計</small><b>${yen(ts)}</b></div><div class="sum"><small>粗利計</small><b class="${tg < 0 ? "ng" : "ok"}">${yen(tg)}</b><small>${ts ? pct((tg / ts) * 100) : ""}</small></div>
     ${warn ? `<div class="sum warn">原価割れ ${warn}件</div>` : ""}`;
 }
@@ -376,7 +378,7 @@ function renderCost() {
       <div class="tnote">${c.mode === "in" ? "1行ずつ 税込み ÷ 1.1 を<b>1円単位で切り上げ</b>てから足します" : "入れた金額をそのまま足します。数量を入れると × します"}</div>
     </div>
     <div class="tgrid cost ${c.mode}" id="cgrid">
-      <div class="th"><span>#</span><span>品名・品番（任意）</span><span>${c.mode === "in" ? "税込み" : "税抜き"}</span><span>数量</span>${c.mode === "in" ? "<span>税抜き</span>" : ""}<span>小計</span><span></span></div>
+      <div class="th"><span>#</span><span>${c.mode === "in" ? "税込み" : "税抜き"}</span><span>数量</span>${c.mode === "in" ? "<span>税抜き</span>" : ""}<span>小計</span><span></span></div>
       ${c.rows.map((r, i) => costRow(r, i)).join("")}
     </div>
     <div class="tfoot" id="cfoot"></div>
@@ -386,7 +388,6 @@ function renderCost() {
 }
 function costRow(r, i) {
   return `<div class="tr" data-row="${i}"><span class="no">${i + 1}</span>
-    <input class="inp nm" data-r="${i}" data-k="n" value="${esc(r.n)}" placeholder="—" autocomplete="off">
     <input class="inp num" data-r="${i}" data-k="p" value="${esc(showNum(r.p))}" inputmode="numeric" placeholder="金額" autocomplete="off">
     <input class="inp num qty" data-r="${i}" data-k="q" value="${esc(r.q)}" inputmode="numeric" placeholder="1" autocomplete="off">
     <div class="outs">${T.cost.mode === "in" ? '<output class="o-ex"></output>' : ""}<output class="o-sub"></output></div>
@@ -399,10 +400,10 @@ function wireCost(box) {
     if (!b) return;
     const d = b.dataset;
     if (d.cmode) c.mode = d.cmode;
-    else if (d.add) c.rows.push(...blank(20, () => ({ n: "", p: "", q: "" })));
+    else if (d.add) c.rows.push(...blank(20, () => ({ p: "", q: "" })));
     else if (d.delrow) {
       c.rows.splice(+d.delrow, 1);
-      if (c.rows.length < 20) c.rows.push({ n: "", p: "", q: "" });
+      if (c.rows.length < 20) c.rows.push({ p: "", q: "" });
     } else if (d.clear) return clearRows("cost");
     else if (d.copy) return copyCol("cost");
     else return;
@@ -418,9 +419,9 @@ function wireCost(box) {
     calcCost();
   });
   gridKeys(grid, (r0, k0, lines) => {
-    const cols = ["n", "p", "q"];
+    const cols = ["p", "q"];
     const c0 = cols.indexOf(k0);
-    while (c.rows.length < r0 + lines.length) c.rows.push(...blank(20, () => ({ n: "", p: "", q: "" })));
+    while (c.rows.length < r0 + lines.length) c.rows.push(...blank(20, () => ({ p: "", q: "" })));
     lines.forEach((cells, i) =>
       cells.forEach((v, j) => cols[c0 + j] && (c.rows[r0 + i][cols[c0 + j]] = v.trim())),
     );
@@ -471,8 +472,8 @@ function calcCost() {
 
 async function clearRows(kind) {
   if (!(await C.confirmBox("入力した行を全部消しますか？", "全部消す", true))) return;
-  if (kind === "sale") T.sale.rows = blank(20, () => ({ n: "", l: "", c: "" }));
-  else T.cost.rows = blank(20, () => ({ n: "", p: "", q: "" }));
+  if (kind === "sale") T.sale.rows = blank(20, () => ({ l: "", c: "" }));
+  else T.cost.rows = blank(20, () => ({ p: "", q: "" }));
   save();
   render($("#main"));
 }
@@ -505,7 +506,7 @@ function renderPad() {
       ${f("padCost", "パッド原価", "例：3,510")}
       ${f("rotorCost", "ローター原価（1枚）", "例：3,290")}
       ${f("rotorList", "ローター通常売価（1枚・任意）", "お得額の表示用")}
-      <div class="pad-set">セット価格：普通車 <b>${yen(sets.normal)}</b> ／ 軽 <b>${yen(sets.kei)}</b> ／ 原価割れ時のローター利益 <b>+${padMargin()}円</b>
+      <div class="pad-set">セット価格：普通車 <b>${yen(sets.normal)}</b> ／ 軽 <b>${yen(sets.kei)}</b> ／ 原価割れ時のローター利益 <b>+${padMargin()}円</b> ／ 値引き時のパッド <b>+${padPlus()[0]}円・+${padPlus()[1]}円</b>
         <button class="linkbtn" data-padset="1">変更</button></div>
       <button class="btn sm" data-padclear="1">入力を消す</button>
     </div>
@@ -514,7 +515,7 @@ function renderPad() {
       <li>ローターを安くして、パッドで利益を取る</li><li>原価は割らない（値引きを使わない）</li>
       <li>ローター1枚 ＝（セット価格 − パッド通常売価）÷ 2。割り切れないときは、ローターを1円下げてパッドに回す</li>
       <li>ローターが原価割れするとき：ローター ＝ 原価＋${padMargin()}円、パッド ＝ セット価格 − ローター×2</li>
-      <li>そのパッドがパッド原価を下回るときは「値引き必要」</li></ol></details>`;
+      <li>そのパッドがパッド原価を下回るときは「値引き必要」→ ローター＝原価＋${padMargin()}円、パッド＝原価＋${padPlus()[0]}円 / ＋${padPlus()[1]}円 の2案を出す</li></ol></details>`;
   box.addEventListener("input", (e) => {
     const k = e.target.dataset.pk;
     if (!k) return;
@@ -551,13 +552,29 @@ function padCard(label, set, x, rotorList, pad) {
   const head = x.ok
     ? `<div class="verdict ok"><span class="lamp g"></span><b>そのままでOK</b></div>`
     : x.needDiscount
-      ? `<div class="verdict ng"><span class="lamp r"></span><b>値引きが必要</b><small>ローターが原価割れ（${yen(x.under)}）。原価＋${padMargin()}円にしても、パッドが原価を ${yen(-x.padGain)} 下回ります</small></div>`
+      ? `<div class="verdict ng"><span class="lamp r"></span><b>値引きが必要</b><small>ローターが原価割れ（${yen(x.under)}）。原価＋${padMargin()}円にしても、パッドが原価を ${yen(-x.padGain)} 下回ります。下の提案価格を使ってください</small></div>`
       : `<div class="verdict warn"><span class="lamp a"></span><b>パッドで調整</b><small>ローターが原価割れ（${yen(x.under)}）するので、ローター＝原価＋${padMargin()}円、残りをパッドに</small></div>`;
   return `<div class="pres ${x.ok ? "ok" : x.needDiscount ? "ng" : "warn"}"><h4>${label} <span class="mono">${yen(set)}</span></h4>${head}
     <table class="kv"><tr><td>パッド</td><td class="mono">${yen(x.pad)}</td><td class="mono g ${x.padGain < 0 ? "ng" : ""}">${x.padGain >= 0 ? "+" : ""}${yen(x.padGain)}</td></tr>
     <tr class="hl"><td>ローター 1枚</td><td class="mono">${yen(x.rotor)} <small>×2</small></td><td class="mono g">+${yen(x.rotorGain)}<small>/枚</small></td></tr>
     <tr class="tot"><td>セット合計</td><td class="mono">${yen(x.pad + x.rotor * 2)}</td><td class="mono g ${x.total < 0 ? "ng" : ""}">利益 ${yen(x.total)}</td></tr>
-    ${normalTotal != null ? `<tr><td>通常で買うと</td><td class="mono">${yen(normalTotal)}</td><td class="mono save">${normalTotal > set ? `${yen(normalTotal - set)} お得` : ""}</td></tr>` : ""}</table></div>`;
+    ${normalTotal != null ? `<tr><td>通常で買うと</td><td class="mono">${yen(normalTotal)}</td><td class="mono save">${normalTotal > set ? `${yen(normalTotal - set)} お得` : ""}</td></tr>` : ""}</table>
+    ${x.needDiscount ? padOffers(x, normalTotal) : ""}</div>`;
+}
+// セット価格では原価割れ → ローターは原価＋10円、パッドは原価＋500円 / ＋1000円で出す
+function padOffers(x, normalTotal) {
+  const padCost = x.pad - x.padGain;
+  return `<div class="offers"><div class="ot">提案価格（ローター 原価＋${padMargin()}円）</div>${padPlus()
+    .map((plus) => {
+      const pad = padCost + plus;
+      const total = pad + x.rotor * 2;
+      return `<div class="offer"><div class="oh">パッド 原価＋${plus.toLocaleString()}円</div>
+        <table class="kv"><tr><td>パッド</td><td class="mono">${yen(pad)}</td><td class="mono g">+${yen(plus)}</td></tr>
+        <tr class="hl"><td>ローター 1枚</td><td class="mono">${yen(x.rotor)} <small>×2</small></td><td class="mono g">+${yen(padMargin())}<small>/枚</small></td></tr>
+        <tr class="tot"><td>セット合計</td><td class="mono">${yen(total)}</td><td class="mono g">利益 ${yen(plus + padMargin() * 2)}</td></tr>
+        ${normalTotal != null && normalTotal > total ? `<tr><td>通常で買うと</td><td class="mono">${yen(normalTotal)}</td><td class="mono save">${yen(normalTotal - total)} お得</td></tr>` : ""}</table></div>`;
+    })
+    .join("")}</div>`;
 }
 function calcPad() {
   const box = $("#padres");
@@ -576,14 +593,24 @@ async function editPadSet() {
   const r = await C.modal(`<h3>パッド・ローターの設定</h3><form>
     <div class="grid2"><div class="field"><label>普通車のセット価格</label><input class="inp mono" name="normal" inputmode="numeric" value="${s.normal}" required></div>
     <div class="field"><label>軽自動車のセット価格</label><input class="inp mono" name="kei" inputmode="numeric" value="${s.kei}" required></div></div>
-    <div class="field"><label>原価割れのときのローター利益（円）</label><input class="inp mono" name="margin" inputmode="numeric" value="${padMargin()}" required></div></form>
+    <div class="field"><label>原価割れのときのローター利益（円）</label><input class="inp mono" name="margin" inputmode="numeric" value="${padMargin()}" required></div>
+    <div class="grid2"><div class="field"><label>値引きが必要なとき パッド原価＋（案1）</label><input class="inp mono" name="plus1" inputmode="numeric" value="${padPlus()[0]}" required></div>
+    <div class="field"><label>値引きが必要なとき パッド原価＋（案2）</label><input class="inp mono" name="plus2" inputmode="numeric" value="${padPlus()[1]}" required></div></div></form>
     <div class="modal-foot"><button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`);
   if (!r) return;
   const n = toNum(r.data.normal),
     k = toNum(r.data.kei),
-    mg = toNum(r.data.margin);
-  if (!n || !k || mg == null) return C.toast("数字を入れてください", true);
-  await C.store.update("settings", { padSetNormal: n, padSetKei: k, padMargin: mg });
+    mg = toNum(r.data.margin),
+    p1 = toNum(r.data.plus1),
+    p2 = toNum(r.data.plus2);
+  if (!n || !k || mg == null || !p1 || !p2) return C.toast("数字を入れてください", true);
+  await C.store.update("settings", {
+    padSetNormal: n,
+    padSetKei: k,
+    padMargin: mg,
+    padPlus1: p1,
+    padPlus2: p2,
+  });
   C.toast("保存しました");
 }
 
@@ -620,7 +647,7 @@ function bulbList() {
   bulbIdx = Object.entries(raw).map(([id, b]) => ({
     id,
     ...b,
-    _s: S.norm(`${b.spec} ${b.code} ${b.cat} ${b.shape} ${b.use} ${b.loc} ${b.note}`),
+    _s: S.norm(`${b.spec} ${b.code} ${b.cat} ${b.shape} ${b.use} ${b.note}`),
     _v: voltOf(b),
     _sh: shapeKey(b.shape),
   }));
@@ -628,7 +655,7 @@ function bulbList() {
 }
 function renderBulb() {
   const box = fresh();
-  box.innerHTML = `<label class="search">${C.IC.search}<input id="bq" type="search" autocomplete="off" placeholder="形状・規格・用途・品番・棚番（例：t10、h4、ウインカー、24v）" value="${esc(T.bulb.q)}"><span class="cnt" id="bcnt"></span></label>
+  box.innerHTML = `<label class="search">${C.IC.search}<input id="bq" type="search" autocomplete="off" placeholder="形状・規格・用途・品番（例：t10、h4、ウインカー、24v）" value="${esc(T.bulb.q)}"><span class="cnt" id="bcnt"></span></label>
     <div class="chips" id="bchips"></div>
     <div id="blist"></div>
     <div class="tacts"><input type="file" id="fbulb" accept=".xlsx,.xlsm,.xls,.json" hidden><button class="btn" data-bpick="1">Excelから取り込み</button><button class="btn pri" data-bedit="">＋ バルブを追加</button></div>`;
@@ -715,7 +742,6 @@ function renderBulbList() {
     hits
       .map(
         (b) => `<div class="brow">
-      <div class="bloc"><small>棚</small><b>${esc(b.loc || "—")}</b></div>
       <div class="bmain"><div class="bt1"><span class="shape">${esc(b.shape || "?")}</span><b>${esc(prettySpec(b.spec))}</b><span class="cat">${esc(b.cat)}</span>${b.note ? `<span class="hot">${b.note.includes("一番") ? "★" : ""}${esc(b.note)}</span>` : ""}</div>
         <div class="buse">${esc(b.use)}</div></div>
       <div class="bside"><button class="bcode" data-bcopy="${esc(b.code)}" title="品番をコピー">${esc(b.code)}</button><small>${b.unit ? `${esc(b.unit)}個入` : ""}</small>
@@ -724,17 +750,15 @@ function renderBulbList() {
       .join("") || '<p class="empty">該当なし</p>';
 }
 async function bulbForm(id) {
-  const b = id
-    ? C.st.bulbs[id]
-    : { spec: "", code: "", cat: "", shape: "", use: "", loc: "", unit: "", note: "" };
+  const b = id ? C.st.bulbs[id] : { spec: "", code: "", cat: "", shape: "", use: "", unit: "", note: "" };
   if (!b) return;
   const f = (k, l, extra = "", cls = "") =>
     `<div class="field"><label>${l}</label><input class="inp ${cls}" name="${k}" value="${esc(b[k])}" ${extra}></div>`;
   const r = await C.modal(`<h3>${id ? "バルブを編集" : "バルブを追加"}</h3><form>
-    <div class="grid2">${f("code", "品番", "required", "mono")}${f("loc", "棚番（ロケーション）")}</div>
+    <div class="grid2">${f("code", "品番", "required", "mono")}${f("unit", "販売単位（個入）", 'inputmode="numeric"')}</div>
     <div class="grid2">${f("shape", "形状（T10・H4 など）", "required")}${f("spec", "規格（12V 5W など）")}</div>
-    <div class="grid2">${f("cat", "分類（ウェッジ・シングル球 など）")}${f("unit", "販売単位（個入）", 'inputmode="numeric"')}</div>
-    ${f("use", "用途・呼び方")}${f("note", "メモ（よく出る、など）")}</form>
+    <div class="grid2">${f("cat", "分類（ウェッジ・シングル球 など）")}${f("note", "メモ（よく出る、など）")}</div>
+    ${f("use", "用途・呼び方")}</form>
     <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`);
   if (!r) return;
   if (r.act === "delete") {
@@ -747,7 +771,7 @@ async function bulbForm(id) {
       .normalize("NFKC")
       .trim();
   const rec = {};
-  for (const k of ["code", "loc", "shape", "spec", "cat", "use", "note"]) rec[k] = N(r.data[k]);
+  for (const k of ["code", "shape", "spec", "cat", "use", "note"]) rec[k] = N(r.data[k]);
   rec.code = rec.code.toUpperCase();
   rec.unit = toNum(r.data.unit) ?? "";
   if (id) await C.store.set(`bulbs/${id}`, rec);
@@ -763,7 +787,7 @@ function bulbsFromRows(sheets) {
       .replace(/\s+/g, " ")
       .trim();
   let base = null;
-  const loc = {};
+  const units = {}; // 2枚目のシートからは販売単位だけ使う
   for (const rows of sheets) {
     for (let h = 0; h < Math.min(rows.length, 10); h++) {
       const hd = (rows[h] || []).map((c) => N(c).replace(/\s/g, ""));
@@ -796,14 +820,14 @@ function bulbsFromRows(sheets) {
         const iUnit = hd.indexOf("販売単位");
         for (const r of rows.slice(h + 1)) {
           const c = N(r[iNo]).toUpperCase();
-          if (c) loc[c] = { loc: N(r[iLoc]), unit: iUnit >= 0 ? (toNum(r[iUnit]) ?? "") : "" };
+          if (c && iUnit >= 0) units[c] = toNum(r[iUnit]) ?? "";
         }
         break;
       }
     }
   }
   if (!base) throw new Error("「規格」「品番」「形状」の列が見つかりませんでした");
-  return base.map((b) => ({ ...b, loc: loc[b.code]?.loc || "", unit: loc[b.code]?.unit ?? "" }));
+  return base.map((b) => ({ ...b, unit: units[b.code] ?? "" }));
 }
 async function importBulbs(file) {
   if (!file) return;
@@ -824,9 +848,8 @@ async function importBulbs(file) {
     return C.toast("取り込めませんでした：" + e.message, true);
   }
   const have = Object.keys(C.st.bulbs || {}).length;
-  const withLoc = list.filter((b) => b.loc).length;
   const ok = await C.confirmBox(
-    `${list.length}件 のバルブを取り込みます（棚番つき ${withLoc}件）。${have ? `\n今の ${have}件 は入れ替わります。` : ""}`,
+    `${list.length}件 のバルブを取り込みます。${have ? `\n今の ${have}件 は入れ替わります。` : ""}`,
     "取り込む",
   );
   if (!ok) return;
@@ -838,7 +861,6 @@ async function importBulbs(file) {
       cat: b.cat || "",
       shape: b.shape || "",
       use: b.use || "",
-      loc: b.loc || "",
       unit: b.unit ?? "",
       note: b.note || "",
     };

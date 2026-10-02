@@ -1,10 +1,10 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261003b";
-import * as S from "./search.js?v=20261003b";
-import * as FID from "./faceid.js?v=20261003b";
-import * as IMG from "./imgtools.js?v=20261003b";
-import * as CAT from "./catalog.js?v=20261003b";
-import * as TOOLS from "./tools.js?v=20261003b";
+import { createStore, DEMO, localKey } from "./store.js?v=20261003c";
+import * as S from "./search.js?v=20261003c";
+import * as FID from "./faceid.js?v=20261003c";
+import * as IMG from "./imgtools.js?v=20261003c";
+import * as CAT from "./catalog.js?v=20261003c";
+import * as TOOLS from "./tools.js?v=20261003c";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);

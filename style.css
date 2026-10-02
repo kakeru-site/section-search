@@ -2178,15 +2178,25 @@ img.blur {
 }
 .tgrid.sale .th,
 .tgrid.sale .tr {
-  grid-template-columns: 26px minmax(120px, 1.4fr) 112px 112px 96px 112px 118px 26px;
+  grid-template-columns: 26px repeat(5, minmax(0, 1fr)) 26px;
+}
+.tgrid.sale.mark .th,
+.tgrid.sale.mark .tr {
+  grid-template-columns: 26px repeat(3, minmax(0, 1fr)) 26px;
 }
 .tgrid.cost .th,
 .tgrid.cost .tr {
-  grid-template-columns: 26px minmax(120px, 1.6fr) 120px 64px 120px 26px;
+  grid-template-columns: 26px minmax(0, 1.2fr) 70px minmax(0, 1fr) 26px;
 }
 .tgrid.cost.in .th,
 .tgrid.cost.in .tr {
-  grid-template-columns: 26px minmax(120px, 1.6fr) 120px 64px 110px 120px 26px;
+  grid-template-columns: 26px minmax(0, 1.2fr) 70px minmax(0, 1fr) minmax(0, 1fr) 26px;
+}
+.tgrid,
+.tfoot,
+.tbar,
+.tacts {
+  max-width: 900px;
 }
 .tgrid .th {
   background: var(--card2);
@@ -2199,7 +2209,7 @@ img.blur {
   top: 0;
   z-index: 2;
 }
-.tgrid .th span:nth-child(n + 3) {
+.tgrid .th span:nth-child(n + 2) {
   text-align: right;
 }
 .tgrid .th .opt {
@@ -2523,7 +2533,7 @@ img.blur {
 }
 .brow {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
   background: var(--card);
@@ -2669,6 +2679,7 @@ img.blur {
   }
   .tgrid .tr,
   .tgrid.sale .tr,
+  .tgrid.sale.mark .tr,
   .tgrid.cost .tr,
   .tgrid.cost.in .tr {
     border: 1px solid var(--ln);
@@ -2679,9 +2690,10 @@ img.blur {
     grid-template-columns: 22px 1fr 1fr 30px;
   }
   .tgrid .tr {
-    grid-template-areas:
-      "no nm nm x"
-      "no a b x";
+    grid-template-areas: "no a b x";
+  }
+  .tgrid.sale.mark .tr {
+    grid-template-areas: "no a a x";
   }
   .tgrid .tr:focus-within {
     border-color: var(--ac);
@@ -2693,10 +2705,6 @@ img.blur {
     grid-area: no;
     align-self: start;
     padding-top: 9px;
-  }
-  .tgrid .inp.nm {
-    grid-area: nm;
-    padding: 6px 8px;
   }
   .tgrid .inp.num {
     padding: 9px 10px;
@@ -2711,10 +2719,10 @@ img.blur {
   .tgrid.cost.in .tr {
     grid-template-columns: 22px 1fr 80px 30px;
   }
-  .tgrid .tr .inp.num:nth-of-type(2) {
+  .tgrid .tr .inp.num:nth-of-type(1) {
     grid-area: a;
   }
-  .tgrid .tr .inp.num:nth-of-type(3) {
+  .tgrid .tr .inp.num:nth-of-type(2) {
     grid-area: b;
   }
   /* 結果は入力のある行だけ */
@@ -2723,8 +2731,12 @@ img.blur {
   }
   .tgrid .tr.filled {
     grid-template-areas:
-      "no nm nm x"
       "no a b x"
+      "no r r x";
+  }
+  .tgrid.sale.mark .tr.filled {
+    grid-template-areas:
+      "no a a x"
       "no r r x";
   }
   .tgrid .tr.filled .outs {
@@ -2810,19 +2822,15 @@ img.blur {
     font-size: 20px !important;
   }
   .brow {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
     grid-template-areas:
-      "m l"
-      "s s";
+      "m"
+      "s";
     gap: 8px;
     padding: 11px 12px;
   }
   .bmain {
     grid-area: m;
-  }
-  .bloc {
-    grid-area: l;
-    text-align: right;
   }
   .bside {
     grid-area: s;
@@ -2838,4 +2846,34 @@ img.blur {
   .bbtn .btn {
     padding: 8px 12px;
   }
+}
+
+/* 値引きが必要なときの提案 */
+.offers {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px dashed var(--ln2);
+}
+.offers .ot {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ac);
+  margin-bottom: 8px;
+}
+.offer {
+  background: var(--in);
+  border-radius: 8px;
+  padding: 8px 10px 4px;
+  margin-bottom: 8px;
+}
+.offer .oh {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.offer .kv td {
+  padding: 5px 2px;
+}
+.offer .kv tr:first-child td {
+  border-top: 0;
 }
