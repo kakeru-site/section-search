@@ -1,9 +1,9 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261002f";
-import * as S from "./search.js?v=20261002f";
-import * as FID from "./faceid.js?v=20261002f";
-import * as IMG from "./imgtools.js?v=20261002f";
-import * as CAT from "./catalog.js?v=20261002f";
+import { createStore, DEMO, localKey } from "./store.js?v=20261003a";
+import * as S from "./search.js?v=20261003a";
+import * as FID from "./faceid.js?v=20261003a";
+import * as IMG from "./imgtools.js?v=20261003a";
+import * as CAT from "./catalog.js?v=20261003a";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -207,7 +207,9 @@ async function boot() {
       return;
     }
     if (!was) {
-      st.locked = !!FID.registered();
+      // パスワードで入った直後はロックしない（二度手間になるので）
+      st.locked = !!FID.registered() && !st.pwLogin;
+      st.pwLogin = false;
       startData();
     }
     route();
@@ -250,8 +252,10 @@ function showLogin() {
     btn.disabled = true;
     $("#lg-err").textContent = "";
     try {
+      st.pwLogin = true;
       await store.login(f.email.value.trim(), f.pw.value);
     } catch (err) {
+      st.pwLogin = false;
       $("#lg-err").textContent = err.message;
     } finally {
       btn.disabled = false;
@@ -1658,7 +1662,7 @@ async function editSettings() {
     av = await FID.platformAvailable();
   $("#ebody").innerHTML = `<div class="card-grid">
     <div class="card"><h4>生体認証ロック（Face ID / Windows Hello）</h4>
-      <p>アプリを開くときに、この端末の生体認証（顔・指紋・PIN）で本人確認します。使っている途中で勝手にロックされることはありません。端末ごとに設定します。<br>${reg ? `<b style="color:var(--ok)">この端末は設定済み</b>（${fmtDay(reg.at)}）` : av ? "この端末で使えます。" : '<span style="color:var(--ac2)">この端末・ブラウザでは使えません（httpsで開いているか確認してください）</span>'}</p>
+      <p>設定した端末では、パスワードなしで、生体認証（顔・指紋・PIN）だけで開けるようになります。使っている途中で勝手にロックされることはありません。端末ごとに設定します。<br>${reg ? `<b style="color:var(--ok)">この端末は設定済み</b>（${fmtDay(reg.at)}）` : av ? "この端末で使えます。" : '<span style="color:var(--ac2)">この端末・ブラウザでは使えません（httpsで開いているか確認してください）</span>'}</p>
       <div class="row2">${reg ? `<button class="btn" id="fid-test">ロックを試す</button><button class="btn danger" id="fid-off">解除する</button>` : `<button class="btn pri" id="fid-on" ${av ? "" : "disabled"}>この端末に設定する</button>`}</div></div>
     <div class="card"><h4>重複の自動削除</h4><p>「セクション・部品コード・部品名」がすべて同じ部品が2件以上あると、自動で1件にまとめます。頻出★・備考・メモは残す側に引き継ぎます。<br>（同じ部品名でも、セクションや部品コードが違うものは消しません）</p>
       <label class="switch"><input type="checkbox" id="dd-auto" ${setting("autoDedupe", true) !== false ? "checked" : ""}> 自動で削除する</label></div>
@@ -1683,7 +1687,8 @@ async function editSettings() {
   $("#fid-on")?.addEventListener("click", async () => {
     try {
       await FID.register(st.user?.email || "セクション検索");
-      toast("生体認証ロックを設定しました");
+      await store.setRemember(true);
+      toast("設定しました。次からはFace IDだけで開けます");
       renderFid();
       editSettings();
     } catch (e) {
@@ -1696,6 +1701,7 @@ async function editSettings() {
   $("#fid-off")?.addEventListener("click", async () => {
     if (await confirmBox("この端末の生体認証ロックを解除しますか？", "解除する")) {
       FID.unregister();
+      await store.setRemember(false);
       renderFid();
       editSettings();
       toast("解除しました");

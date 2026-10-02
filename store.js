@@ -1,7 +1,17 @@
 // DBとログインまわり（Firebase / デモ 共通のI/F）
-import { FIREBASE, ROOT_PATH, SDK_VERSION } from "./config.js?v=20261002f";
+import { FIREBASE, ROOT_PATH, SDK_VERSION } from "./config.js?v=20261003a";
 
 export const DEMO = !FIREBASE.apiKey;
+
+// 生体認証を設定した端末だけログインを覚えておく（開くときはFace IDだけで入れる）
+// それ以外の端末はタブを閉じたらログアウト
+const remembered = () => {
+  try {
+    return !!localStorage.getItem("secsearch.webauthn.v1");
+  } catch {
+    return false;
+  }
+};
 
 // 共通ユーティリティ
 const PUSH_CHARS = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
@@ -43,7 +53,10 @@ function demoStore() {
   let authCb = null,
     user = null;
   try {
-    if (sessionStorage.getItem("secsearch.demo.login"))
+    if (
+      sessionStorage.getItem("secsearch.demo.login") ||
+      (remembered() && localStorage.getItem("secsearch.demo.login"))
+    )
       user = { uid: "demo", email: "demo@example.com" };
   } catch {}
 
@@ -86,6 +99,7 @@ function demoStore() {
       user = { uid: "demo", email: email || "demo@example.com" };
       try {
         sessionStorage.setItem("secsearch.demo.login", "1");
+        localStorage.setItem("secsearch.demo.login", "1");
       } catch {}
       authCb && authCb(user);
     },
@@ -93,9 +107,11 @@ function demoStore() {
       user = null;
       try {
         sessionStorage.removeItem("secsearch.demo.login");
+        localStorage.removeItem("secsearch.demo.login");
       } catch {}
       authCb && authCb(null);
     },
+    async setRemember() {},
     async resetPassword() {
       throw new Error("デモモードではパスワード再設定は使えません");
     },
@@ -151,8 +167,7 @@ async function firebaseStore() {
   const app = initializeApp(FIREBASE);
   const auth = A.getAuth(app);
   try {
-    // タブを閉じたらログアウト扱いにする
-    await A.setPersistence(auth, A.browserSessionPersistence);
+    await A.setPersistence(auth, remembered() ? A.browserLocalPersistence : A.browserSessionPersistence);
   } catch {}
   const db = D.getDatabase(app);
   const R = (p) => D.ref(db, p ? `${ROOT_PATH}/${p}` : ROOT_PATH);
@@ -186,6 +201,10 @@ async function firebaseStore() {
       A.onAuthStateChanged(auth, (u) => cb(u ? { uid: u.uid, email: u.email } : null));
     },
     login: wrap((email, pw) => A.signInWithEmailAndPassword(auth, email, pw)),
+    // 生体認証のON/OFFに合わせて、ログインの覚え方を切り替える
+    setRemember: wrap((on) =>
+      A.setPersistence(auth, on ? A.browserLocalPersistence : A.browserSessionPersistence),
+    ),
     logout: wrap(() => A.signOut(auth)),
     resetPassword: wrap((email) => A.sendPasswordResetEmail(auth, email)),
     get user() {
