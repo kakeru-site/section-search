@@ -1,6 +1,6 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261003c";
+import * as S from "./search.js?v=20261003d";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -246,13 +246,14 @@ function renderSale() {
           : `<div class="tfield"><label>上乗せする利益（原価に対して）</label><span class="pin"><input id="mark" class="inp num sm" inputmode="decimal" value="${esc(s.mark)}"><i>%</i></span></div>`
       }
       <div class="tfield"><label>端数</label><div class="segs">${ROUNDS.map((r) => `<button class="${s.round === r.id ? "on" : ""}" data-round="${r.id}">${r.label}</button>`).join("")}</div></div>
+      <button class="btn clear-all" data-clear="sale" title="金額・数量を全部消す（掛け率などの設定はそのまま）">入力を全部消す</button>
     </div>
     <div class="tgrid sale ${s.mode}" id="sgrid">
       <div class="th"><span>#</span>${s.mode === "rate" ? "<span>定価</span>" : ""}<span>原価</span>${s.mode === "rate" ? "<span>仕入れ掛</span>" : ""}<span>売価</span><span>粗利</span><span></span></div>
       ${s.rows.map((r, i) => saleRow(r, i)).join("")}
     </div>
     <div class="tfoot" id="sfoot"></div>
-    <div class="tacts"><button class="btn" data-add="sale">＋ 20行ふやす</button><button class="btn" data-copy="sale">売価をコピー</button><span class="sp"></span><button class="btn danger" data-clear="sale">全部消す</button></div>`;
+    <div class="tacts"><button class="btn" data-add="sale">＋ 20行ふやす</button><button class="btn" data-copy="sale">売価をコピー</button><span class="sp"></span><button class="btn danger" data-clear="sale">入力を全部消す</button></div>`;
   wireSale(box);
   calcSale();
 }
@@ -376,13 +377,14 @@ function renderCost() {
   box.innerHTML = `<div class="tbar">
       <div class="seg2"><button class="${c.mode === "ex" ? "on" : ""}" data-cmode="ex">税抜きで足す（通常）</button><button class="${c.mode === "in" ? "on" : ""}" data-cmode="in">税込みから税抜きに（スズキ）</button></div>
       <div class="tnote">${c.mode === "in" ? "1行ずつ 税込み ÷ 1.1 を<b>1円単位で切り上げ</b>てから足します" : "入れた金額をそのまま足します。数量を入れると × します"}</div>
+      <button class="btn clear-all" data-clear="cost" title="金額・数量を全部消す（掛け率などの設定はそのまま）">入力を全部消す</button>
     </div>
     <div class="tgrid cost ${c.mode}" id="cgrid">
       <div class="th"><span>#</span><span>${c.mode === "in" ? "税込み" : "税抜き"}</span><span>数量</span>${c.mode === "in" ? "<span>税抜き</span>" : ""}<span>小計</span><span></span></div>
       ${c.rows.map((r, i) => costRow(r, i)).join("")}
     </div>
     <div class="tfoot" id="cfoot"></div>
-    <div class="tacts"><button class="btn" data-add="cost">＋ 20行ふやす</button><button class="btn" data-copy="cost">合計をコピー</button><span class="sp"></span><button class="btn danger" data-clear="cost">全部消す</button></div>`;
+    <div class="tacts"><button class="btn" data-add="cost">＋ 20行ふやす</button><button class="btn" data-copy="cost">合計をコピー</button><span class="sp"></span><button class="btn danger" data-clear="cost">入力を全部消す</button></div>`;
   wireCost(box);
   calcCost();
 }
@@ -470,12 +472,20 @@ function calcCost() {
     <div class="sum minor"><small>参考：税込み（×1.1）</small><b>${yen(Math.floor((t.sum * 11) / 10))}</b></div>`;
 }
 
-async function clearRows(kind) {
-  if (!(await C.confirmBox("入力した行を全部消しますか？", "全部消す", true))) return;
-  if (kind === "sale") T.sale.rows = blank(20, () => ({ l: "", c: "" }));
-  else T.cost.rows = blank(20, () => ({ p: "", q: "" }));
+// 確認は出さずに消して、少しの間だけ「元に戻す」を出す
+function clearRows(kind) {
+  const key = kind === "sale" ? "sale" : kind === "cost" ? "cost" : "pad";
+  const before = JSON.stringify(T[key]);
+  if (key === "sale") T.sale.rows = blank(20, () => ({ l: "", c: "" }));
+  else if (key === "cost") T.cost.rows = blank(20, () => ({ p: "", q: "" }));
+  else T.pad = { pad: "", padCost: "", rotorCost: "", rotorList: "" };
   save();
   render($("#main"));
+  C.toastAction("入力を全部消しました", "元に戻す", () => {
+    T[key] = JSON.parse(before);
+    save();
+    if ($("#tbody")) render($("#main"));
+  });
 }
 async function copyCol(kind) {
   let text = "";
@@ -501,14 +511,13 @@ function renderPad() {
   const f = (k, label, ph) =>
     `<div class="field"><label>${label}</label><input class="inp num big" data-pk="${k}" value="${esc(showNum(p[k]))}" inputmode="numeric" placeholder="${ph}" autocomplete="off"></div>`;
   box.innerHTML = `<div class="pad-grid">
-    <div class="card"><h3>入力</h3>
+    <div class="card"><div class="card-h"><h3>入力</h3><button class="btn clear-all" data-padclear="1">入力を全部消す</button></div>
       ${f("pad", "パッド通常売価", "例：4,910")}
       ${f("padCost", "パッド原価", "例：3,510")}
       ${f("rotorCost", "ローター原価（1枚）", "例：3,290")}
       ${f("rotorList", "ローター通常売価（1枚・任意）", "お得額の表示用")}
       <div class="pad-set">セット価格：普通車 <b>${yen(sets.normal)}</b> ／ 軽 <b>${yen(sets.kei)}</b> ／ 原価割れ時のローター利益 <b>+${padMargin()}円</b> ／ 値引き時のパッド <b>+${padPlus()[0]}円・+${padPlus()[1]}円</b>
         <button class="linkbtn" data-padset="1">変更</button></div>
-      <button class="btn sm" data-padclear="1">入力を消す</button>
     </div>
     <div id="padres" class="pad-res"></div></div>
     <details class="pad-rule"><summary>計算のルール</summary><ol>
@@ -536,11 +545,7 @@ function renderPad() {
   box.addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
-    if (b.dataset.padclear) {
-      T.pad = { pad: "", padCost: "", rotorCost: "", rotorList: "" };
-      save();
-      renderPad();
-    }
+    if (b.dataset.padclear) clearRows("pad");
     if (b.dataset.padset) editPadSet();
   });
   calcPad();

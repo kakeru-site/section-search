@@ -1,7 +1,7 @@
 // 品番辞書（3万点くらい）
 // DBには catalog/{品番キー} で1件ずつ置く。端末側はIndexedDBに丸ごと控えておいて、
 // catalogMeta/version が変わったときだけ取り直す
-import * as S from "./search.js?v=20261003c";
+import * as S from "./search.js?v=20261003d";
 
 // ---- IndexedDB（だめなら控えなしで動く） ----
 let dbp = null;

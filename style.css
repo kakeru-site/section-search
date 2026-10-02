@@ -2877,3 +2877,33 @@ img.blur {
 .offer .kv tr:first-child td {
   border-top: 0;
 }
+
+/* 一括で消すボタン */
+.btn.clear-all {
+  margin-left: auto;
+  align-self: center;
+  border-color: rgba(255, 107, 91, 0.5);
+  color: var(--ng);
+  font-weight: 700;
+}
+.btn.clear-all:hover {
+  background: rgba(255, 107, 91, 0.12);
+}
+.card-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.card-h h3 {
+  margin: 0 !important;
+}
+@media (max-width: 760px) {
+  .tbar .btn.clear-all {
+    width: 100%;
+    padding: 11px;
+  }
+  .card-h .btn.clear-all {
+    padding: 9px 12px;
+  }
+}
