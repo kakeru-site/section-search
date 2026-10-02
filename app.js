@@ -1,10 +1,10 @@
 // セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261003d";
-import * as S from "./search.js?v=20261003d";
-import * as FID from "./faceid.js?v=20261003d";
-import * as IMG from "./imgtools.js?v=20261003d";
-import * as CAT from "./catalog.js?v=20261003d";
-import * as TOOLS from "./tools.js?v=20261003d";
+import { createStore, DEMO, localKey } from "./store.js?v=20261003e";
+import * as S from "./search.js?v=20261003e";
+import * as FID from "./faceid.js?v=20261003e";
+import * as IMG from "./imgtools.js?v=20261003e";
+import * as CAT from "./catalog.js?v=20261003e";
+import * as TOOLS from "./tools.js?v=20261003e";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -814,6 +814,8 @@ function renderKata() {
     if (e.key === "Enter") {
       e.preventDefault();
       histKata.flush();
+      // Google検索の埋め込みは Enter を押したときだけ
+      if (pendingCse) runCse(pendingCse.cx, pendingCse.q);
     }
     if (e.key === "Escape") {
       e.preventDefault();
@@ -833,7 +835,8 @@ function renderKata() {
   setTimeout(() => k.focus(), 0);
 }
 const memosForKata = (code) => vals(st.memos).filter((m) => m.kataCode === code);
-let lastCseQ = "";
+let lastCseQ = "",
+  pendingCse = null;
 function renderKataResult() {
   const box = $("#kres"),
     cnt = $("#kcnt");
@@ -858,6 +861,7 @@ function renderKataResult() {
       : `<div class="panel"><h3>対応表に「${esc(raw)}」はありません</h3><button class="btn" data-google="${esc(raw + " 型式")}">${IC.search} Googleで調べる</button></div>`;
     return;
   }
+  pendingCse = null;
   const r = S.parseKata(raw, st.kata);
   const gq = `${setting("googlePrefix", "")} ${r.input}`.trim();
   const segs = `<div class="split">
@@ -940,7 +944,9 @@ function loadCse(cx) {
   });
   return csePromise;
 }
-const runCse = debounce(async (cx, q) => {
+async function runCse(cx, q) {
+  if (cseHost) cseHost.hidden = false;
+  $("#gwait")?.remove();
   try {
     await loadCse(cx);
     const g = window.google?.search?.cse?.element;
@@ -960,14 +966,27 @@ const runCse = debounce(async (cx, q) => {
     const gb = $("#gbox");
     if (gb) gb.innerHTML = `<p style="color:#b33">${esc(e.message)}（新しいタブで検索してください）</p>`;
   }
-}, 700);
+}
+// 入力中は検索しない。前と同じ型式ならそのまま結果を見せる
 function mountCse(cx, q) {
   if (!cseHost) {
     cseHost = document.createElement("div");
     cseHost.innerHTML = '<div id="cse-target"></div>';
   }
-  $("#gbox").appendChild(cseHost);
-  runCse(cx, q);
+  const gb = $("#gbox");
+  gb.appendChild(cseHost);
+  pendingCse = { cx, q };
+  if (q === lastCseQ) {
+    cseHost.hidden = false;
+    return;
+  }
+  cseHost.hidden = true;
+  gb.insertAdjacentHTML(
+    "afterbegin",
+    `<div class="gwait" id="gwait"><p>入力が終わったら <kbd>Enter</kbd> でGoogle検索します</p>
+      <button class="btn" type="button" id="gwait-go">${IC.search} 「${esc(q)}」で検索</button></div>`,
+  );
+  $("#gwait-go").addEventListener("click", () => runCse(cx, q));
 }
 
 // ---- メモ ----

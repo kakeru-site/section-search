@@ -2907,3 +2907,32 @@ img.blur {
     padding: 9px 12px;
   }
 }
+
+/* 型式：Enter待ち */
+.gwait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 200px;
+  color: #555;
+  font-size: 13px;
+  text-align: center;
+}
+.gwait p {
+  margin: 0;
+}
+.gwait kbd {
+  display: inline-block !important;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 12px;
+  color: #333;
+}
+.gwait .btn {
+  background: #f4f4f4;
+  color: #222;
+  border-color: #ccc;
+}
