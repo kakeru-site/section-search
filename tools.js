@@ -1,6 +1,6 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261003g";
+import * as S from "./search.js?v=20261003h";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {

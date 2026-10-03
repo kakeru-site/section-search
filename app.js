@@ -1,10 +1,10 @@
-// セクション検索 main
-import { createStore, DEMO, localKey } from "./store.js?v=20261003g";
-import * as S from "./search.js?v=20261003g";
-import * as FID from "./faceid.js?v=20261003g";
-import * as IMG from "./imgtools.js?v=20261003g";
-import * as CAT from "./catalog.js?v=20261003g";
-import * as TOOLS from "./tools.js?v=20261003g";
+// 店頭業務ツール main
+import { createStore, DEMO, localKey } from "./store.js?v=20261003h";
+import * as S from "./search.js?v=20261003h";
+import * as FID from "./faceid.js?v=20261003h";
+import * as IMG from "./imgtools.js?v=20261003h";
+import * as CAT from "./catalog.js?v=20261003h";
+import * as TOOLS from "./tools.js?v=20261003h";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -221,7 +221,7 @@ async function boot() {
 function showGateError(msg) {
   const g = $("#gate");
   g.classList.remove("hidden");
-  g.innerHTML = `<div class="stripe"></div><div class="gate-body"><div class="gate-card"><div class="gate-logo">${IC.logo}<span>SECTION<b>検索</b></span></div><p class="gate-err" style="white-space:pre-line">${esc(msg)}</p></div></div>`;
+  g.innerHTML = `<div class="stripe"></div><div class="gate-body"><div class="gate-card"><div class="gate-logo">${IC.logo}<span>店頭業務<b>ツール</b></span></div><p class="gate-err" style="white-space:pre-line">${esc(msg)}</p></div></div>`;
 }
 function route() {
   $("#gate").classList.toggle("hidden", !!st.user);
@@ -238,8 +238,8 @@ function route() {
 function showLogin() {
   const g = $("#gate");
   g.innerHTML = `<div class="stripe"></div><div class="gate-body"><form class="gate-card" id="login-form" autocomplete="on">
-    <div class="gate-logo">${IC.logo}<span>SECTION<b>検索</b></span></div>
-    <div class="gate-sub">部品名からセクション・部品コードを引く店頭業務ツール</div>
+    <div class="gate-logo">${IC.logo}<span>店頭業務<b>ツール</b></span></div>
+    <div class="gate-sub">セクション・品番・型式・計算を、ひとつの画面で</div>
     ${DEMO ? `<div class="demo-badge" style="margin-bottom:14px">デモモード：Firebase未設定のため、何を入れてもログインできます。データはこのブラウザにだけ保存されます。</div>` : ""}
     <div class="field"><label for="lg-email">メールアドレス</label><input class="inp" id="lg-email" type="email" name="email" autocomplete="username" required ${DEMO ? 'value="demo@example.com"' : ""}></div>
     <div class="field"><label for="lg-pw">パスワード</label><input class="inp" id="lg-pw" type="password" name="pw" autocomplete="current-password" ${DEMO ? "" : "required"}></div>
@@ -283,7 +283,7 @@ function showLock() {
   const l = $("#lock");
   if ($("#lock-card", l)) return;
   l.innerHTML = `<div class="stripe"></div><div class="gate-body"><div class="gate-card center" id="lock-card">
-    <div class="gate-logo" style="justify-content:center">${IC.logo}<span>SECTION<b>検索</b></span></div>
+    <div class="gate-logo" style="justify-content:center">${IC.logo}<span>店頭業務<b>ツール</b></span></div>
     <div class="gate-sub">ロック中です</div>
     <svg viewBox="0 0 24 24" class="lock-face"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M9 9v1.5M15 9v1.5M12 9v4h-1M9 16c1.8 1.4 4.2 1.4 6 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     <button class="btn pri wide" id="unlock">生体認証で解除</button>
@@ -458,7 +458,7 @@ const NAV = [
 ];
 function renderShell() {
   $("#app").innerHTML = `<div class="stripe"></div><div class="shell">
-    <aside class="side"><div class="logo">${IC.logo}<span>SECTION<b>検索</b></span></div><nav id="nav"></nav>
+    <aside class="side"><div class="logo">${IC.logo}<span>店頭業務<b>ツール</b></span></div><nav id="nav"></nav>
       <div class="side-foot">${DEMO ? '<div class="demo-badge">デモモード（このブラウザにだけ保存）</div>' : ""}<button class="faceid" id="fid-card" data-go="edit:settings"></button>
       <div class="who"><span id="who"></span><button class="linkbtn" id="logout">ログアウト</button></div></div></aside>
     <main id="main"></main>
@@ -1894,7 +1894,7 @@ async function editSettings() {
   };
   $("#fid-on")?.addEventListener("click", async () => {
     try {
-      await FID.register(st.user?.email || "セクション検索");
+      await FID.register(st.user?.email || "店頭業務ツール");
       await store.setRemember(true);
       toast("設定しました。次からはFace IDだけで開けます");
       renderFid();
