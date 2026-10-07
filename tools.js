@@ -1,6 +1,6 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261003h";
+import * as S from "./search.js?v=20261007a";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -57,7 +57,11 @@ export function markupPrice(cost, markPct, roundId) {
   return roundTo(Math.round(cost) * m100, 10000, r.unit, r.dir);
 }
 // 税込 → 税抜（切り上げ）
-export const exTax = (incl) => Math.ceil((Math.round(incl) * 10) / 11);
+// スズキのシートと同じ：消費税 = ROUND(税込み/11)、税抜き = 税込み - 消費税
+// ExcelのROUNDは0から遠い方へ丸めるので、マイナス（返品）も符号ごと扱う
+const xlRound = (n) => Math.sign(n) * Math.round(Math.abs(n));
+export const taxOf = (incl) => xlRound(Math.round(incl) / 11);
+export const exTax = (incl) => Math.round(incl) - taxOf(incl);
 
 // パッドローター
 // ローター1枚 =（セット − パッド）÷ 2。端数はパッド側に寄せる（パッドで利益を取る）
@@ -376,7 +380,7 @@ function renderCost() {
   const c = T.cost;
   box.innerHTML = `<div class="tbar">
       <div class="seg2"><button class="${c.mode === "ex" ? "on" : ""}" data-cmode="ex">税抜きで足す（通常）</button><button class="${c.mode === "in" ? "on" : ""}" data-cmode="in">税込みから税抜きに（スズキ）</button></div>
-      <div class="tnote">${c.mode === "in" ? "1行ずつ 税込み ÷ 1.1 を<b>1円単位で切り上げ</b>てから足します" : "入れた金額をそのまま足します。数量を入れると × します"}</div>
+      <div class="tnote">${c.mode === "in" ? "1行ずつ <b>消費税 ＝ 税込み ÷ 11（四捨五入）</b>、税抜き ＝ 税込み − 消費税 にしてから足します。マイナス（返品）もOK" : "入れた金額をそのまま足します。数量を入れると × します"}</div>
       <button class="btn clear-all" data-clear="cost" title="金額・数量を全部消す（掛け率などの設定はそのまま）">入力を全部消す</button>
     </div>
     <div class="tgrid cost ${c.mode}" id="cgrid">
@@ -438,7 +442,7 @@ function costCalcRow(r) {
   if (p == null) return null;
   const q = toNum(r.q) ?? 1;
   const unit = T.cost.mode === "in" ? exTax(p) : Math.round(p);
-  return { unit, q, sub: unit * q };
+  return { unit, q, sub: unit * q, incl: Math.round(p) * q };
 }
 function costTotal() {
   return T.cost.rows.reduce(
@@ -446,12 +450,13 @@ function costTotal() {
       const x = costCalcRow(r);
       if (x) {
         a.sum += x.sub;
+        a.incl += x.incl;
         a.n++;
         a.q += x.q;
       }
       return a;
     },
-    { sum: 0, n: 0, q: 0 },
+    { sum: 0, n: 0, q: 0, incl: 0 },
   );
 }
 function calcCost() {
@@ -469,7 +474,11 @@ function calcCost() {
   const t = costTotal();
   $("#cfoot").innerHTML = `<div class="sum"><span>${t.n}行</span><small>${t.q}点</small></div>
     <div class="sum hl big"><small>合計（税抜き）</small><b>${yen(t.sum)}</b></div>
-    <div class="sum minor"><small>参考：税込み（×1.1）</small><b>${yen(Math.floor((t.sum * 11) / 10))}</b></div>`;
+    ${
+      T.cost.mode === "in"
+        ? `<div class="sum minor"><small>税込み計</small><b>${yen(t.incl)}</b></div><div class="sum minor"><small>消費税計</small><b>${yen(t.incl - t.sum)}</b></div>`
+        : `<div class="sum minor"><small>参考：税込み（×1.1）</small><b>${yen(Math.floor((t.sum * 11) / 10))}</b></div>`
+    }`;
 }
 
 // 確認は出さずに消して、少しの間だけ「元に戻す」を出す
