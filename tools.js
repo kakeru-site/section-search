@@ -1,6 +1,6 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014b";
+import * as S from "./search.js?v=20261014c";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -893,6 +893,30 @@ const oilN = (s) =>
     .normalize("NFKC")
     .replace(/\s+/g, " ")
     .trim();
+// ひらがなで打っても漢字の名称に当たるように（設定の「同義語」にも足せます）
+const OIL_SYN = [
+  "液状=えきじょう",
+  "パッキン=ぱっきん=ガスケット",
+  "耐熱=たいねつ",
+  "潤滑=じゅんかつ",
+  "洗浄=せんじょう",
+  "防錆=ぼうせい=錆止め=さびどめ",
+  "固着=こちゃく",
+  "接着=せっちゃく",
+  "冷却水=れいきゃくすい=LLC=クーラント",
+  "添加剤=てんかざい",
+  "洗剤=せんざい",
+  "剥離=はくり",
+  "鉱物油=こうぶつゆ",
+  "化学合成油=かがくごうせいゆ",
+  "部分合成油=ぶぶんごうせいゆ",
+  "軽油=けいゆ",
+  "耐水=たいすい",
+  "共用=きょうよう",
+  "塗料=とりょう",
+  "消臭=しょうしゅう",
+  "艶出し=つやだし",
+].map((l) => l.split("=").map(S.norm));
 let oilIdx = null,
   oilSrc = null;
 function oilList() {
@@ -1011,7 +1035,7 @@ function renderOilList() {
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((t) => S.expand(t, C.st.syn));
+    .map((t) => S.expand(t, [...OIL_SYN, ...C.st.syn]));
   const qn = S.norm(String(T.oil.q || "").replace(/[^0-9A-Za-z]/g, ""));
   const hits = list.filter(
     (o) =>
