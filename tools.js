@@ -1,7 +1,7 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014f";
-import { buildOilWorkbook, freeName } from "./oilxlsx.js?v=20261014f";
+import * as S from "./search.js?v=20261014g";
+import { buildOilWorkbook, freeName } from "./oilxlsx.js?v=20261014g";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -1545,7 +1545,7 @@ async function exportIntoBase(file) {
       <div><span>作成者</span><b>${esc(wb.creator || "（記録なし）")}</b></div>
       <div><span>最終更新者</span><b>${esc(wb.lastModifiedBy || "（記録なし）")}</b></div>
       <div><span>今あるシート</span><b>${esc(sheets.join("、") || "（なし）")}</b></div>
-      <div><span>追加するシート</span><b>${esc(freeName(wb, "検索"))}（検索画面）・${esc(freeName(wb, "データ"))}（${items.length}件）</b></div>
+      <div><span>追加するシート</span><b>${esc(freeName(wb, "オイル・ケミカル検索"))}（検索画面）・${esc(freeName(wb, "オイル・ケミカルデータ"))}（${items.length}件）</b></div>
     </div>
     <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今あるシートの内容はそのまま残り、検索のシートが後ろに加わります。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。<br>・グラフ・ピボットテーブル・マクロ・一部の図形は、保存すると消えることがあります。大事なファイルは、念のためコピーを取ってから使ってください。</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
