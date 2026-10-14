@@ -154,8 +154,8 @@ function remapSheet(xml, xfOff, strings) {
   return xml;
 }
 
-// base: readBase の結果 / ourBuf: ExcelJS が作った「検索」「データ」の2枚だけのxlsx
-export async function injectSheets(JSZip, base, ourBuf, { nameS, nameD }) {
+// base: readBase の結果 / ourBuf: ExcelJS が作った「検索」「使い方」「データ」の3枚だけのxlsx（この順）
+export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameD }) {
   const B = base.zip;
   const put = (p, d) => B.file(p, d, { createFolders: false });
   const A = await JSZip.loadAsync(ourBuf);
@@ -181,7 +181,8 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameD }) {
   let n = Math.max(0, ...existing.map((f) => +f.match(/sheet(\d+)\.xml/)[1]));
   const sheets = [
     [nameS, "xl/worksheets/sheet1.xml"],
-    [nameD, "xl/worksheets/sheet2.xml"],
+    [nameG, "xl/worksheets/sheet2.xml"],
+    [nameD, "xl/worksheets/sheet3.xml"],
   ];
   const sheetIds = [...wb.matchAll(/<sheet\b[^>]*\bsheetId="(\d+)"/g)].map((x) => +x[1]);
   let sid = Math.max(0, ...sheetIds);

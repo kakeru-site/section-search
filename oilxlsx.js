@@ -3,20 +3,27 @@ const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charC
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
 
-// 検索用の文字列：元の文字＋カタカナ版＋ひらがな版＋同義語（読み・別名）
-// これをExcel側で SEARCH するので、ひらがな・読み・別名でも当たる（小さい「っ」「ょ」もそのまま）
+// 読み・別名（固定の補助文字列）：カタカナ版・ひらがな版・同義語（読み・別名）
+// 「検索用」の列は、品番・名称などの今の内容＋この文字列から数式で作る（書き換えても検索に反映される）
 // groups は「液状=えきじょう」のような同義語を [["液状","えきじょう"],…] にしたもの
-export function searchText(o, groups) {
-  const base = NF(`${o.code} ${String(o.code || "").replace(/[^0-9A-Za-z]/g, "")} ${o.name} ${o.cap} ${o.use} ${o.cat}`);
+export function readingsText(o, groups) {
+  const raw = `${o.code} ${o.name} ${o.cap} ${o.use} ${o.cat}`;
+  const base = NF(raw);
   const kata = kataOf(base);
-  const extra = [];
+  const out = [];
+  if (base !== raw.toLowerCase()) out.push(base); // 全角の英数字などは半角にした形も
+  out.push(kata, hiraOf(base));
   for (const g of groups) {
     const ws = g.map(NF).filter(Boolean);
-    if (ws.some((w) => kata.includes(kataOf(w)))) for (const w of ws) extra.push(w, kataOf(w), hiraOf(w));
+    if (ws.some((w) => kata.includes(kataOf(w)))) for (const w of ws) out.push(w, kataOf(w), hiraOf(w));
   }
-  const flat = base.replace(/[\s\-・.／/]/g, ""); // 「0w-20」を「0w20」で探しても当たるように
-  return [...new Set([base, flat, kata, hiraOf(base), ...extra])].join(" ").slice(0, 3000);
+  return [...new Set(out)].join(" ").slice(0, 3000);
 }
+// 検索用の列と同じ中身（数式の計算済みの値として入れる）
+const searchCell = (o, readings) =>
+  [o.code, o.name, o.cap || "", o.use || "", o.cat || "", readings, `${o.code}${o.name}`.replace(/-/g, "").replace(/ /g, "")]
+    .join(" ")
+    .toLowerCase();
 
 const MAXROWS = 200; // 検索シートに出す最大件数
 const SPARE = 300; // データシートの空き行（あとから足せる）
@@ -49,6 +56,134 @@ export function layoutFor(items) {
   return { w, lines, height: Math.max(24, lines * 19 + 4) };
 }
 
+
+// ---- 使い方シート ----
+const GW = { b: 7, c: 28, d: 62 }; // 列の幅（B・C・D）
+const guideBlocks = (protect) => [
+  ["title", "オイル・ケミカル検索の使い方"],
+  ["sub", "お客さんに聞かれたとき、ぱっと探してぱっと答えるためのシートです。むずかしくないので、さくっと読んでみてください！"],
+  ["h", "まずはこれだけ（3ステップ）"],
+  ["step", "①", "「検索」シートの黄色いところに、探したい言葉を入れて Enter！（品番でも名前でも用途でもOK）"],
+  ["step", "②", "下に結果がズラッと出ます。多すぎるときは「分類」のプルダウンで絞ってください"],
+  ["step", "③", "もっと調べたいときは、右端の「Google」を押せば検索ページが開きます"],
+  ["h", "検索のコツ"],
+  ["th", "入れる言葉", "こうなる"],
+  ["tr", "atf", "「ATF」が入っている商品が出ます。大文字・小文字はどっちでもOK！"],
+  ["tr", "オイル 4l", "空白で区切ると、両方入っているものだけ出ます（3つまで）"],
+  ["tr", "えきじ", "ひらがなでもOK。ただし、読みが登録してある言葉（「液状」など）だけです"],
+  ["tr", "0w20", "ハイフンなしでも「0W-20」が出ます"],
+  ["tr", "（何も入れない）", "全部出ます（200件まで）"],
+  ["b", "英数字は半角で入れてください。全角だと当たらないことがあります"],
+  ["b", "「?」と「*」は検索で特別な意味になる記号なので、入れないでください"],
+  ["h", "商品を追加・修正・削除する（「オイル・ケミカルデータ」シート）"],
+  ["step", "追加", "一覧の一番下の空き行に入れるだけ！空き行は300行ぶん用意してあります"],
+  ["b", "品番と名称だけは必ず入れてください。容量・用途・分類は空でもOK"],
+  ["step", "修正", "直したい行を、そのまま書き換えればOK。検索にもすぐ反映されます"],
+  ["step", "削除", "行ごと消さずに、セルの中身だけ消してください（選んで Delete）"],
+  ["step", "分類", "文字を入れるだけで、新しい分類も作れます。プルダウンにも出したいときは、右端の「分類一覧」の下に足してください"],
+  ["b", "並べ替えや絞り込みは、一番上の見出しのボタンから自由にどうぞ"],
+  ["ng", "行の途中に「挿入」しないでください（検索に出なくなります）"],
+  ["ng", "列を消したり、隠れている列をいじったりしないでください"],
+  ["h", "困ったときは"],
+  ["b", "何も出ない・計算されない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
+  ["b", "あるはずなのに出ない → 全角になっていないか、分類が「すべて」になっているか見てください"],
+  ["b", "追加したのに出ない → 品番（A列）が空になっていないか、行を挿入していないか見てください"],
+  ["b", "200件で止まる → 言葉を足して絞り込んでください"],
+  ["b", "おかしくなった → 元のファイルをもう一回コピーすれば、元どおりです"],
+  ["h", "これだけは守ってください"],
+  ["b", "元のファイルは触らずに、各自コピーして使ってください"],
+  ["b", "検索欄に入れた言葉は、保存しなくて大丈夫です。閉じるときは「保存しない」でOK！"],
+  ["b", "検索結果の表（数式が入ってます）は、消したり上書きしたりしないでください"],
+  ...(protect
+    ? [
+        ["b", "「検索」と「使い方」のシートは、間違って消さないように保護してあります。入力できるのは黄色い欄とプルダウンだけです"],
+        ["b", "保護を外したいときは「校閲 → シート保護の解除」です（パスワードなし）"],
+      ]
+    : []),
+];
+
+function fillGuide(ws, { font, protect }) {
+  const AC = "FFF2C230";
+  const DK = "FF17191C";
+  ws.columns = [{ width: 2 }, { width: GW.b }, { width: GW.c }, { width: GW.d }];
+  const spanW = GW.c + GW.d; // 文章がまたぐ幅（C〜D）
+  const lines = (text, width) => Math.max(1, Math.ceil((dispW(text) * 1.12) / (width - 2)));
+  const hairs = { bottom: { style: "hair", color: { argb: "FFB0B4BA" } } };
+  let r = 1;
+  for (const blk of guideBlocks(protect)) {
+    const [kind, a, b] = blk;
+    const row = ws.getRow(r);
+    const span = (text, o = {}) => {
+      ws.mergeCells(r, 3, r, 4);
+      const c = row.getCell(3);
+      c.value = text;
+      c.font = o.font || font;
+      c.alignment = { vertical: "middle", wrapText: true };
+    };
+    if (kind === "title") {
+      ws.mergeCells(r, 2, r, 4);
+      const c = row.getCell(2);
+      c.value = a;
+      c.font = { ...font, size: 20, bold: true, color: { argb: DK } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AC } };
+      c.alignment = { vertical: "middle", indent: 1 };
+      for (let i = 2; i <= 4; i++) row.getCell(i).fill = c.fill;
+      row.height = 40;
+    } else if (kind === "sub") {
+      ws.mergeCells(r, 2, r, 4);
+      const c = row.getCell(2);
+      c.value = a;
+      c.font = { ...font, color: { argb: "FF4A4F57" } };
+      c.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+      row.height = lines(a, GW.b + spanW) * 19 + 10;
+    } else if (kind === "h") {
+      r++; // 見出しの前に1行あける
+      ws.getRow(r - 1).height = 10;
+      const hr = ws.getRow(r);
+      ws.mergeCells(r, 2, r, 4);
+      const c = hr.getCell(2);
+      c.value = a;
+      c.font = { ...font, size: 12, bold: true, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DK } };
+      c.alignment = { vertical: "middle", indent: 1 };
+      for (let i = 2; i <= 4; i++) hr.getCell(i).fill = c.fill;
+      hr.height = 24;
+    } else if (kind === "step") {
+      const n = row.getCell(2);
+      n.value = a;
+      n.font = { ...font, bold: true, size: a.length > 1 ? 11 : 14, color: { argb: "FFB06A00" } };
+      n.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      span(b);
+      row.height = Math.max(24, lines(b, spanW) * 19 + 6);
+      for (let i = 2; i <= 4; i++) row.getCell(i).border = hairs;
+    } else if (kind === "b" || kind === "ng") {
+      const m = row.getCell(2);
+      m.value = kind === "ng" ? "×" : "・";
+      m.font = { ...font, bold: true, color: { argb: kind === "ng" ? "FFD93025" : "FF7A7F87" } };
+      m.alignment = { vertical: "middle", horizontal: "center" };
+      span(a, kind === "ng" ? { font: { ...font, bold: true, color: { argb: "FFD93025" } } } : {});
+      row.height = Math.max(22, lines(a, spanW) * 19 + 4);
+    } else if (kind === "th" || kind === "tr") {
+      const c1 = row.getCell(3);
+      const c2 = row.getCell(4);
+      c1.value = a;
+      c2.value = b;
+      const head = kind === "th";
+      c1.font = head ? { ...font, bold: true } : { name: "Consolas", size: 11, bold: true };
+      c2.font = head ? { ...font, bold: true } : font;
+      for (const c of [c1, c2]) {
+        c.alignment = { vertical: "middle", wrapText: true };
+        c.border = { top: { style: "thin", color: { argb: "FF8A8F98" } }, bottom: { style: "thin", color: { argb: "FF8A8F98" } }, left: { style: "thin", color: { argb: "FF8A8F98" } }, right: { style: "thin", color: { argb: "FF8A8F98" } } };
+        if (head) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3C4" } };
+      }
+      row.height = Math.max(24, Math.max(lines(a, GW.c), lines(b, GW.d)) * 19 + 6);
+    }
+    r++;
+  }
+  ws.pageSetup = { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true };
+  if (protect) ws.sheetProtection = { sheet: true };
+}
+
 // 既存のブックに同じ名前のシートがあれば「検索2」のように避ける
 export function freeName(wb, base) {
   let n = base,
@@ -67,6 +202,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
   const nameS = opt.names?.search || freeName(wb, "オイル・ケミカル検索");
   const QS = quote(nameS);
+  const nameG = opt.names?.guide || freeName(wb, "使い方");
   const nameD = opt.names?.data || freeName(wb, "オイル・ケミカルデータ");
   const QD = quote(nameD);
   const N = items.length;
@@ -83,6 +219,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const ws = wb.addWorksheet(nameS, {
     views: [{ state: "frozen", ySplit: 6, showGridLines: false, tabSelected: true }],
   });
+  const wg = wb.addWorksheet(nameG, { views: [{ showGridLines: false }] });
   const wd = wb.addWorksheet(nameD, { views: [{ state: "frozen", ySplit: 1 }] });
 
   // ---- データ ----
@@ -92,8 +229,8 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     { header: "容量", width: L.w.cap },
     { header: "用途", width: L.w.use },
     { header: "分類", width: L.w.cat },
-    { header: "", width: 3 },
-    { header: "検索用（自動・触らない）", width: 18 },
+    { header: "読み・別名（自動）", width: 16 },
+    { header: "検索用（自動）", width: 18 },
     { header: "一致", width: 6 },
     { header: "順位", width: 6 },
     { header: "", width: 3 },
@@ -116,21 +253,23 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
       row.getCell(3).value = o.cap || "";
       row.getCell(4).value = o.use || "";
       row.getCell(5).value = o.cat || "";
-      row.getCell(7).value = searchText(o, groups);
-    } else {
-      // 空き行：あとから足した商品も、漢字・カタカナの直接入力で検索できる
-      row.getCell(7).value = { formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$C${r}&" "&$D${r}&" "&$E${r}))`, result: "" };
+      row.getCell(6).value = readingsText(o, groups);
     }
+    // 検索用：今の品番・名称などから数式で作る（書き換え・追加しても検索に反映される）
+    row.getCell(7).value = {
+      formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$C${r}&" "&$D${r}&" "&$E${r}&" "&$F${r}&" "&SUBSTITUTE(SUBSTITUTE($A${r}&$B${r},"-","")," ","")))`,
+      result: o ? searchCell(o, row.getCell(6).value) : "",
+    };
     row.getCell(8).value = {
       result: o ? 1 : 0,
-      formula: `IF($A${r}="",0,IF(AND(OR(${QS}!$K$2="",ISNUMBER(SEARCH(${QS}!$K$2,$G${r}))),OR(${QS}!$K$3="",ISNUMBER(SEARCH(${QS}!$K$3,$G${r}))),OR(${QS}!$K$4="",ISNUMBER(SEARCH(${QS}!$K$4,$G${r}))),OR(${QS}!$B$3="すべて",$E${r}=${QS}!$B$3)),1,0))`,
+      formula: `IF($A${r}="",0,IF(AND(OR(${QS}!$K$2="",ISNUMBER(SEARCH(${QS}!$K$2,$G${r}))),OR(${QS}!$K$3="",ISNUMBER(SEARCH(${QS}!$K$3,$G${r}))),OR(${QS}!$K$4="",ISNUMBER(SEARCH(${QS}!$K$4,$G${r}))),OR(${QS}!$B$3="すべて",${QS}!$B$3="",$E${r}=${QS}!$B$3)),1,0))`,
     };
     row.getCell(9).value = { formula: `IF($H${r}=1,COUNTIF($H$2:$H${r},1),"")`, result: o ? r - 1 : "" };
   }
-  wd.autoFilter = { from: "A1", to: "E1" };
+  wd.autoFilter = { from: "A1", to: "F1" };
+  for (const c of [6, 7, 8, 9, 10]) wd.getColumn(c).hidden = true; // 計算用の列は見せない（触らせない）
   for (let r = 2; r <= N + 1; r++) for (const c of [1, 2, 3, 4, 5]) wd.getRow(r).getCell(c).alignment = { vertical: "middle", wrapText: true };
-  for (const c of ["G", "H", "I"]) wd.getColumn(c).font = { ...font, color: { argb: "FF9AA0A6" } };
-  wd.getCell("G1").font = { ...font, color: { argb: "FF9AA0A6" }, italic: true };
+  for (const c of ["F", "G", "H", "I"]) wd.getColumn(c).font = { ...font, color: { argb: "FF9AA0A6" } };
 
   // ---- 検索 ----
   ws.columns = [
@@ -162,7 +301,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getCell("B3").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`${QD}!$K$2:$K$${cats.length + 2}`],
+    formulae: [`${QD}!$K$2:$K$${Math.max(cats.length + 2, 30)}`],
   };
   ws.getCell("C3").value = "← 黄色い欄に入力（品番・名称・用途・容量。空白で区切ると絞り込み。ひらがなもOK）";
   ws.getCell("C3").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
@@ -218,7 +357,16 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getColumn(11).hidden = true;
   ws.getColumn(12).hidden = true;
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  fillGuide(wg, { font, protect: !!opt.protect });
+  // 検索シートから使い方へ飛べるリンク
+  ws.getCell("F1").value = { formula: `HYPERLINK("#"&"'${nameG.replace(/'/g, "''")}'!A1","使い方はこちら →")`, result: "使い方はこちら →" };
+  ws.getCell("F1").font = { ...font, color: { argb: "FF1A73E8" }, underline: true };
+  if (opt.protect) {
+    // 入力できるのは、黄色い検索欄とプルダウンだけ（パスワードなし。「校閲→シート保護の解除」で外せる）
+    for (const a of ["B2", "C2", "D2", "E2", "B3"]) ws.getCell(a).protection = { locked: false };
+    ws.sheetProtection = { sheet: true };
+  }
   const idx = wb.worksheets.indexOf(ws);
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: idx, visibility: "visible" }];
-  return { wb, nameS, nameD };
+  return { wb, nameS, nameG, nameD };
 }

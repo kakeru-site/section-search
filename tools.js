@@ -1,8 +1,8 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014l";
-import { buildOilWorkbook } from "./oilxlsx.js?v=20261014l";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014l";
+import * as S from "./search.js?v=20261014m";
+import { buildOilWorkbook } from "./oilxlsx.js?v=20261014m";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014m";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -120,7 +120,7 @@ const T = Object.assign(
     cost: { mode: "ex", rows: blank(20, () => ({ p: "", q: "" })) },
     pad: { pad: "", padCost: "", rotorCost: "", rotorList: "" },
     bulb: { q: "", shape: "", volt: "" },
-    oil: { q: "", cat: "" },
+    oil: { q: "", cat: "", protect: true },
   },
   load() || {},
 );
@@ -979,7 +979,7 @@ function renderOil() {
   box.innerHTML = `<label class="search">${C.IC.search}<input id="oq" type="search" autocomplete="off" placeholder="品番・名称・用途（例：5w30、ATF、ブレーキ）" value="${esc(T.oil.q)}"><span class="cnt" id="ocnt"></span></label>
     <div class="chips" id="ochips"></div>
     <div id="olist"></div>
-    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn" data-oxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><input type="file" id="foilbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-oxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
+    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn" data-oxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><button class="chip ${T.oil.protect !== false ? "on" : ""}" data-oprot="1" title="書き出すExcelの検索・使い方シートに保護をかける（パスワードなし）">シート保護 ${T.oil.protect !== false ? "ON" : "OFF"}</button><input type="file" id="foilbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-oxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
   const q = $("#oq", box);
   q.addEventListener("input", () => {
     T.oil.q = q.value;
@@ -1009,6 +1009,12 @@ function renderOil() {
     else if (d.ocats) oilCatsForm();
     else if (d.oxlsx) exportOils();
     else if (d.oxbase) $("#foilbase").click();
+    else if (d.oprot) {
+      T.oil.protect = T.oil.protect === false;
+      save();
+      b.classList.toggle("on", T.oil.protect);
+      b.textContent = `シート保護 ${T.oil.protect ? "ON" : "OFF"}`;
+    }
     else if (d.ocat !== undefined) {
       T.oil.cat = T.oil.cat === d.ocat ? "" : d.ocat;
       oilLimit = 30;
@@ -1519,7 +1525,7 @@ async function exportOils() {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
     const items = oilExportItems();
-    const { wb } = buildOilWorkbook(X, items, oilGroups());
+    const { wb } = buildOilWorkbook(X, items, oilGroups(), { protect: T.oil.protect !== false });
     downloadXlsx(await wb.xlsx.writeBuffer(), "オイル・ケミカル検索.xlsx");
     C.toast(`${items.length}件 をExcelにしました`);
   } catch (e) {
@@ -1544,6 +1550,7 @@ async function exportIntoBase(file) {
   }
   const items = oilExportItems();
   const nameS = uniqueName(base.names, "オイル・ケミカル検索");
+  const nameG = uniqueName(base.names, "使い方");
   const nameD = uniqueName(base.names, "オイル・ケミカルデータ");
   const r = await C.modal(`<h3>Excelに検索機能を追加</h3>
     <div class="xlinfo">
@@ -1552,7 +1559,8 @@ async function exportIntoBase(file) {
       <div><span>最終更新者</span><b>${esc(base.lastModifiedBy || "（記録なし）")}</b></div>
       ${base.company ? `<div><span>会社名</span><b>${esc(base.company)}</b></div>` : ""}
       <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
-      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameD)}（${items.length}件）</b></div>
+      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameG)}・${esc(nameD)}（${items.length}件）</b></div>
+      <div><span>シート保護</span><b>${T.oil.protect !== false ? "あり（検索・使い方のシート。パスワードなし）" : "なし"}</b></div>
     </div>
     <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容（シート・グラフ・表・書式など）には手を触れず、検索のシートだけを後ろに足します。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
@@ -1560,8 +1568,11 @@ async function exportIntoBase(file) {
   try {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
-    const { wb } = buildOilWorkbook(X, items, oilGroups(), { names: { search: nameS, data: nameD } });
-    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameD });
+    const { wb } = buildOilWorkbook(X, items, oilGroups(), {
+      names: { search: nameS, guide: nameG, data: nameD },
+      protect: T.oil.protect !== false,
+    });
+    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameG, nameD });
     downloadXlsx(out, `オイル・ケミカル検索.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {
