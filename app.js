@@ -1131,7 +1131,10 @@ function mountCse(cx, q) {
 }
 
 // ---- メモ ----
+const MISS_TYPES = ["部品違い", "型式・年式の見落とし", "数量・価格", "伝え間違い", "発注・在庫", "操作", "その他"];
+const MISS_CAUSES = ["確認不足", "思い込み", "知識不足", "うっかり"];
 function memoMatches(m) {
+  if (st.memoFilter === "miss" && m.kind !== "miss") return false;
   if (st.memoFilter === "open" && m.done) return false;
   if (st.memoFilter === "done" && !m.done) return false;
   if (st.memoPart && m.partId !== st.memoPart) return false;
@@ -1147,8 +1150,8 @@ function memoMatches(m) {
 function renderMemo(full) {
   const main = $("#main");
   if (full || !$("#memo-list")) {
-    main.innerHTML = `<div class="view-head"><div><h1 class="h1">メモ</h1><div class="tip">業務中の疑問や気づきを書き留める ／ 部品・型式に紐付けられます ／ 書いた内容は自動で保存</div></div>
-      <button class="btn pri" data-newmemo="1">＋ 新しいメモ</button></div>
+    main.innerHTML = `<div class="view-head"><div><h1 class="h1">メモ</h1><div class="tip">業務中の疑問や気づき・ミスを書き留める ／ 部品・型式に紐付けられます ／ 書いた内容は自動で保存</div></div>
+      <div class="head-acts"><button class="btn" data-newmiss="1">＋ ミス記録</button><button class="btn pri" data-newmemo="1">＋ 新しいメモ</button></div></div>
       <div class="memo-grid"><div><div class="toolbar"><input class="inp" id="mq" placeholder="メモを検索" value="${esc(st.memoQ)}" data-live="1"></div>
         <div class="chips" id="mchips" style="margin-top:0"></div><div class="memo-list" id="memo-list"></div></div>
         <div id="memo-ed"></div></div>`;
@@ -1168,12 +1171,14 @@ function renderMemoList() {
     open: all.filter((m) => !m.done).length,
     done: all.filter((m) => m.done).length,
     all: all.length,
+    miss: all.filter((m) => m.kind === "miss").length,
   };
   $("#mchips").innerHTML =
     [
       ["open", "未解決"],
       ["done", "解決済み"],
       ["all", "すべて"],
+      ["miss", "ミス"],
     ]
       .map(
         ([k, l]) =>
@@ -1189,11 +1194,11 @@ function renderMemoList() {
         (
           m,
         ) => `<button class="mitem ${m.id === st.memoSel ? "on" : ""} ${m.done ? "done" : ""}" data-memo="${esc(m.id)}">
-      <div class="mt"><span class="dot"></span><span>${esc(m.title || "（無題）")}</span></div>
-      <div class="mm"><span>${fmtWhen(m.updatedAt)}</span>${m.partLabel ? `<span>🔧 ${esc(m.partLabel)}</span>` : ""}${m.kataCode ? `<span>🚗 ${esc(m.kataCode)} ${esc(m.kataName || "")}</span>` : ""}</div></button>`,
+      <div class="mt"><span class="dot"></span><span>${m.kind === "miss" ? '<span class="misstag">ミス</span>' : ""}${esc(m.title || "（無題）")}</span></div>
+      <div class="mm"><span>${fmtWhen(m.updatedAt)}</span>${m.kind === "miss" && m.missType ? `<span>${esc(m.missType)}</span>` : ""}${m.recur ? `<span class="recur">再発 ${m.recur}回</span>` : ""}${m.partLabel ? `<span>🔧 ${esc(m.partLabel)}</span>` : ""}${m.kataCode ? `<span>🚗 ${esc(m.kataCode)} ${esc(m.kataName || "")}</span>` : ""}</div></button>`,
       )
       .join("") ||
-    `<p class="empty">${st.memoFilter === "open" ? "未解決のメモはありません 👍" : "メモはありません"}</p>`;
+    `<p class="empty">${st.memoFilter === "open" ? "未解決のメモはありません 👍" : st.memoFilter === "miss" ? "ミス記録はありません" : "メモはありません"}</p>`;
 }
 function renderMemoEditor() {
   const ed = $("#memo-ed");
@@ -1205,16 +1210,28 @@ function renderMemoEditor() {
     return;
   }
   const part = m.partId && st.parts[m.partId] ? { id: m.partId, ...st.parts[m.partId] } : null;
-  ed.innerHTML = `<div class="editor">
-    <input class="inp title" id="me-title" placeholder="タイトル（例：C27のオイルエレメント、寒冷地仕様は？）" value="${esc(m.title)}">
+  const miss = m.kind === "miss";
+  const chipRow = (label, key, list, cur) =>
+    `<div class="missrow"><span class="ml">${label}</span>${list
+      .map((x) => `<button class="chip ${cur === x ? "on" : ""}" data-${key}="${esc(x)}">${esc(x)}</button>`)
+      .join("")}</div>`;
+  ed.innerHTML = `<div class="editor ${miss ? "miss" : ""}">
+    <input class="inp title" id="me-title" placeholder="${miss ? "何が起きた？（1行で）" : "タイトル（例：C27のオイルエレメント、寒冷地仕様は？）"}" value="${esc(m.title)}">
+    ${
+      miss
+        ? `${chipRow("種類", "mtype", MISS_TYPES, m.missType)}${chipRow("原因", "mcause", MISS_CAUSES, m.cause)}
+    <input class="inp" id="me-fix" placeholder="次どうする？（再発防止のひと言）" value="${esc(m.fix || "")}">`
+        : ""
+    }
     <div class="links">紐付け：
       ${m.partId ? `<button class="ltag" data-q="${esc(part ? part.name : "")}" title="セクション検索で開く">🔧 <b>${esc(part ? part.sec : "")}</b>${esc(part ? `${part.code} ${part.name}` : m.partLabel || "（削除された部品）")}</button><button class="x" data-unlink="part" title="紐付けを外す">×</button>` : ""}
       ${m.kataCode ? `<button class="ltag" data-kq="${esc(m.kataCode)}">🚗 <b>${esc(m.kataCode)}</b>${esc(st.kata[m.kataCode]?.name || m.kataName || "")}</button><button class="x" data-unlink="kata" title="紐付けを外す">×</button>` : ""}
       ${!m.partId && !m.kataCode ? '<span style="color:var(--mu2)">なし（部品の「メモ」ボタンや型式画面から作ると自動で紐付きます）</span>' : ""}
     </div>
-    <textarea class="inp" id="me-body" rows="14" placeholder="疑問点・調べたこと・答え など">${esc(m.body)}</textarea>
+    <textarea class="inp" id="me-body" rows="${miss ? 8 : 14}" placeholder="${miss ? "詳細・正しい答え など（任意）" : "疑問点・調べたこと・答え など"}">${esc(m.body)}</textarea>
     <div class="ed-foot"><span class="meta" id="me-meta">作成 ${fmtWhen(m.createdAt)} ／ 更新 ${fmtWhen(m.updatedAt)}</span>
-      <label class="switch"><input type="checkbox" id="me-done" ${m.done ? "checked" : ""}> 解決済み</label>
+      ${miss ? `<button class="btn sm" data-recur="${esc(m.id)}" title="同じミスをまたやってしまったら押す">また起きた${m.recur ? ` <b>${m.recur}</b>` : ""}</button>` : ""}
+      <label class="switch"><input type="checkbox" id="me-done" ${m.done ? "checked" : ""}> ${miss ? "対策済み" : "解決済み"}</label>
       <button class="btn danger sm" data-delmemo="${esc(m.id)}">削除</button></div></div>`;
   const save = debounce(async (fields) => {
     try {
@@ -1225,18 +1242,20 @@ function renderMemoEditor() {
     }
   }, 600);
   const t = $("#me-title"),
-    b = $("#me-body");
+    b = $("#me-body"),
+    fx = $("#me-fix");
+  const vals_ = () => (fx ? { title: t.value, body: b.value, fix: fx.value } : { title: t.value, body: b.value });
   const fire = () => {
     $("#me-meta").textContent = "保存中…";
-    save({ title: t.value, body: b.value });
+    save(vals_());
   };
-  t.addEventListener("input", fire);
-  b.addEventListener("input", fire);
-  t.addEventListener("blur", () => save.flush({ title: t.value, body: b.value }));
-  b.addEventListener("blur", () => save.flush({ title: t.value, body: b.value }));
+  for (const el of fx ? [t, b, fx] : [t, b]) {
+    el.addEventListener("input", fire);
+    el.addEventListener("blur", () => save.flush(vals_()));
+  }
   $("#me-done").addEventListener("change", async (e) => {
     await store.update(`memos/${m.id}`, { done: e.target.checked, updatedAt: Date.now() });
-    toast(e.target.checked ? "解決済みにしました" : "未解決に戻しました");
+    toast(e.target.checked ? (miss ? "対策済みにしました" : "解決済みにしました") : "未解決に戻しました");
   });
 }
 async function newMemo(fields = {}) {
@@ -1250,7 +1269,7 @@ async function newMemo(fields = {}) {
     ...fields,
   });
   st.memoSel = id;
-  st.memoFilter = fields.done ? "all" : "open";
+  st.memoFilter = fields.kind === "miss" ? "miss" : fields.done ? "all" : "open";
   st.memoQ = "";
   if (st.view !== "memo") go("memo");
   else renderMemo(true);
@@ -2827,6 +2846,24 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (d.newmemo) return newMemo();
+  if (d.newmiss) return newMemo({ kind: "miss", missType: "", cause: "", fix: "", recur: 0 });
+  if (d.mtype !== undefined || d.mcause !== undefined) {
+    const id = st.memoSel;
+    const m = id && st.memos[id];
+    if (!m) return;
+    const f = d.mtype !== undefined ? ["missType", d.mtype] : ["cause", d.mcause];
+    await store.update(`memos/${id}`, { [f[0]]: m[f[0]] === f[1] ? "" : f[1], updatedAt: Date.now() });
+    renderMemoEditor();
+    return renderMemoList();
+  }
+  if (d.recur) {
+    const m = st.memos[d.recur];
+    if (!m) return;
+    await store.update(`memos/${d.recur}`, { recur: (m.recur || 0) + 1, lastRecurAt: Date.now(), updatedAt: Date.now() });
+    toast("再発を記録しました");
+    renderMemoEditor();
+    return renderMemoList();
+  }
   if (d.mf) {
     st.memoFilter = d.mf;
     return renderMemoList();

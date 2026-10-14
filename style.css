@@ -3160,3 +3160,37 @@ img.blur {
     padding: 12px;
   }
 }
+
+/* ---- ミス記録 ---- */
+.head-acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.misstag {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ng);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 6px;
+}
+.mitem .mm .recur {
+  color: var(--ng);
+  font-weight: 700;
+}
+.editor.miss {
+  border-color: var(--ng);
+}
+.missrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.missrow .ml {
+  font-size: 11px;
+  color: var(--mu);
+  width: 32px;
+}
