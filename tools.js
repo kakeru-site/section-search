@@ -1,6 +1,7 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014d";
+import * as S from "./search.js?v=20261014e";
+import { buildOilWorkbook } from "./oilxlsx.js?v=20261014e";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -894,7 +895,7 @@ const oilN = (s) =>
     .replace(/\s+/g, " ")
     .trim();
 // ひらがなで打っても漢字の名称に当たるように（設定の「同義語」にも足せます）
-const OIL_SYN = [
+const OIL_SYN_RAW = [
   "液状=えきじょう",
   "パッキン=ぱっきん=ガスケット",
   "耐熱=たいねつ",
@@ -916,7 +917,8 @@ const OIL_SYN = [
   "塗料=とりょう",
   "消臭=しょうしゅう",
   "艶出し=つやだし",
-].map((l) => l.split("=").map(S.norm));
+].map((l) => l.split("="));
+const OIL_SYN = OIL_SYN_RAW.map((g) => g.map(S.norm));
 // 入力途中（「えきじ」など）でも、読みの前方一致で漢字の名称を拾う
 const KANA_ONLY = /^[ァ-ヶー]+$/;
 function oilExpand(tok) {
@@ -976,7 +978,7 @@ function renderOil() {
   box.innerHTML = `<label class="search">${C.IC.search}<input id="oq" type="search" autocomplete="off" placeholder="品番・名称・用途（例：5w30、ATF、ブレーキ）" value="${esc(T.oil.q)}"><span class="cnt" id="ocnt"></span></label>
     <div class="chips" id="ochips"></div>
     <div id="olist"></div>
-    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
+    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn" data-oxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
   const q = $("#oq", box);
   q.addEventListener("input", () => {
     T.oil.q = q.value;
@@ -1001,6 +1003,7 @@ function renderOil() {
     if (d.opick) $("#foil").click();
     else if (d.oedit !== undefined) oilForm(d.oedit || null);
     else if (d.ocats) oilCatsForm();
+    else if (d.oxlsx) exportOils();
     else if (d.ocat !== undefined) {
       T.oil.cat = T.oil.cat === d.ocat ? "" : d.ocat;
       oilLimit = 30;
@@ -1448,5 +1451,59 @@ async function importOils(file) {
     C.toast(`${res.items.length}件 取り込みました`);
   } catch (e) {
     C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
+  }
+}
+
+// ---- 検索機能つきExcelの書き出し（Excel 2016 の関数だけで動く） ----
+let exceljsPromise = null;
+function loadExcelJs() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (!exceljsPromise)
+    exceljsPromise = new Promise((res, rej) => {
+      const urls = [
+        "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
+      ];
+      const next = () => {
+        const u = urls.shift();
+        if (!u) {
+          exceljsPromise = null;
+          return rej(new Error("Excel用の部品を読み込めませんでした。通信を確認してください"));
+        }
+        const el = document.createElement("script");
+        el.src = u;
+        el.onload = () => (window.ExcelJS ? res(window.ExcelJS) : next());
+        el.onerror = next;
+        document.head.appendChild(el);
+      };
+      next();
+    });
+  return exceljsPromise;
+}
+async function exportOils() {
+  const list = oilList();
+  if (!list.length) return C.toast("書き出す商品がまだありません", true);
+  try {
+    C.toast("Excelを作っています…");
+    const X = await loadExcelJs();
+    const items = [...list]
+      .sort((a, b) => String(a.cat || "").localeCompare(String(b.cat || ""), "ja") || String(a.name).localeCompare(String(b.name), "ja", { numeric: true }))
+      .map((o) => ({ code: o.code, name: o.name, cap: o.cap || "", use: o.use || "", cat: o.cat || "" }));
+    const wb = buildOilWorkbook(X, items, [...OIL_SYN_RAW, ...(C.st.syn || [])]);
+    const buf = await wb.xlsx.writeBuffer();
+    const d = new Date();
+    const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(
+      new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    );
+    a.download = `oil-chemical-search_${stamp}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    C.toast(`${items.length}件 をExcelにしました`);
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
   }
 }
