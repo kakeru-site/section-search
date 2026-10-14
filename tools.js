@@ -1,7 +1,8 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014g";
-import { buildOilWorkbook, freeName } from "./oilxlsx.js?v=20261014g";
+import * as S from "./search.js?v=20261014i";
+import { buildOilWorkbook } from "./oilxlsx.js?v=20261014i";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014i";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -978,7 +979,7 @@ function renderOil() {
   box.innerHTML = `<label class="search">${C.IC.search}<input id="oq" type="search" autocomplete="off" placeholder="品番・名称・用途（例：5w30、ATF、ブレーキ）" value="${esc(T.oil.q)}"><span class="cnt" id="ocnt"></span></label>
     <div class="chips" id="ochips"></div>
     <div id="olist"></div>
-    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn" data-oxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><input type="file" id="foilbase" accept=".xlsx" hidden><button class="btn" data-oxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
+    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn" data-oxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><input type="file" id="foilbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-oxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
   const q = $("#oq", box);
   q.addEventListener("input", () => {
     T.oil.q = q.value;
@@ -1459,31 +1460,38 @@ async function importOils(file) {
 }
 
 // ---- 検索機能つきExcelの書き出し（Excel 2016 の関数だけで動く） ----
-let exceljsPromise = null;
-function loadExcelJs() {
-  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
-  if (!exceljsPromise)
-    exceljsPromise = new Promise((res, rej) => {
-      const urls = [
-        "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js",
-        "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
-      ];
+const libPromises = {};
+function loadLib(key, urls) {
+  if (window[key]) return Promise.resolve(window[key]);
+  if (!libPromises[key])
+    libPromises[key] = new Promise((res, rej) => {
+      const list = [...urls];
       const next = () => {
-        const u = urls.shift();
+        const u = list.shift();
         if (!u) {
-          exceljsPromise = null;
+          libPromises[key] = null;
           return rej(new Error("Excel用の部品を読み込めませんでした。通信を確認してください"));
         }
         const el = document.createElement("script");
         el.src = u;
-        el.onload = () => (window.ExcelJS ? res(window.ExcelJS) : next());
+        el.onload = () => (window[key] ? res(window[key]) : next());
         el.onerror = next;
         document.head.appendChild(el);
       };
       next();
     });
-  return exceljsPromise;
+  return libPromises[key];
 }
+const loadExcelJs = () =>
+  loadLib("ExcelJS", [
+    "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
+  ]);
+const loadJsZip = () =>
+  loadLib("JSZip", [
+    "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
+  ]);
 function oilExportItems() {
   return [...oilList()]
     .sort(
@@ -1521,40 +1529,42 @@ async function exportOils() {
   }
 }
 // 会社指定のExcelを選ぶ → 内容を確認 → 実行で、そのExcelに検索シートを足して保存
+// 元ファイルの中身には手を触れず、シートだけを差し込む（グラフ・表・図・書式はそのまま）
 async function exportIntoBase(file) {
   if (!file) return;
   if (!oilList().length) return C.toast("書き出す商品がまだありません", true);
-  if (/\.xlsm$/i.test(file.name))
-    return C.toast("マクロ付き（.xlsm）は、マクロが消えてしまうため対応していません。.xlsx で保存し直してください", true);
-  if (!/\.xlsx$/i.test(file.name))
-    return C.toast("対応しているのは .xlsx です。古い .xls は、Excelで「.xlsx」として保存し直してください", true);
-  let X, wb;
+  const ext = (file.name.match(/\.(xlsx|xlsm)$/i) || [])[1];
+  if (!ext)
+    return C.toast("対応しているのは .xlsx（.xlsm）です。古い .xls は、Excelで「.xlsx」として保存し直してください", true);
+  let JSZip, base;
   try {
     C.toast("Excelを読んでいます…");
-    X = await loadExcelJs();
-    wb = new X.Workbook();
-    await wb.xlsx.load(await file.arrayBuffer());
+    JSZip = await loadJsZip();
+    base = await readBase(JSZip, await file.arrayBuffer());
   } catch (e) {
-    return C.toast("このExcelを開けませんでした（パスワード付き・破損など）：" + e.message, true);
+    return C.toast("このExcelを開けませんでした：" + e.message, true);
   }
   const items = oilExportItems();
-  const sheets = wb.worksheets.map((w) => w.name);
+  const nameS = uniqueName(base.names, "オイル・ケミカル検索");
+  const nameD = uniqueName(base.names, "オイル・ケミカルデータ");
   const r = await C.modal(`<h3>Excelに検索機能を追加</h3>
     <div class="xlinfo">
       <div><span>ファイル</span><b>${esc(file.name)}</b></div>
-      <div><span>作成者</span><b>${esc(wb.creator || "（記録なし）")}</b></div>
-      <div><span>最終更新者</span><b>${esc(wb.lastModifiedBy || "（記録なし）")}</b></div>
-      <div><span>今あるシート</span><b>${esc(sheets.join("、") || "（なし）")}</b></div>
-      <div><span>追加するシート</span><b>${esc(freeName(wb, "オイル・ケミカル検索"))}（検索画面）・${esc(freeName(wb, "オイル・ケミカルデータ"))}（${items.length}件）</b></div>
+      <div><span>作成者</span><b>${esc(base.creator || "（記録なし）")}</b></div>
+      <div><span>最終更新者</span><b>${esc(base.lastModifiedBy || "（記録なし）")}</b></div>
+      ${base.company ? `<div><span>会社名</span><b>${esc(base.company)}</b></div>` : ""}
+      <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
+      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameD)}（${items.length}件）</b></div>
     </div>
-    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今あるシートの内容はそのまま残り、検索のシートが後ろに加わります。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。<br>・グラフ・ピボットテーブル・マクロ・一部の図形は、保存すると消えることがあります。大事なファイルは、念のためコピーを取ってから使ってください。</p>
+    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容（シート・グラフ・表・書式など）には手を触れず、検索のシートだけを後ろに足します。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
   if (!r) return;
   try {
     C.toast("Excelを作っています…");
-    buildOilWorkbook(X, items, oilGroups(), { wb });
-    const base = file.name.replace(/\.xlsx$/i, "");
-    downloadXlsx(await wb.xlsx.writeBuffer(), `${base}_検索付き.xlsx`);
+    const X = await loadExcelJs();
+    const { wb } = buildOilWorkbook(X, items, oilGroups(), { names: { search: nameS, data: nameD } });
+    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameD });
+    downloadXlsx(out, `${file.name.replace(/\.(xlsx|xlsm)$/i, "")}_検索付き.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);
