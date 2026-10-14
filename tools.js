@@ -1,6 +1,6 @@
-// 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索
+// 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261007a";
+import * as S from "./search.js?v=20261014b";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -118,6 +118,7 @@ const T = Object.assign(
     cost: { mode: "ex", rows: blank(20, () => ({ p: "", q: "" })) },
     pad: { pad: "", padCost: "", rotorCost: "", rotorList: "" },
     bulb: { q: "", shape: "", volt: "" },
+    oil: { q: "", cat: "" },
   },
   load() || {},
 );
@@ -146,6 +147,7 @@ const TABS = [
   ["cost", "原価計算"],
   ["pad", "パッド・ローター"],
   ["bulb", "バルブ検索"],
+  ["oil", "オイル・ケミカル"],
 ];
 export function render(main) {
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">ツール</h1>
@@ -159,7 +161,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -170,6 +172,7 @@ function fresh() {
 }
 export function onData(key) {
   if (T.tab === "bulb" && key === "bulbs" && $("#blist")) renderBulbList();
+  if (T.tab === "oil" && (key === "oils" || key === "memos") && $("#olist")) renderOilList();
   if (T.tab === "pad" && key === "settings" && $("#padres") && !document.activeElement?.dataset?.pk)
     renderPad();
 }
@@ -881,4 +884,535 @@ async function importBulbs(file) {
   });
   await C.store.set("bulbs", obj);
   C.toast(`${list.length}件 取り込みました`);
+}
+
+
+// ================= オイル・ケミカル検索 =================
+const oilN = (s) =>
+  String(s ?? "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+let oilIdx = null,
+  oilSrc = null;
+function oilList() {
+  const raw = C.st.oils || {};
+  if (raw === oilSrc && oilIdx) return oilIdx;
+  oilSrc = raw;
+  oilIdx = Object.entries(raw).map(([id, o]) => ({
+    id,
+    ...o,
+    _s: S.norm(
+      `${o.code} ${String(o.code || "").replace(/[^0-9A-Za-z]/g, "")} ${o.name} ${o.use} ${o.cat} ${o.cap}`,
+    ),
+    _c: S.norm(String(o.code || "").replace(/[^0-9A-Za-z]/g, "")),
+  }));
+  return oilIdx;
+}
+// 分類は登録済みの商品から集める（多い順）
+function oilCats(list = oilList()) {
+  const cnt = {};
+  for (const o of list) if (o.cat) cnt[o.cat] = (cnt[o.cat] || 0) + 1;
+  return Object.keys(cnt)
+    .sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b, "ja"))
+    .map((name) => ({ name, n: cnt[name] }));
+}
+// 写真本体は oilPhoto/{id}、oils/{id}/photo には更新時刻だけ
+const oilPhotoCache = new Map();
+function oilPhoto(id) {
+  const o = C.st.oils[id];
+  if (!o?.photo) return Promise.resolve(null);
+  const hit = oilPhotoCache.get(id);
+  if (hit && hit.v === o.photo) return hit.p;
+  const p = C.store.get(`oilPhoto/${id}`).catch(() => null);
+  oilPhotoCache.set(id, { v: o.photo, p });
+  return p;
+}
+function fillOilPhotos(root) {
+  $$("img[data-ophoto]", root).forEach(async (img) => {
+    const u = await oilPhoto(img.dataset.ophoto);
+    if (u) img.src = u;
+    else img.closest(".oph")?.remove();
+  });
+}
+let oilLimit = 30;
+function renderOil() {
+  const box = fresh();
+  oilLimit = 30;
+  box.innerHTML = `<label class="search">${C.IC.search}<input id="oq" type="search" autocomplete="off" placeholder="品番・名称・用途（例：5w30、ATF、ブレーキ）" value="${esc(T.oil.q)}"><span class="cnt" id="ocnt"></span></label>
+    <div class="chips" id="ochips"></div>
+    <div id="olist"></div>
+    <div class="tacts"><input type="file" id="foil" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-opick="1">Excelから取り込み</button><button class="btn" data-ocats="1">分類を整理</button><button class="btn pri" data-oedit="">＋ 追加</button></div>`;
+  const q = $("#oq", box);
+  q.addEventListener("input", () => {
+    T.oil.q = q.value;
+    oilLimit = 30;
+    save();
+    renderOilList();
+  });
+  q.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      q.value = T.oil.q = "";
+      renderOilList();
+    }
+  });
+  $("#foil", box).addEventListener("change", (e) =>
+    importOils(e.target.files[0]).finally(() => (e.target.value = "")),
+  );
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+    const o = d.oid ? C.st.oils[d.oid] && { id: d.oid, ...C.st.oils[d.oid] } : null;
+    if (d.opick) $("#foil").click();
+    else if (d.oedit !== undefined) oilForm(d.oedit || null);
+    else if (d.ocats) oilCatsForm();
+    else if (d.ocat !== undefined) {
+      T.oil.cat = T.oil.cat === d.ocat ? "" : d.ocat;
+      oilLimit = 30;
+      save();
+      renderOilList();
+    } else if (d.omore) {
+      oilLimit += 60;
+      renderOilList();
+    } else if (d.ocopy) C.copyText(d.ocopy).then(() => C.toast(`${d.ocopy} をコピーしました`));
+    else if (o && d.oact === "google") C.googleOpen(`${o.code} ${o.name}`);
+    else if (o && d.oact === "memo") C.openMemoForOil(o);
+    else if (o && d.oact === "edit") oilForm(o.id);
+    else if (o && d.oact === "view") oilView(o.id);
+  });
+  renderOilList();
+  if (matchMedia("(hover: hover)").matches) setTimeout(() => q.focus(), 0);
+}
+function renderOilList() {
+  const list = oilList();
+  const box = $("#olist");
+  if (!box) return;
+  const cats = oilCats(list);
+  if (T.oil.cat && T.oil.cat !== "__none" && !cats.some((c) => c.name === T.oil.cat)) T.oil.cat = "";
+  const noCat = list.filter((o) => !o.cat).length;
+  $("#ochips").innerHTML =
+    cats
+      .map(
+        (c) =>
+          `<button class="chip ${T.oil.cat === c.name ? "on" : ""}" data-ocat="${esc(c.name)}">${esc(c.name)} ${c.n}</button>`,
+      )
+      .join("") +
+    (noCat && cats.length
+      ? `<button class="chip ${T.oil.cat === "__none" ? "on" : ""}" data-ocat="__none">未分類 ${noCat}</button>`
+      : "");
+  if (!list.length) {
+    $("#ocnt").textContent = "";
+    box.innerHTML = `<div class="panel"><h3>オイル・ケミカルがまだ登録されていません</h3><p style="margin:0;font-size:12.5px;color:var(--mu);line-height:1.7">下の「＋ 追加」で品番・名称・用途を入れて登録するか、「Excelから取り込み」で品番・名称（・容量）の入ったExcel／CSVを選んでください。列の並びはどんな形でも自動で探します。</p></div>`;
+    return;
+  }
+  const toks = String(T.oil.q || "")
+    .normalize("NFKC")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => S.expand(t, C.st.syn));
+  const qn = S.norm(String(T.oil.q || "").replace(/[^0-9A-Za-z]/g, ""));
+  const hits = list.filter(
+    (o) =>
+      (!T.oil.cat || (T.oil.cat === "__none" ? !o.cat : o.cat === T.oil.cat)) &&
+      toks.every((alts) => alts.some((a) => o._s.includes(a))),
+  );
+  // 品番が前方一致するものを先頭に
+  hits.sort(
+    (a, b) =>
+      (qn && b._c.startsWith(qn) ? 1 : 0) - (qn && a._c.startsWith(qn) ? 1 : 0) ||
+      String(a.name).localeCompare(String(b.name), "ja", { numeric: true }),
+  );
+  $("#ocnt").textContent = `${hits.length} / ${list.length}件`;
+  const shown = hits.slice(0, oilLimit);
+  const memoCnt = {};
+  for (const m of Object.values(C.st.memos || {})) if (m.oilId) memoCnt[m.oilId] = (memoCnt[m.oilId] || 0) + 1;
+  box.innerHTML =
+    shown
+      .map(
+        (o) => `<div class="orow">
+      ${o.photo ? `<button class="oph" data-oact="view" data-oid="${esc(o.id)}" title="写真を大きく見る"><img data-ophoto="${esc(o.id)}" alt=""></button>` : ""}
+      <div class="omain">
+        <div class="ot1"><b class="oname">${esc(o.name)}</b>${o.cap ? `<span class="ocap">${esc(o.cap)}</span>` : ""}${o.cat ? `<span class="cat">${esc(o.cat)}</span>` : ""}</div>
+        <div class="ot2"><button class="bcode" data-ocopy="${esc(o.code)}" title="品番をコピー">${esc(o.code)}</button></div>
+        ${o.use ? `<div class="buse">${esc(o.use)}</div>` : ""}
+        <div class="oacts"><button class="btn" data-oact="google" data-oid="${esc(o.id)}" title="品番と名称でGoogle検索">${C.IC.search}Google</button><button class="btn ${memoCnt[o.id] ? "has" : ""}" data-oact="memo" data-oid="${esc(o.id)}">${C.IC.note}メモ${memoCnt[o.id] ? `<span class="cnt">${memoCnt[o.id]}</span>` : ""}</button><button class="btn sm" data-oact="edit" data-oid="${esc(o.id)}">編集</button></div>
+      </div></div>`,
+      )
+      .join("") +
+    (hits.length > shown.length
+      ? `<button class="btn more-btn" data-omore="1">さらに表示（残り ${hits.length - shown.length}件）</button>`
+      : "") || '<p class="empty">該当なし</p>';
+  fillOilPhotos(box);
+}
+async function oilView(id) {
+  const o = C.st.oils[id];
+  const u = await oilPhoto(id);
+  if (!o || !u) return;
+  await C.modal(`<h3>${esc(o.name)} <span class="mono" style="color:var(--mu);font-size:14px">${esc(o.code)}</span></h3>
+    <img src="${u}" alt="" style="width:100%;border-radius:8px;display:block">
+    <div class="modal-foot"><button class="btn pri" data-m="cancel">閉じる</button></div>`);
+}
+async function oilForm(id) {
+  const o = id ? C.st.oils[id] : null;
+  if (id && !o) return;
+  const b = o || { code: "", name: "", cap: "", use: "", cat: "" };
+  let photo = null,
+    changed = false;
+  const f = (k, l, extra = "", cls = "") =>
+    `<div class="field"><label>${l}</label><input class="inp ${cls}" name="${k}" value="${esc(b[k])}" ${extra}></div>`;
+  const r = await C.modal(
+    `<h3>${id ? "オイル・ケミカルを編集" : "オイル・ケミカルを追加"}</h3><form>
+    ${f("code", "品番", "required autocomplete=off", "mono")}${f("name", "名称", "required autocomplete=off")}
+    <div class="grid2">${f("cap", "容量（任意）", 'placeholder="4L" autocomplete=off')}${f("use", "使用用途（任意）", "autocomplete=off")}</div>
+    <div class="field"><label>分類（任意）</label><input class="inp" name="cat" id="of-cat" value="${esc(b.cat)}" placeholder="下から選ぶか、新しい名前を入力" autocomplete="off">
+      <div class="chips" id="of-cats" style="margin:6px 0 0">${oilCats()
+        .map(
+          (c) =>
+            `<button type="button" class="chip ${c.name === b.cat ? "on" : ""}" data-pcat="${esc(c.name)}">${esc(c.name)}</button>`,
+        )
+        .join("")}</div></div>
+    <div class="field"><label>商品の写真（任意）</label><div id="of-photo"></div></div></form>
+    <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button>${id ? "" : '<button class="btn" data-m="next">保存して次へ</button>'}<button class="btn pri" data-m="ok">保存</button></div>`,
+    {
+      onOpen(bg) {
+        const wrap = $("#of-photo", bg);
+        const draw = () => {
+          wrap.innerHTML = C.photoBox(photo, "商品の写真（任意）");
+          C.wirePhotoBox($(".kdrop", wrap), (url) => {
+            photo = url;
+            changed = true;
+            draw();
+          });
+        };
+        draw();
+        if (id) oilPhoto(id).then((u) => !changed && u && ((photo = u), draw()));
+        bg.addEventListener("paste", async (e) => {
+          const file = C.pasteFile(e);
+          if (!file) return;
+          e.preventDefault();
+          try {
+            photo = await C.blobToPhoto(file);
+            changed = true;
+            draw();
+          } catch (err) {
+            C.toast(err.message, true);
+          }
+        });
+        bg.addEventListener("click", (e) => {
+          const c = e.target.closest("[data-pcat]");
+          if (!c) return;
+          const inp = $("#of-cat", bg);
+          inp.value = inp.value === c.dataset.pcat ? "" : c.dataset.pcat;
+          $$("#of-cats .chip", bg).forEach((x) => x.classList.toggle("on", x.dataset.pcat === inp.value));
+        });
+        $("#of-cat", bg).addEventListener("input", (e) =>
+          $$("#of-cats .chip", bg).forEach((x) => x.classList.toggle("on", x.dataset.pcat === oilN(e.target.value))),
+        );
+      },
+    },
+  );
+  if (!r) return;
+  if (r.act === "delete") {
+    if (!(await C.confirmBox(`${b.code}（${b.name}）を削除しますか？`, "削除", true))) return;
+    await C.store.remove(`oils/${id}`);
+    await C.store.remove(`oilPhoto/${id}`).catch(() => {});
+    oilPhotoCache.delete(id);
+    return C.toast("削除しました");
+  }
+  const rec = {
+    code: oilN(r.data.code).toUpperCase(),
+    name: oilN(r.data.name),
+    cap: oilN(r.data.cap),
+    use: oilN(r.data.use),
+    cat: oilN(r.data.cat),
+    photo: o?.photo ?? null,
+    updatedAt: Date.now(),
+  };
+  if (!rec.code || !rec.name) {
+    C.toast("品番と名称を入れてください", true);
+    return oilForm(id);
+  }
+  if (
+    !id &&
+    oilList().some((x) => String(x.code).toUpperCase() === rec.code) &&
+    !(await C.confirmBox(`品番 ${rec.code} はすでに登録されています。\nもうひとつ追加しますか？`, "追加する"))
+  )
+    return;
+  const key = id || C.localKey();
+  if (changed) {
+    rec.photo = photo ? Date.now() : null;
+    if (photo) await C.store.set(`oilPhoto/${key}`, photo);
+    else await C.store.remove(`oilPhoto/${key}`).catch(() => {});
+    oilPhotoCache.delete(key);
+  }
+  await C.store.set(`oils/${key}`, rec);
+  C.toast("保存しました");
+  if (r.act === "next") oilForm(null);
+}
+// 分類の名前を直す・消す（商品は消えません）
+async function oilCatsForm() {
+  const cats = oilCats();
+  if (!cats.length) return C.toast("分類はまだありません。商品の登録時に入力すると増えます");
+  const r = await C.modal(`<h3>分類を整理</h3><p style="margin:0 0 10px;font-size:12px;color:var(--mu);line-height:1.6">名前を直すと、その分類の商品すべてに反映されます。同じ名前にすると1つにまとまります。削除しても商品は残り「未分類」になります。</p><form>
+    ${cats
+      .map(
+        (c, i) => `<div class="catrow"><input class="inp" name="r${i}" value="${esc(c.name)}"><small>${c.n}件</small>
+      <label class="switch"><input type="checkbox" name="d${i}"> 削除</label></div>`,
+      )
+      .join("")}</form>
+    <div class="modal-foot"><button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`);
+  if (!r) return;
+  const upd = {};
+  let n = 0;
+  cats.forEach((c, i) => {
+    const del = r.data[`d${i}`] === "on";
+    const to = del ? "" : oilN(r.data[`r${i}`]);
+    if (to === c.name) return;
+    for (const o of oilList()) if (o.cat === c.name) (upd[`${o.id}/cat`] = to), n++;
+  });
+  if (!n) return;
+  await C.store.update("oils", upd);
+  C.toast("分類を更新しました");
+}
+
+// ---- Excel / CSV の取り込み：列の並びがどうでも、品番・名称・容量を自動で探す ----
+const hdKey = (s) =>
+  oilN(s)
+    .toLowerCase()
+    .replace(/[\s・･_\-－ー/／.()（）［］\[\]]/g, "");
+// [完全一致, 部分一致, 除外] ／ 完全一致が最優先
+const OIL_COL = {
+  code: [
+    ["品番", "部品番号", "商品コード", "商品番号", "品目コード", "品目番号", "製品番号", "製品コード", "型番", "コード", "品番コード", "pn", "partno", "partnumber", "itemcode", "sku", "アイテムコード", "メーカー品番", "商品cd", "品目cd"],
+    ["品番", "コード", "番号", "partno", "品目"],
+    /jan|ean|バーコード|棚|ロケ|価格|単価|在庫|数量|区分|分類|仕入|取引/,
+  ],
+  name: [
+    ["名称", "品名", "商品名", "製品名", "品目名", "部品名", "名前", "商品名称", "品名規格", "名称規格", "品名称", "description", "name", "itemname", "商品"],
+    ["名称", "品名", "商品名", "製品名", "名"],
+    /メーカー|分類|コード|番号|価格|単価|在庫|数量|区分|仕入|取引|カナ|ｶﾅ|略/,
+  ],
+  cap: [
+    ["容量", "内容量", "規格", "サイズ", "荷姿", "容器", "容量規格", "volume", "size", "リットル"],
+    ["容量", "内容量", "規格", "サイズ", "荷姿"],
+    /価格|単価|在庫|数量|分類/,
+  ],
+  use: [
+    ["用途", "使用用途", "適合", "適用", "特徴", "使用箇所", "使い方", "用途特徴", "対象", "対応"],
+    ["用途", "適合", "適用", "使用", "特徴"],
+    /価格|単価|在庫|数量/,
+  ],
+  cat: [
+    ["分類", "カテゴリ", "カテゴリー", "区分", "種別", "種類", "品種", "大分類", "中分類", "小分類", "ジャンル", "category", "グループ"],
+    ["分類", "カテゴリ", "区分", "種別", "品種", "ジャンル"],
+    /^$/,
+  ],
+};
+function scoreHeader(h, field) {
+  const k = hdKey(h);
+  if (!k) return 0;
+  const [exact, part, ng] = OIL_COL[field];
+  if (exact.some((e) => hdKey(e) === k)) return 3;
+  if (ng.test(k)) return 0;
+  return part.some((p) => k.includes(hdKey(p))) ? 1 : 0;
+}
+const colName = (i) => {
+  let s = "",
+    n = i + 1;
+  while (n > 0) {
+    s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+};
+const CAP_RE = /(\d+(?:\.\d+)?)\s*(?:ℓ|l|ml|ｍｌ|リットル|kg|g|㎖)(?![a-z])/i;
+const CAP_ONLY = /^\d+(?:\.\d+)?\s*(?:ℓ|l|ml|リットル|kg|g|㎖|缶|本|個|セット|入)?(?:\s*[×x*]\s*\d+\s*(?:缶|本|個|入)?)?$/i;
+const JP = /[ぁ-んァ-ヶ一-龠]/;
+const looksCode = (v) => /^[A-Za-z0-9][A-Za-z0-9\-_./ ]{2,29}$/.test(v) && /\d/.test(v) && !CAP_ONLY.test(v);
+
+// 1枚のシートから商品を探す。見つからなければ null
+function oilsFromSheet(rows) {
+  const W = Math.max(0, ...rows.slice(0, 60).map((r) => (r || []).length));
+  if (!W) return null;
+  // 1) 見出し行を探す（上から40行）：品番・名称・容量・用途・分類の見出しが多い行
+  let best = null;
+  for (let h = 0; h < Math.min(rows.length, 40); h++) {
+    const row = rows[h] || [];
+    const pick = {};
+    const used = new Set();
+    // 強い一致の項目から順に、列を取り合わないよう割り当てる
+    const cand = [];
+    for (const f of Object.keys(OIL_COL))
+      row.forEach((c, i) => {
+        const sc = scoreHeader(c, f);
+        if (sc) cand.push({ f, i, sc });
+      });
+    cand.sort((a, b) => b.sc - a.sc || a.i - b.i);
+    for (const c of cand) if (!(c.f in pick) && !used.has(c.i)) ((pick[c.f] = c.i), used.add(c.i));
+    const n = Object.keys(pick).length;
+    const key = (pick.code != null ? 3 : 0) + (pick.name != null ? 3 : 0) + n;
+    if ((pick.code != null || pick.name != null) && (!best || key > best.key)) best = { h, pick, key, hdr: row };
+  }
+  let h = best ? best.h : -1;
+  const pick = best ? { ...best.pick } : {};
+  const how = {};
+  for (const f in pick) how[f] = `${colName(pick[f])}列「${oilN(best.hdr[pick[f]])}」`;
+  const data = rows.slice(h + 1).filter((r) => (r || []).some((c) => oilN(c)));
+  const sample = data.slice(0, 300);
+  const col = (i) => sample.map((r) => oilN(r[i])).filter(Boolean);
+  const taken = () => new Set(Object.values(pick));
+  // 2) 見出しで見つからなかった列は、中身から推測する
+  if (pick.code == null) {
+    let bi = -1,
+      bs = 0.55;
+    for (let i = 0; i < W; i++) {
+      if (taken().has(i)) continue;
+      const v = col(i);
+      if (v.length < 2) continue;
+      const sc = (v.filter(looksCode).length / v.length) * (new Set(v).size / v.length);
+      if (sc > bs) ((bs = sc), (bi = i));
+    }
+    if (bi >= 0) ((pick.code = bi), (how.code = `${colName(bi)}列（中身から判定）`));
+  }
+  if (pick.name == null) {
+    let bi = -1,
+      bs = 0;
+    for (let i = 0; i < W; i++) {
+      if (taken().has(i)) continue;
+      const v = col(i);
+      if (v.length < 2) continue;
+      const jp = v.filter((x) => JP.test(x) && x.length >= 2).length / v.length;
+      const len = v.reduce((a, x) => a + x.length, 0) / v.length;
+      const sc = jp * Math.min(len, 30);
+      if (jp >= 0.5 && len >= 3 && sc > bs) ((bs = sc), (bi = i));
+    }
+    if (bi >= 0) ((pick.name = bi), (how.name = `${colName(bi)}列（中身から判定）`));
+  }
+  if (pick.cap == null) {
+    let bi = -1,
+      bs = 0.5;
+    for (let i = 0; i < W; i++) {
+      if (taken().has(i)) continue;
+      const v = col(i);
+      if (v.length < 2) continue;
+      const sc = v.filter((x) => x.length <= 14 && (CAP_ONLY.test(x) || CAP_RE.test(x))).length / v.length;
+      if (sc > bs) ((bs = sc), (bi = i));
+    }
+    if (bi >= 0) ((pick.cap = bi), (how.cap = `${colName(bi)}列（中身から判定）`));
+  }
+  if (pick.code == null || pick.name == null) return null;
+  const items = [];
+  for (const r of data) {
+    const code = oilN(r[pick.code]).toUpperCase();
+    const name = oilN(r[pick.name]);
+    if (!code || !name || code === name) continue;
+    if (/^(合計|小計|計|total|品番|部品番号|商品コード)$/i.test(code)) continue;
+    if (!/[0-9A-Za-z]/.test(code)) continue;
+    const it = { code, name };
+    if (pick.cap != null) it.cap = oilN(r[pick.cap]);
+    if (!it.cap) {
+      const m = name.match(CAP_RE);
+      if (m) it.cap = m[0].replace(/\s+/g, "");
+    }
+    if (pick.use != null) it.use = oilN(r[pick.use]);
+    if (pick.cat != null) it.cat = oilN(r[pick.cat]);
+    items.push(it);
+  }
+  return items.length ? { items, how, hasCat: pick.cat != null } : null;
+}
+export function oilsFromWorkbook(named) {
+  const found = [];
+  for (const [name, rows] of named) {
+    const r = oilsFromSheet(rows);
+    if (r) found.push({ name, ...r });
+  }
+  if (!found.length) throw new Error("品番と名称の列が見つかりませんでした");
+  // シートが複数あって分類の列が無いときは、シート名を分類にする（Sheet1 などは除く）
+  const multi = found.length > 1;
+  const byCode = new Map();
+  for (const f of found)
+    for (const it of f.items) {
+      const x = { ...it };
+      if (multi && !f.hasCat && !/^(sheet|シート)\s*\d*$/i.test(f.name.trim())) x.cat = f.name.trim();
+      byCode.set(x.code, x); // 同じ品番は後のほうを使う
+    }
+  return { items: [...byCode.values()], sheets: found.map((f) => ({ name: f.name, n: f.items.length, how: f.how })) };
+}
+async function importOils(file) {
+  if (!file) return;
+  let res;
+  try {
+    const X = await C.loadXlsx();
+    let wb;
+    if (/\.csv$/i.test(file.name)) {
+      const buf = await file.arrayBuffer();
+      let txt;
+      try {
+        txt = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+      } catch {
+        txt = new TextDecoder("shift_jis").decode(buf); // Excelで保存したCSVはShift-JIS
+      }
+      wb = X.read(txt, { type: "string" });
+    } else wb = X.read(await file.arrayBuffer(), { type: "array" });
+    res = oilsFromWorkbook(
+      wb.SheetNames.map((n) => [n, X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" })]),
+    );
+  } catch (e) {
+    return C.toast("取り込めませんでした：" + e.message, true);
+  }
+  const have = new Map(oilList().map((o) => [String(o.code).toUpperCase(), o]));
+  const add = res.items.filter((x) => !have.has(x.code)).length;
+  const upd = res.items.length - add;
+  const L = { code: "品番", name: "名称", cap: "容量", use: "用途", cat: "分類" };
+  const detail = res.sheets
+    .map(
+      (s) =>
+        `■ ${s.name}（${s.n}件）\n` +
+        Object.keys(L)
+          .filter((k) => s.how[k])
+          .map((k) => `　${L[k]} ← ${s.how[k]}`)
+          .join("\n"),
+    )
+    .join("\n");
+  const ex = res.items
+    .slice(0, 3)
+    .map((x) => `　${x.code}　${x.name}${x.cap ? `　${x.cap}` : ""}`)
+    .join("\n");
+  const ok = await C.confirmBox(
+    `${res.items.length}件 を見つけました（新規 ${add}件／更新 ${upd}件）。\n今ある商品は消えません。同じ品番は上書きします。\n\n${detail}\n\n例：\n${ex}`,
+    "取り込む",
+  );
+  if (!ok) return;
+  const w = {};
+  for (const it of res.items) {
+    const old = have.get(it.code);
+    if (old) {
+      w[`${old.id}/name`] = it.name;
+      if (it.cap) w[`${old.id}/cap`] = it.cap;
+      if (it.use) w[`${old.id}/use`] = it.use;
+      if (it.cat) w[`${old.id}/cat`] = it.cat;
+      w[`${old.id}/updatedAt`] = Date.now();
+    } else
+      w[C.localKey()] = {
+        code: it.code,
+        name: it.name,
+        cap: it.cap || "",
+        use: it.use || "",
+        cat: it.cat || "",
+        updatedAt: Date.now(),
+      };
+  }
+  const keys = Object.keys(w);
+  try {
+    for (let i = 0; i < keys.length; i += 500) {
+      const part = {};
+      for (const k of keys.slice(i, i + 500)) part[k] = w[k];
+      await C.store.update("oils", part);
+    }
+    C.toast(`${res.items.length}件 取り込みました`);
+  } catch (e) {
+    C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
+  }
 }
