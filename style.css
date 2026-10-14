@@ -3285,3 +3285,20 @@ img.blur {
   font-size: 11px;
   white-space: nowrap;
 }
+
+.xlinfo {
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.xlinfo div {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px;
+}
+.xlinfo span {
+  color: var(--mu);
+}
+.xlinfo b {
+  word-break: break-all;
+}

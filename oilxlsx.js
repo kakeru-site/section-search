@@ -21,10 +21,24 @@ export function searchText(o, groups) {
 const MAXROWS = 200; // 検索シートに出す最大件数
 const SPARE = 300; // データシートの空き行（あとから足せる）
 
-export function buildOilWorkbook(ExcelJS, items, groups) {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "セクション検索";
-  wb.calcProperties = { fullCalcOnLoad: true };
+// 既存のブックに同じ名前のシートがあれば「検索2」のように避ける
+export function freeName(wb, base) {
+  let n = base,
+    i = 2;
+  while (wb.getWorksheet(n)) n = `${base}${i++}`;
+  return n;
+}
+const quote = (n) => `'${n.replace(/'/g, "''")}'`;
+
+// opt.wb を渡すと、そのブック（会社のExcel）に検索・データのシートを足す。作成者などは元のまま
+export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
+  const wb = opt.wb || new ExcelJS.Workbook();
+  if (!opt.wb) wb.creator = "セクション検索";
+  wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
+  const nameS = freeName(wb, "検索");
+  const QS = quote(nameS);
+  const nameD = freeName(wb, "データ");
+  const QD = quote(nameD);
   const N = items.length;
   const LAST = N + 1 + SPARE; // データシートの最終行
   const font = { name: "Yu Gothic UI", size: 11 };
@@ -33,8 +47,12 @@ export function buildOilWorkbook(ExcelJS, items, groups) {
   const thin = { style: "thin", color: { argb: "FF8A8F98" } };
   const box = { top: thin, left: thin, bottom: thin, right: thin };
 
-  const ws = wb.addWorksheet("検索", { views: [{ state: "frozen", ySplit: 6, showGridLines: false }] });
-  const wd = wb.addWorksheet("データ", { views: [{ state: "frozen", ySplit: 1 }] });
+  // 既存のシートが選ばれたままだと、まとめて編集されてしまうので外す
+  for (const w of wb.worksheets) w.views = (w.views || []).map((v) => ({ ...v, tabSelected: false }));
+  const ws = wb.addWorksheet(nameS, {
+    views: [{ state: "frozen", ySplit: 6, showGridLines: false, tabSelected: true }],
+  });
+  const wd = wb.addWorksheet(nameD, { views: [{ state: "frozen", ySplit: 1 }] });
 
   // ---- データ ----
   wd.columns = [
@@ -73,7 +91,7 @@ export function buildOilWorkbook(ExcelJS, items, groups) {
       row.getCell(7).value = { formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$C${r}&" "&$D${r}&" "&$E${r}))` };
     }
     row.getCell(8).value = {
-      formula: `IF($A${r}="",0,IF(AND(OR(検索!$K$2="",ISNUMBER(SEARCH(検索!$K$2,$G${r}))),OR(検索!$K$3="",ISNUMBER(SEARCH(検索!$K$3,$G${r}))),OR(検索!$K$4="",ISNUMBER(SEARCH(検索!$K$4,$G${r}))),OR(検索!$B$3="すべて",$E${r}=検索!$B$3)),1,0))`,
+      formula: `IF($A${r}="",0,IF(AND(OR(${QS}!$K$2="",ISNUMBER(SEARCH(${QS}!$K$2,$G${r}))),OR(${QS}!$K$3="",ISNUMBER(SEARCH(${QS}!$K$3,$G${r}))),OR(${QS}!$K$4="",ISNUMBER(SEARCH(${QS}!$K$4,$G${r}))),OR(${QS}!$B$3="すべて",$E${r}=${QS}!$B$3)),1,0))`,
     };
     row.getCell(9).value = { formula: `IF($H${r}=1,COUNTIF($H$2:$H${r},1),"")` };
   }
@@ -111,12 +129,12 @@ export function buildOilWorkbook(ExcelJS, items, groups) {
   ws.getCell("B3").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`データ!$K$2:$K$${cats.length + 2}`],
+    formulae: [`${QD}!$K$2:$K$${cats.length + 2}`],
   };
   ws.getCell("C3").value = "← 黄色い欄に入力（品番・名称・用途・容量。空白で区切ると絞り込み。ひらがなもOK）";
   ws.getCell("C3").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
   ws.getCell("A4").value = {
-    formula: `SUM(データ!$H$2:$H$${LAST})&" 件ヒット（全 "&COUNTA(データ!$A$2:$A$${LAST})&" 件）"&IF(SUM(データ!$H$2:$H$${LAST})>${MAXROWS},"　※先頭の${MAXROWS}件まで表示。語を足して絞ってください","")`,
+    formula: `SUM(${QD}!$H$2:$H$${LAST})&" 件ヒット（全 "&COUNTA(${QD}!$A$2:$A$${LAST})&" 件）"&IF(SUM(${QD}!$H$2:$H$${LAST})>${MAXROWS},"　※先頭の${MAXROWS}件まで表示。語を足して絞ってください","")`,
   };
   ws.getCell("A4").font = { ...font, bold: true, color: { argb: "FFB06A00" } };
   // 検索語を3つまでに分ける（計算用・K列は非表示）
@@ -137,8 +155,8 @@ export function buildOilWorkbook(ExcelJS, items, groups) {
   for (let k = 1; k <= MAXROWS; k++) {
     const r = 6 + k;
     const row = ws.getRow(r);
-    row.getCell(9).value = { formula: `IFERROR(MATCH(${k},データ!$I$1:$I$${LAST},0),"")` };
-    const at = (col) => ({ formula: `IF($I${r}="","",INDEX(データ!$${col}$1:$${col}$${LAST},$I${r})&"")` });
+    row.getCell(9).value = { formula: `IFERROR(MATCH(${k},${QD}!$I$1:$I$${LAST},0),"")` };
+    const at = (col) => ({ formula: `IF($I${r}="","",INDEX(${QD}!$${col}$1:$${col}$${LAST},$I${r})&"")` });
     row.getCell(1).value = { formula: `IF($I${r}="","",${k})` };
     row.getCell(2).value = at("A");
     row.getCell(3).value = at("B");
@@ -160,5 +178,7 @@ export function buildOilWorkbook(ExcelJS, items, groups) {
   ws.getColumn(11).hidden = true;
   ws.getColumn(12).hidden = true;
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
-  return wb;
+  const idx = wb.worksheets.indexOf(ws);
+  wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: idx, visibility: "visible" }];
+  return { wb, nameS, nameD };
 }
