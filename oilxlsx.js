@@ -21,6 +21,34 @@ export function searchText(o, groups) {
 const MAXROWS = 200; // 検索シートに出す最大件数
 const SPARE = 300; // データシートの空き行（あとから足せる）
 
+// 文字の幅（全角は2、半角は1）。列の幅と行の高さを、中身に合わせて決めるのに使う
+const dispW = (s) => {
+  let w = 0;
+  for (const ch of String(s ?? "")) {
+    const c = ch.codePointAt(0);
+    w += c > 0x7f && !(c >= 0xff61 && c <= 0xff9f) ? 2 : 1;
+  }
+  return w;
+};
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+// どの商品も途切れず見えるように、列の幅と1行の高さを決める
+// （検索の結果は数式なので、行の高さが自動では変わらない。どの商品が出ても足りる高さに揃える）
+export function layoutFor(items) {
+  const maxW = (f) => Math.max(0, ...items.map((o) => dispW(o[f])));
+  const w = {
+    code: clamp(Math.ceil(maxW("code") * 1.15) + 2, 14, 28),
+    name: clamp(Math.ceil(maxW("name") * 1.1) + 2, 24, 56),
+    cap: clamp(Math.ceil(maxW("cap") * 1.15) + 2, 8, 16),
+    use: clamp(Math.ceil(maxW("use") * 1.1) + 2, 24, 70),
+    cat: clamp(Math.ceil(maxW("cat") * 1.15) + 2, 12, 26),
+  };
+  let lines = 1;
+  for (const o of items)
+    for (const f of Object.keys(w)) lines = Math.max(lines, Math.ceil((dispW(o[f]) * 1.1) / (w[f] - 1)));
+  lines = Math.min(lines, 6);
+  return { w, lines, height: Math.max(24, lines * 19 + 4) };
+}
+
 // 既存のブックに同じ名前のシートがあれば「検索2」のように避ける
 export function freeName(wb, base) {
   let n = base,
@@ -44,6 +72,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const N = items.length;
   const LAST = N + 1 + SPARE; // データシートの最終行
   const font = { name: "Yu Gothic UI", size: 11 };
+  const L = layoutFor(items);
   const AC = "FFF2C230";
   const DK = "FF17191C";
   const thin = { style: "thin", color: { argb: "FF8A8F98" } };
@@ -58,11 +87,11 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
 
   // ---- データ ----
   wd.columns = [
-    { header: "品番", width: 18 },
-    { header: "名称", width: 44 },
-    { header: "容量", width: 9 },
-    { header: "用途", width: 44 },
-    { header: "分類", width: 14 },
+    { header: "品番", width: L.w.code },
+    { header: "名称", width: L.w.name },
+    { header: "容量", width: L.w.cap },
+    { header: "用途", width: L.w.use },
+    { header: "分類", width: L.w.cat },
     { header: "", width: 3 },
     { header: "検索用（自動・触らない）", width: 18 },
     { header: "一致", width: 6 },
@@ -99,18 +128,19 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     row.getCell(9).value = { formula: `IF($H${r}=1,COUNTIF($H$2:$H${r},1),"")`, result: o ? r - 1 : "" };
   }
   wd.autoFilter = { from: "A1", to: "E1" };
+  for (let r = 2; r <= N + 1; r++) for (const c of [1, 2, 3, 4, 5]) wd.getRow(r).getCell(c).alignment = { vertical: "middle", wrapText: true };
   for (const c of ["G", "H", "I"]) wd.getColumn(c).font = { ...font, color: { argb: "FF9AA0A6" } };
   wd.getCell("G1").font = { ...font, color: { argb: "FF9AA0A6" }, italic: true };
 
   // ---- 検索 ----
   ws.columns = [
     { width: 6 },
-    { width: 18 },
-    { width: 44 },
-    { width: 9 },
-    { width: 44 },
-    { width: 14 },
-    { width: 9 },
+    { width: L.w.code },
+    { width: L.w.name },
+    { width: L.w.cap },
+    { width: L.w.use },
+    { width: L.w.cat },
+    { width: 10 },
     { width: 3 },
     { width: 6 },
     { width: 3 },
@@ -179,8 +209,9 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
       const c = row.getCell(i);
       c.font = i === 7 ? { ...font, color: { argb: "FF1A73E8" }, underline: true } : font;
       c.border = { bottom: { style: "hair", color: { argb: "FFB0B4BA" } } };
-      c.alignment = { vertical: "middle", wrapText: i === 3 || i === 5 };
+      c.alignment = { vertical: "middle", wrapText: i >= 2 && i <= 6 };
     }
+    if (k <= N + 30) row.height = L.height; // 商品の数＋あとから足す分だけ。それより下の空の行は普通の高さ
     row.getCell(2).font = { name: "Consolas", size: 11, bold: true };
   }
   ws.getColumn(9).hidden = true;
