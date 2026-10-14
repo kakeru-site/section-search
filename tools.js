@@ -1,8 +1,8 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014i";
-import { buildOilWorkbook } from "./oilxlsx.js?v=20261014i";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014i";
+import * as S from "./search.js?v=20261014j";
+import { buildOilWorkbook } from "./oilxlsx.js?v=20261014j";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014j";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -1520,9 +1520,7 @@ async function exportOils() {
     const X = await loadExcelJs();
     const items = oilExportItems();
     const { wb } = buildOilWorkbook(X, items, oilGroups());
-    const d = new Date();
-    const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-    downloadXlsx(await wb.xlsx.writeBuffer(), `oil-chemical-search_${stamp}.xlsx`);
+    downloadXlsx(await wb.xlsx.writeBuffer(), "オイル・ケミカル検索.xlsx");
     C.toast(`${items.length}件 をExcelにしました`);
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);
@@ -1564,7 +1562,7 @@ async function exportIntoBase(file) {
     const X = await loadExcelJs();
     const { wb } = buildOilWorkbook(X, items, oilGroups(), { names: { search: nameS, data: nameD } });
     const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameD });
-    downloadXlsx(out, `${file.name.replace(/\.(xlsx|xlsm)$/i, "")}_検索付き.${ext.toLowerCase()}`);
+    downloadXlsx(out, `オイル・ケミカル検索.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);
