@@ -34,7 +34,9 @@ const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const wb = opt.wb || new ExcelJS.Workbook();
   if (!opt.wb) wb.creator = "セクション検索";
-  wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
+  // 単独のファイルでは開いたときに再計算させる。会社のExcelに差し込むときは、計算の設定には触れず、
+  // 最初の状態（検索語なし）の答えを計算済みの値として入れておく
+  if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
   const nameS = opt.names?.search || freeName(wb, "オイル・ケミカル検索");
   const QS = quote(nameS);
   const nameD = opt.names?.data || freeName(wb, "オイル・ケミカルデータ");
@@ -88,12 +90,13 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
       row.getCell(7).value = searchText(o, groups);
     } else {
       // 空き行：あとから足した商品も、漢字・カタカナの直接入力で検索できる
-      row.getCell(7).value = { formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$C${r}&" "&$D${r}&" "&$E${r}))` };
+      row.getCell(7).value = { formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$C${r}&" "&$D${r}&" "&$E${r}))`, result: "" };
     }
     row.getCell(8).value = {
+      result: o ? 1 : 0,
       formula: `IF($A${r}="",0,IF(AND(OR(${QS}!$K$2="",ISNUMBER(SEARCH(${QS}!$K$2,$G${r}))),OR(${QS}!$K$3="",ISNUMBER(SEARCH(${QS}!$K$3,$G${r}))),OR(${QS}!$K$4="",ISNUMBER(SEARCH(${QS}!$K$4,$G${r}))),OR(${QS}!$B$3="すべて",$E${r}=${QS}!$B$3)),1,0))`,
     };
-    row.getCell(9).value = { formula: `IF($H${r}=1,COUNTIF($H$2:$H${r},1),"")` };
+    row.getCell(9).value = { formula: `IF($H${r}=1,COUNTIF($H$2:$H${r},1),"")`, result: o ? r - 1 : "" };
   }
   wd.autoFilter = { from: "A1", to: "E1" };
   for (const c of ["G", "H", "I"]) wd.getColumn(c).font = { ...font, color: { argb: "FF9AA0A6" } };
@@ -134,16 +137,17 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getCell("C3").value = "← 黄色い欄に入力（品番・名称・用途・容量。空白で区切ると絞り込み。ひらがなもOK）";
   ws.getCell("C3").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
   ws.getCell("A4").value = {
+    result: `${N} 件ヒット（全 ${N} 件）${N > MAXROWS ? `　※先頭の${MAXROWS}件まで表示。語を足して絞ってください` : ""}`,
     formula: `SUM(${QD}!$H$2:$H$${LAST})&" 件ヒット（全 "&COUNTA(${QD}!$A$2:$A$${LAST})&" 件）"&IF(SUM(${QD}!$H$2:$H$${LAST})>${MAXROWS},"　※先頭の${MAXROWS}件まで表示。語を足して絞ってください","")`,
   };
   ws.getCell("A4").font = { ...font, bold: true, color: { argb: "FFB06A00" } };
   // 検索語を3つまでに分ける（計算用・K列は非表示）
   ws.getCell("K1").value = "計算用";
-  ws.getCell("K2").value = { formula: `IFERROR(LEFT($K$5,FIND(" ",$K$5)-1),$K$5)` };
-  ws.getCell("K3").value = { formula: `IFERROR(LEFT($L$5,FIND(" ",$L$5)-1),$L$5)` };
-  ws.getCell("K4").value = { formula: `IFERROR(MID($L$5,FIND(" ",$L$5)+1,200),"")` };
-  ws.getCell("K5").value = { formula: `LOWER(TRIM(SUBSTITUTE($B$2,"　"," ")))` };
-  ws.getCell("L5").value = { formula: `IFERROR(MID($K$5,FIND(" ",$K$5)+1,200),"")` };
+  ws.getCell("K2").value = { formula: `IFERROR(LEFT($K$5,FIND(" ",$K$5)-1),$K$5)`, result: "" };
+  ws.getCell("K3").value = { formula: `IFERROR(LEFT($L$5,FIND(" ",$L$5)-1),$L$5)`, result: "" };
+  ws.getCell("K4").value = { formula: `IFERROR(MID($L$5,FIND(" ",$L$5)+1,200),"")`, result: "" };
+  ws.getCell("K5").value = { formula: `LOWER(TRIM(SUBSTITUTE($B$2,"　"," ")))`, result: "" };
+  ws.getCell("L5").value = { formula: `IFERROR(MID($K$5,FIND(" ",$K$5)+1,200),"")`, result: "" };
   const H = ["No", "品番", "名称", "容量", "用途", "分類", "Google"];
   H.forEach((h, i) => {
     const c = ws.getRow(6).getCell(i + 1);
@@ -155,16 +159,21 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   for (let k = 1; k <= MAXROWS; k++) {
     const r = 6 + k;
     const row = ws.getRow(r);
-    row.getCell(9).value = { formula: `IFERROR(MATCH(${k},${QD}!$I$1:$I$${LAST},0),"")` };
-    const at = (col) => ({ formula: `IF($I${r}="","",INDEX(${QD}!$${col}$1:$${col}$${LAST},$I${r})&"")` });
-    row.getCell(1).value = { formula: `IF($I${r}="","",${k})` };
-    row.getCell(2).value = at("A");
-    row.getCell(3).value = at("B");
-    row.getCell(4).value = at("C");
-    row.getCell(5).value = at("D");
-    row.getCell(6).value = at("E");
+    const o = items[k - 1];
+    row.getCell(9).value = { formula: `IFERROR(MATCH(${k},${QD}!$I$1:$I$${LAST},0),"")`, result: o ? k + 1 : "" };
+    const at = (col, v) => ({
+      formula: `IF($I${r}="","",INDEX(${QD}!$${col}$1:$${col}$${LAST},$I${r})&"")`,
+      result: o ? String(v ?? "") : "",
+    });
+    row.getCell(1).value = { formula: `IF($I${r}="","",${k})`, result: o ? k : "" };
+    row.getCell(2).value = at("A", o?.code);
+    row.getCell(3).value = at("B", o?.name);
+    row.getCell(4).value = at("C", o?.cap);
+    row.getCell(5).value = at("D", o?.use);
+    row.getCell(6).value = at("E", o?.cat);
     row.getCell(7).value = {
       formula: `IF($I${r}="","",HYPERLINK("https://www.google.com/search?q="&_xlfn.ENCODEURL($B${r}&" "&$C${r}),"Google"))`,
+      result: o ? "Google" : "",
     };
     for (let i = 1; i <= 7; i++) {
       const c = row.getCell(i);

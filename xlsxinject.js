@@ -10,9 +10,21 @@ const unesc = (s) =>
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&");
+// UTF-8として正しく読めて、書き戻しても1バイトも変わらないことを確かめてから使う（文字化けで壊さないため）
 const text = async (zip, path) => {
   const f = zip.file(path);
-  return f ? f.async("string") : null;
+  if (!f) return null;
+  const bytes = await f.async("uint8array");
+  let s;
+  try {
+    s = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new Error(`${path} の文字コードが想定と違うため、追加できませんでした`);
+  }
+  const back = new TextEncoder().encode(s);
+  if (back.length !== bytes.length || back.some((b, i) => b !== bytes[i]))
+    throw new Error(`${path} を安全に読み込めなかったため、追加できませんでした`);
+  return s;
 };
 const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
@@ -165,8 +177,7 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameD }) {
   const strings = [...sst.matchAll(/<si\s*\/>|<si>([\s\S]*?)<\/si>/g)].map((x) => x[1] ?? "<t></t>");
 
   // --- 新しいシートの置き場所 ---
-  const origSheetFiles = Object.keys(B.files).filter((f) => /^xl\/(worksheets|chartsheets)\/[^/]+\.xml$/.test(f));
-  const existing = origSheetFiles.filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
+  const existing = Object.keys(B.files).filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
   let n = Math.max(0, ...existing.map((f) => +f.match(/sheet(\d+)\.xml/)[1]));
   const sheets = [
     [nameS, "xl/worksheets/sheet1.xml"],
@@ -179,12 +190,12 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameD }) {
     sheetsAdd = "";
   // 名前空間はこの要素の上で宣言する（元のファイルの書き方に左右されないように）
   const nsDecl = ` xmlns:r="${REL_NS}"`;
-  const firstNew = sheetIds.length;
   for (const [name, src] of sheets) {
     n++;
     sid++;
     const path = `xl/worksheets/sheet${n}.xml`;
-    const x = remapSheet(await text(A, src), merged.xfOff, strings);
+    // 元のシートの「選択中」には触れない代わりに、こちらの「選択中」を外す（複数選択でまとめて編集されないように）
+    const x = remapSheet(await text(A, src), merged.xfOff, strings).replace(/\stabSelected="1"/g, "");
     put(path, x);
     const rid = `rIdOil${n}`;
     relsAdd += `<Relationship Id="${rid}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${n}.xml"/>`;
@@ -195,39 +206,6 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameD }) {
   ct = ct.replace("</Types>", ctAdd + "</Types>");
   wb = wb.replace("</sheets>", sheetsAdd + "</sheets>");
 
-  // --- 計算の連鎖は作り直してもらう／開いたら再計算 ---
-  const cc = rels.match(/<Relationship\b[^>]*Type="[^"]*\/calcChain"[^>]*\/>/);
-  if (cc) {
-    const tg = (cc[0].match(/Target="([^"]+)"/) || [])[1];
-    rels = rels.replace(cc[0], "");
-    if (tg) {
-      const p = tg.startsWith("/") ? tg.slice(1) : dir + tg;
-      B.remove(p);
-      ct = ct.replace(new RegExp(`<Override\\b[^>]*PartName="/${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "");
-    }
-  }
-  if (/<calcPr\b/.test(wb)) {
-    wb = wb.replace(/<calcPr\b([^>]*?)(\/?)>/, (_, a, s) => `<calcPr${a.replace(/\sfullCalcOnLoad="[^"]*"/, "")} fullCalcOnLoad="1"${s}>`);
-  } else {
-    let pos = -1;
-    for (const t of ["</definedNames>", "</externalReferences>", "</functionGroups>", "</sheets>"]) {
-      const i = wb.indexOf(t);
-      if (i >= 0) {
-        pos = i + t.length;
-        break;
-      }
-    }
-    wb = wb.slice(0, pos) + '<calcPr fullCalcOnLoad="1"/>' + wb.slice(pos);
-  }
-  // 新しい検索シートを開いた状態にする（元のシートの「選択中」は外す）
-  if (!/<bookViews\b/.test(wb) && /<sheets\b/.test(wb))
-    wb = wb.replace(/<sheets\b/, `<bookViews><workbookView activeTab="${firstNew}"/></bookViews><sheets`);
-  else if (/<workbookView\b/.test(wb))
-    wb = wb.replace(/<workbookView\b([^>]*?)(\/?)>/, (_, a, s) => `<workbookView${a.replace(/\sactiveTab="\d+"/, "")} activeTab="${firstNew}"${s}>`);
-  for (const f of origSheetFiles) {
-    const x = await text(B, f);
-    if (x && /\stabSelected="1"/.test(x)) put(f, x.replace(/\stabSelected="1"/g, ""));
-  }
   put(base.wbPath, wb);
   put(relsPath, rels);
   put("[Content_Types].xml", ct);
