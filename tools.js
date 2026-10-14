@@ -1,6 +1,6 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014c";
+import * as S from "./search.js?v=20261014d";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -917,6 +917,16 @@ const OIL_SYN = [
   "消臭=しょうしゅう",
   "艶出し=つやだし",
 ].map((l) => l.split("=").map(S.norm));
+// 入力途中（「えきじ」など）でも、読みの前方一致で漢字の名称を拾う
+const KANA_ONLY = /^[ァ-ヶー]+$/;
+function oilExpand(tok) {
+  const alts = new Set(S.expand(tok, [...OIL_SYN, ...C.st.syn]));
+  const t = S.norm(tok);
+  if (KANA_ONLY.test(t) && t.length >= 2)
+    for (const g of [...OIL_SYN, ...C.st.syn])
+      if (g.some((w) => KANA_ONLY.test(w) && w.length > t.length && w.startsWith(t))) for (const o of g) alts.add(o);
+  return [...alts];
+}
 let oilIdx = null,
   oilSrc = null;
 function oilList() {
@@ -1035,7 +1045,7 @@ function renderOilList() {
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((t) => S.expand(t, [...OIL_SYN, ...C.st.syn]));
+    .map(oilExpand);
   const qn = S.norm(String(T.oil.q || "").replace(/[^0-9A-Za-z]/g, ""));
   const hits = list.filter(
     (o) =>
