@@ -1,8 +1,9 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014w";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014w";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014w";
+import * as S from "./search.js?v=20261014x";
+import { yomiText } from "./yomi.js?v=20261014x";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014x";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014x";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -658,6 +659,8 @@ const BULB_SYN_RAW = [
   "フォグ=霧灯",
 ].map((l) => l.split("="));
 const BULB_SYN = BULB_SYN_RAW.map((g) => g.map(S.norm));
+// 漢字の読み（ひらがなで打っても漢字の語に当たる）を検索用の文字列に足す
+const yomiIdx = (t) => " " + S.norm(yomiText(t, 0)) + " " + S.norm(yomiText(t, 1));
 let bulbIdx = null,
   bulbSrc = null;
 let bulbLimit = 30;
@@ -695,7 +698,7 @@ function bulbList() {
   bulbIdx = Object.entries(raw).map(([id, b]) => ({
     id,
     ...b,
-    _s: S.norm(`${b.spec} ${b.code} ${b.cat} ${b.shape} ${b.use} ${b.note}`),
+    _s: S.norm(`${b.spec} ${b.code} ${b.cat} ${b.shape} ${b.use} ${b.note}`) + yomiIdx(`${b.cat} ${b.use} ${b.note}`),
     _v: voltOf(b),
     _sh: shapeKey(b.shape),
   }));
@@ -1070,7 +1073,7 @@ function oilList() {
     ...o,
     _s: S.norm(
       `${o.code} ${String(o.code || "").replace(/[^0-9A-Za-z]/g, "")} ${o.name} ${o.use} ${o.cat} ${o.cap}`,
-    ),
+    ) + yomiIdx(`${o.name} ${o.use} ${o.cat}`),
     _c: S.norm(String(o.code || "").replace(/[^0-9A-Za-z]/g, "")),
   }));
   return oilIdx;

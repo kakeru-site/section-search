@@ -1,4 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
+import { yomiText } from "./yomi.js?v=20261014x";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -12,12 +13,16 @@ export function readingsText(o, groups) {
   const kata = kataOf(base);
   const out = [];
   if (base !== raw.toLowerCase()) out.push(base); // 全角の英数字などは半角にした形も
-  out.push(kata, hiraOf(base));
+  // 漢字の読みも入れる（「もれ」で「漏れ」が出るように）
+  const y0 = hiraOf(yomiText(base, 0));
+  const y1 = hiraOf(yomiText(base, 1));
+  out.push(kata, y0, kataOf(y0));
+  if (y1 !== y0) out.push(y1, kataOf(y1));
   for (const g of groups) {
     const ws = g.map(NF).filter(Boolean);
     if (ws.some((w) => kata.includes(kataOf(w)))) for (const w of ws) out.push(w, kataOf(w), hiraOf(w));
   }
-  return [...new Set(out)].join(" ").slice(0, 3000);
+  return [...new Set(out)].join(" ").slice(0, 6000);
 }
 // 検索用の列と同じ中身（数式の計算済みの値として入れる）
 const searchCell = (o, readings) =>
@@ -37,7 +42,7 @@ export const KINDS = {
     eg: [
       ["atf", "「ATF」が入っている商品が出ます。大文字・小文字はどっちでもOK！"],
       ["オイル 4l", "空白で区切ると、両方入っているものだけ出ます（3つまで）"],
-      ["えきじ", "ひらがなでもOK。ただし、読みが登録してある言葉（「液状」など）だけです"],
+      ["もれ", "ひらがな・カタカナでもOK。「漏れ」のような漢字の言葉も出ます（読みが入っている言葉だけ。出ないときは漢字で入れてください）"],
       ["0w20", "ハイフンなしでも「0W-20」が出ます"],
     ],
   },
@@ -51,7 +56,7 @@ export const KINDS = {
     eg: [
       ["t10", "「T10」のバルブが出ます。大文字・小文字はどっちでもOK！"],
       ["h4 12v", "空白で区切ると、両方入っているものだけ出ます（3つまで）"],
-      ["ういんかー", "ひらがなでもOK。ただし、読みが登録してある言葉（「ウインカー」など）だけです"],
+      ["ういんかー", "ひらがなでもOK。「ウインカー」が出ます。漢字の言葉も、読みで探せます（載っていないときは漢字で）"],
       ["24v", "24Vのバルブだけが出ます"],
     ],
   },
