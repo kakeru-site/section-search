@@ -1,5 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261015c";
+import { yomiText } from "./yomi.js?v=20261015d";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -88,6 +88,12 @@ const dispW = (s) => {
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // どの商品も途切れず見えるように、列の幅と1行の高さを決める
 // （検索の結果は数式なので、行の高さが自動では変わらない。どの商品が出ても足りる高さに揃える）
+export const USE_LINES = 6;
+export const USE_SUFFIX = "…（全文は印刷用シート）";
+export const cutUse = (t, limit) => {
+  const x = String(t ?? "");
+  return x.length > limit ? x.slice(0, limit) + USE_SUFFIX : x;
+};
 export function layoutFor(items) {
   const val = (o, f) => o[f];
   const maxW = (f) => Math.max(0, ...items.map((o) => dispW(val(o, f))));
@@ -101,8 +107,13 @@ export function layoutFor(items) {
   let lines = 1;
   for (const o of items)
     for (const f of Object.keys(w)) lines = Math.max(lines, Math.ceil((dispW(val(o, f)) * 1.1) / (w[f] - 1)));
-  lines = Math.min(lines, 21); // Excelの行の高さは409ptまで
-  return { w, lines, height: Math.max(24, lines * 19 + 4) };
+  // 行の高さは、いちばん長い用途に合わせると高くなりすぎて、画面にほとんど入らず、スクロールで飛ぶ。
+  // そこで高さは最大 USE_LINES 行ぶんにして、それより長い用途は「…」で省略する（全文は印刷用・データのシートで見られる）
+  const useLines = Math.ceil((maxW("use") * 1.1) / (w.use - 1));
+  lines = Math.min(lines, USE_LINES);
+  const useLimit =
+    useLines > USE_LINES ? Math.floor(((USE_LINES * (w.use - 1)) / 1.1 / 1.9) * 0.92) - USE_SUFFIX.length : Infinity;
+  return { w, lines, height: Math.max(24, lines * 19 + 4), useLimit };
 }
 
 
@@ -146,6 +157,7 @@ const guideBlocks = (protect, K, nameP) => [
   ["h", "これだけは守ってください"],
   ["b", "元のファイルは触らずに、各自コピーして使ってください"],
   ["b", "検索欄に入れた言葉は、保存しなくて大丈夫です。閉じるときは「保存しない」でOK！"],
+  ["b", "検索結果の「用途」は、長いと途中で「…」と省略されます（見やすいように、行の高さをそろえているためです）。全文は、「印刷用」か「データ」のシートで見られます"],
   ["b", "検索結果の表（数式が入ってます）は、消したり上書きしたりしないでください"],
   ...(protect
     ? [
@@ -606,7 +618,14 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     row.getCell(2).value = at("A", o?.code);
     row.getCell(3).value = at("B", o?.name);
     row.getCell(4).value = at("D", o?.cap);
-    row.getCell(5).value = at("E", o?.use);
+    if (Number.isFinite(L.useLimit)) {
+      // 長い用途は途中までにして「…」を付ける（行の高さをそろえたまま、どの商品が出ても収まるように）
+      const x = `INDEX(${QD}!$E$1:$E$${LAST},$I${r})`;
+      row.getCell(5).value = {
+        formula: `IF($I${r}="","",IF(LEN(${x})>${L.useLimit},LEFT(${x},${L.useLimit})&"${USE_SUFFIX}",${x}&""))`,
+        result: o ? cutUse(o.use, L.useLimit) : "",
+      };
+    } else row.getCell(5).value = at("E", o?.use);
     row.getCell(6).value = at("F", o?.cat);
     row.getCell(7).value = {
       formula: `IF($I${r}="","",${gLink(`$B${r}`, `$C${r}`)})`,
