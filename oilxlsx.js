@@ -60,9 +60,12 @@ export const KINDS = {
 // HYPERLINK は、リンク先が255文字までしか使えない（日本語は1文字が9文字ぶんに増える）。
 // 長いときは、名称の先頭だけにして必ず収まるようにする
 const gLink = (code, name) => {
-  const full = `ENCODEURL(${code}&" "&${name})`;
-  const short = `ENCODEURL(${code}&" "&LEFT(${name},10))`;
-  return `HYPERLINK("https://www.google.com/search?q="&IF(LEN(_xlfn.${full})>200,_xlfn.${short},_xlfn.${full}),"Google")`;
+  const pre = '"https://www.google.com/search?q="';
+  const full = `_xlfn.ENCODEURL(${code}&" "&${name})`;
+  const short = `_xlfn.ENCODEURL(${code}&" "&LEFT(${name},8))`;
+  const plain = `_xlfn.ENCODEURL(${code})`;
+  // 長ければ名称の先頭だけ → それでもだめなら品番だけ
+  return `IFERROR(HYPERLINK(${pre}&IF(LEN(${full})>170,${short},${full}),"Google"),HYPERLINK(${pre}&${plain},"Google"))`;
 };
 
 const MAXROWS = 200; // 検索シートに出す最大件数
