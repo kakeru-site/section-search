@@ -1,9 +1,9 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014x";
-import { yomiText } from "./yomi.js?v=20261014x";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014x";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014x";
+import * as S from "./search.js?v=20261014y";
+import { yomiText } from "./yomi.js?v=20261014y";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014y";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014y";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -120,7 +120,7 @@ const T = Object.assign(
     },
     cost: { mode: "ex", rows: blank(20, () => ({ p: "", q: "" })) },
     pad: { pad: "", padCost: "", rotorCost: "", rotorList: "" },
-    bulb: { q: "", shape: "", volt: "", protect: true },
+    bulb: { q: "", shape: "", volt: "", cat: "", protect: true },
     oil: { q: "", cat: "", protect: true },
   },
   load() || {},
@@ -698,7 +698,10 @@ function bulbList() {
   bulbIdx = Object.entries(raw).map(([id, b]) => ({
     id,
     ...b,
-    _s: S.norm(`${b.spec} ${b.code} ${b.cat} ${b.shape} ${b.use} ${b.note}`) + yomiIdx(`${b.cat} ${b.use} ${b.note}`),
+    _s:
+      S.norm(`${b.spec} ${b.code} ${String(b.code || "").replace(/[^0-9A-Za-z]/g, "")} ${b.cat} ${b.shape} ${b.use} ${b.note}`) +
+      yomiIdx(`${b.cat} ${b.use} ${b.note}`),
+    _c: S.norm(String(b.code || "").replace(/[^0-9A-Za-z]/g, "")),
     _v: voltOf(b),
     _sh: shapeKey(b.shape),
   }));
@@ -708,8 +711,9 @@ function renderBulb() {
   const box = fresh();
   box.innerHTML = `<label class="search">${C.IC.search}<input id="bq" type="search" autocomplete="off" placeholder="形状・規格・用途・品番（例：t10、h4、ウインカー、24v）" value="${esc(T.bulb.q)}"><span class="cnt" id="bcnt"></span></label>
     <div class="chips" id="bchips"></div>
+    <div class="chips" id="bchips2"></div>
     <div id="blist"></div>
-    <div class="tacts"><input type="file" id="fbulb" accept=".xlsx,.xlsm,.xls,.json" hidden><button class="btn" data-bpick="1">Excelから取り込み</button><button class="btn" data-bcats="1">分類を整理</button><button class="btn" data-bxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><button class="chip ${T.bulb.protect !== false ? "on" : ""}" data-bprot="1" title="書き出すExcelの検索・使い方シートに保護をかける（パスワードなし）">シート保護 ${T.bulb.protect !== false ? "ON" : "OFF"}</button><input type="file" id="fbulbbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-bxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-bedit="">＋ 追加</button></div>`;
+    <div class="tacts"><input type="file" id="fbulb" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden><button class="btn" data-bpick="1">Excelから取り込み</button><button class="btn" data-bcats="1">分類を整理</button><button class="btn" data-bxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><button class="chip ${T.bulb.protect !== false ? "on" : ""}" data-bprot="1" title="書き出すExcelの検索・使い方シートに保護をかける（パスワードなし）">シート保護 ${T.bulb.protect !== false ? "ON" : "OFF"}</button><input type="file" id="fbulbbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-bxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-bedit="">＋ 追加</button></div>`;
   bulbLimit = 30;
   const q = $("#bq", box);
   q.addEventListener("input", () => {
@@ -747,6 +751,11 @@ function renderBulb() {
       b.textContent = `シート保護 ${T.bulb.protect ? "ON" : "OFF"}`;
     } else if (d.bshape !== undefined) {
       T.bulb.shape = T.bulb.shape === d.bshape ? "" : d.bshape;
+      bulbLimit = 30;
+      save();
+      renderBulbList();
+    } else if (d.bcat !== undefined) {
+      T.bulb.cat = T.bulb.cat === d.bcat ? "" : d.bcat;
       bulbLimit = 30;
       save();
       renderBulbList();
@@ -788,9 +797,22 @@ function renderBulbList() {
     ["12V", "24V"]
       .map((v) => `<button class="chip ${T.bulb.volt === v ? "on" : ""}" data-bvolt="${v}">${v}</button>`)
       .join("");
+  const cats = oilCats(list);
+  if (T.bulb.cat && T.bulb.cat !== "__none" && !cats.some((c) => c.name === T.bulb.cat)) T.bulb.cat = "";
+  const noCat = list.filter((b) => !b.cat).length;
+  $("#bchips2").innerHTML =
+    cats
+      .map(
+        (c) =>
+          `<button class="chip ${T.bulb.cat === c.name ? "on" : ""}" data-bcat="${esc(c.name)}">${esc(c.name)} ${c.n}</button>`,
+      )
+      .join("") +
+    (noCat && cats.length
+      ? `<button class="chip ${T.bulb.cat === "__none" ? "on" : ""}" data-bcat="__none">未分類 ${noCat}</button>`
+      : "");
   if (!list.length) {
     $("#bcnt").textContent = "";
-    box.innerHTML = `<div class="panel"><h3>バルブのデータがまだありません</h3><p style="margin:0;font-size:12.5px;color:var(--mu);line-height:1.7">下の「Excelから取り込み」で、バルブ適合のExcel（DBシート＋ロケーションのシート）か bulbs.json を選んでください。</p></div>`;
+    box.innerHTML = `<div class="panel"><h3>バルブがまだ登録されていません</h3><p style="margin:0;font-size:12.5px;color:var(--mu);line-height:1.7">下の「＋ 追加」で品番・形状・規格を入れて登録するか、「Excelから取り込み」で品番・形状・規格の入ったExcel／CSV（またはバルブ適合のExcel、bulbs.json）を選んでください。列の並びはどんな形でも自動で探します。</p></div>`;
     return;
   }
   const toks = String(T.bulb.q || "")
@@ -798,15 +820,19 @@ function renderBulbList() {
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((t) => S.expand(t, [...BULB_SYN, ...C.st.syn]));
+    .map((t) => kanaExpand(t, [...BULB_SYN, ...C.st.syn]));
+  const qn = S.norm(String(T.bulb.q || "").replace(/[^0-9A-Za-z]/g, ""));
   const hits = list.filter(
     (b) =>
       (!T.bulb.shape || b._sh === T.bulb.shape) &&
+      (!T.bulb.cat || (T.bulb.cat === "__none" ? !b.cat : b.cat === T.bulb.cat)) &&
       (!T.bulb.volt || b._v === T.bulb.volt) &&
       toks.every((alts) => alts.some((a) => b._s.includes(a))),
   );
+  // 品番が前方一致するものを先頭に
   hits.sort(
     (a, b) =>
+      (qn && b._c.startsWith(qn) ? 1 : 0) - (qn && a._c.startsWith(qn) ? 1 : 0) ||
       (b.note?.includes("一番") ? 1 : 0) - (a.note?.includes("一番") ? 1 : 0) ||
       a._sh.localeCompare(b._sh, "ja", { numeric: true }),
   );
@@ -844,7 +870,14 @@ async function bulbForm(id) {
     `<h3>${id ? "バルブを編集" : "バルブを追加"}</h3><form>
     <div class="grid2">${f("code", "品番", "required autocomplete=off", "mono")}${f("unit", "販売単位（個入）", 'inputmode="numeric"')}</div>
     <div class="grid2">${f("shape", "形状（T10・H4 など）", "required autocomplete=off")}${f("spec", "規格（12V 5W など）", "autocomplete=off")}</div>
+    <div class="chips" id="bf-shapes" style="margin:-4px 0 10px">${[...new Set(bulbList().map((x) => x.shape).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "ja", { numeric: true }))
+      .map((x) => `<button type="button" class="chip ${x === b.shape ? "on" : ""}" data-pchip="shape" data-pv="${esc(x)}">${esc(x)}</button>`)
+      .join("")}</div>
     <div class="grid2">${f("cat", "分類（ウェッジ・シングル球 など）", "autocomplete=off")}${f("note", "メモ（よく出る、など）", "autocomplete=off")}</div>
+    <div class="chips" id="bf-cats" style="margin:-4px 0 10px">${oilCats(bulbList())
+      .map((c) => `<button type="button" class="chip ${c.name === b.cat ? "on" : ""}" data-pchip="cat" data-pv="${esc(c.name)}">${esc(c.name)}</button>`)
+      .join("")}</div>
     ${f("use", "用途・呼び方", "autocomplete=off")}
     <div class="field"><label>商品の写真（任意）</label><div id="bf-photo"></div></div></form>
     <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button>${id ? "" : '<button class="btn" data-m="next">保存して次へ</button>'}<button class="btn pri" data-m="ok">保存</button></div>`,
@@ -861,6 +894,18 @@ async function bulbForm(id) {
         };
         draw();
         if (id) bulbPhoto(id).then((u) => !changed && u && ((photo = u), draw()));
+        // 形状・分類は、登録済みの中から選ぶか、新しい名前を入力
+        bg.addEventListener("click", (e) => {
+          const c = e.target.closest("[data-pchip]");
+          if (!c) return;
+          const inp = bg.querySelector(`input[name=${c.dataset.pchip}]`);
+          inp.value = inp.value === c.dataset.pv ? "" : c.dataset.pv;
+          inp.dispatchEvent(new Event("input"));
+        });
+        for (const k of ["shape", "cat"])
+          bg.querySelector(`input[name=${k}]`).addEventListener("input", (e) =>
+            $$(`[data-pchip="${k}"]`, bg).forEach((x) => x.classList.toggle("on", x.dataset.pv === String(e.target.value).trim())),
+          );
         bg.addEventListener("paste", async (e) => {
           const file = C.pasteFile(e);
           if (!file) return;
@@ -966,58 +1011,154 @@ function bulbsFromRows(sheets) {
   if (!base) throw new Error("「規格」「品番」「形状」の列が見つかりませんでした");
   return base.map((b) => ({ ...b, unit: units[b.code] ?? "" }));
 }
+// バルブ適合表の形でない Excel／CSV でも、見出しから品番・形状・規格などを自動で探す
+const BULB_COL = {
+  code: [["品番", "部品番号", "商品コード", "品目コード", "型番", "コード", "pn", "partno", "partnumber", "sku"], ["品番", "コード", "番号"], /jan|ean|棚|ロケ|価格|単価|在庫|数量|区分|分類/],
+  shape: [["形状", "口金", "バルブ形状", "バルブ型式", "形", "ソケット", "球形状", "型式", "type"], ["形状", "口金", "ソケット"], /^$/],
+  spec: [["規格", "電圧", "ワット", "仕様", "定格", "電圧ワット", "v/w", "vw", "spec"], ["規格", "電圧", "ワット", "定格"], /価格|単価|在庫|数量/],
+  cat: [["分類", "カテゴリ", "カテゴリー", "種別", "種類", "区分", "品種", "category"], ["分類", "カテゴリ", "種別", "区分"], /^$/],
+  use: [["用途", "用途・呼び方", "使用箇所", "適合", "適用", "使い方", "呼び方", "特徴"], ["用途", "適合", "適用", "使用", "呼び方"], /価格|単価|在庫|数量/],
+  unit: [["販売単位", "入数", "入り数", "個入", "単位", "ロット", "unit"], ["販売単位", "入数", "個入"], /価格|単価|在庫/],
+  note: [["メモ", "備考", "note", "コメント", "よく出る"], ["メモ", "備考", "コメント"], /^$/],
+};
+function scoreBulbHeader(h, field) {
+  const k = hdKey(h);
+  if (!k) return 0;
+  const [exact, part, ng] = BULB_COL[field];
+  if (exact.some((e) => hdKey(e) === k)) return 3;
+  if (ng.test(k)) return 0;
+  return part.some((p) => k.includes(hdKey(p))) ? 1 : 0;
+}
+function bulbsFromSheetGeneric(rows) {
+  let best = null;
+  for (let h = 0; h < Math.min(rows.length, 40); h++) {
+    const row = rows[h] || [];
+    const cand = [];
+    for (const f of Object.keys(BULB_COL))
+      row.forEach((c, i) => {
+        const sc = scoreBulbHeader(c, f);
+        if (sc) cand.push({ f, i, sc });
+      });
+    cand.sort((a, b) => b.sc - a.sc || a.i - b.i);
+    const pick = {};
+    const used = new Set();
+    for (const c of cand) if (!(c.f in pick) && !used.has(c.i)) ((pick[c.f] = c.i), used.add(c.i));
+    if (pick.code == null || (pick.shape == null && pick.spec == null)) continue;
+    const key = Object.keys(pick).length;
+    if (!best || key > best.key) best = { h, pick, key, hdr: row };
+  }
+  if (!best) return null;
+  const { h, pick, hdr } = best;
+  const how = {};
+  for (const f in pick) how[f] = `${colName(pick[f])}列「${oilN(hdr[pick[f]])}」`;
+  const items = [];
+  for (const r of rows.slice(h + 1)) {
+    const code = oilN(r[pick.code]).toUpperCase();
+    if (!code || !/[0-9A-Za-z]/.test(code) || /^(合計|小計|計|total|品番|部品番号)$/i.test(code)) continue;
+    const it = { code };
+    for (const f of ["shape", "spec", "cat", "use", "note"]) if (pick[f] != null) it[f] = oilN(r[pick[f]]);
+    if (pick.unit != null) it.unit = toNum(oilN(r[pick.unit]).replace(/個入?|入$/g, "")) ?? "";
+    if (!it.shape && !it.spec) continue;
+    items.push(it);
+  }
+  return items.length ? { items, how } : null;
+}
 async function importBulbs(file) {
   if (!file) return;
-  let list;
+  let list, how = null;
   try {
     if (file.name.toLowerCase().endsWith(".json")) {
       const j = JSON.parse(await file.text());
       list = Array.isArray(j) ? j : j.bulbs;
     } else {
       const X = await C.loadXlsx();
-      const wb = X.read(await file.arrayBuffer(), { type: "array" });
-      list = bulbsFromRows(
-        wb.SheetNames.map((n) => X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" })),
-      );
+      let wb;
+      if (/\.csv$/i.test(file.name)) {
+        const buf = await file.arrayBuffer();
+        let txt;
+        try {
+          txt = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+        } catch {
+          txt = new TextDecoder("shift_jis").decode(buf); // Excelで保存したCSVはShift-JIS
+        }
+        wb = X.read(txt, { type: "string" });
+      } else wb = X.read(await file.arrayBuffer(), { type: "array" });
+      const sheets = wb.SheetNames.map((n) => [n, X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" })]);
+      try {
+        list = bulbsFromRows(sheets.map((x) => x[1])); // バルブ適合表（DBシート＋ロケーション）
+        how = [{ name: "バルブ適合表の形式", how: {} }];
+      } catch {
+        const found = sheets.map(([name, rows]) => ({ name, ...(bulbsFromSheetGeneric(rows) || {}) })).filter((f) => f.items);
+        if (!found.length) throw new Error("品番と形状（または規格）の列が見つかりませんでした");
+        const byCode = new Map();
+        for (const f of found) for (const it of f.items) byCode.set(it.code, it);
+        list = [...byCode.values()];
+        how = found.map((f) => ({ name: f.name, n: f.items.length, how: f.how }));
+      }
     }
     if (!Array.isArray(list) || !list.length) throw new Error("バルブのデータが見つかりませんでした");
   } catch (e) {
     return C.toast("取り込めませんでした：" + e.message, true);
   }
-  const have = Object.keys(C.st.bulbs || {}).length;
+  list = list.map((b) => ({ ...b, code: oilN(b.code).toUpperCase() })).filter((b) => b.code);
+  const have = new Map(bulbList().map((b) => [String(b.code).toUpperCase(), b]));
+  const add = list.filter((x) => !have.has(x.code)).length;
+  const upd = list.length - add;
+  const L = { code: "品番", shape: "形状", spec: "規格", cat: "分類", use: "用途", unit: "入数", note: "メモ" };
+  const detail = (how || [])
+    .map(
+      (sh) =>
+        `■ ${sh.name}${sh.n ? `（${sh.n}件）` : ""}` +
+        (Object.keys(sh.how || {}).length
+          ? "\n" +
+            Object.keys(L)
+              .filter((k) => sh.how[k])
+              .map((k) => `　${L[k]} ← ${sh.how[k]}`)
+              .join("\n")
+          : ""),
+    )
+    .join("\n");
+  const ex = list
+    .slice(0, 3)
+    .map((x) => `　${x.code}　${x.shape || ""} ${x.spec || ""}`)
+    .join("\n");
   const ok = await C.confirmBox(
-    `${list.length}件 のバルブを取り込みます。${have ? `\n今の ${have}件 は入れ替わります。` : ""}`,
+    `${list.length}件 を見つけました（新規 ${add}件／更新 ${upd}件）。\n今あるバルブは消えません。同じ品番は上書きします。${detail ? `\n\n${detail}` : ""}\n\n例：\n${ex}`,
     "取り込む",
   );
   if (!ok) return;
-  // 同じ品番は、いまの登録（写真・メモとの紐付け）を引き継ぐ
-  const old = new Map(bulbList().map((x) => [String(x.code).toUpperCase(), x]));
-  const obj = {};
-  const kept = new Set();
-  list.forEach((b) => {
-    const code = String(b.code || "").toUpperCase();
-    const prev = old.get(code);
-    const key = prev && !kept.has(prev.id) ? prev.id : C.localKey();
-    if (prev) kept.add(prev.id);
-    obj[key] = {
-      code,
-      spec: b.spec || "",
-      cat: b.cat || "",
-      shape: b.shape || "",
-      use: b.use || "",
-      unit: b.unit ?? "",
-      note: b.note || "",
-      photo: (key === prev?.id && prev.photo) || null,
-      updatedAt: Date.now(),
-    };
-  });
-  await C.store.set("bulbs", obj);
-  for (const x of old.values())
-    if (!kept.has(x.id) && x.photo) {
-      C.store.remove(`bulbPhoto/${x.id}`).catch(() => {});
-      bulbPhotoCache.delete(x.id);
+  const w = {};
+  for (const b of list) {
+    const old = have.get(b.code);
+    const rec = {};
+    for (const k of ["shape", "spec", "cat", "use", "note"]) if (oilN(b[k])) rec[k] = oilN(b[k]);
+    if (b.unit !== "" && b.unit != null) rec.unit = toNum(b.unit) ?? b.unit;
+    if (old) {
+      for (const k in rec) w[`${old.id}/${k}`] = rec[k];
+      w[`${old.id}/updatedAt`] = Date.now();
+    } else
+      w[C.localKey()] = {
+        code: b.code,
+        shape: rec.shape || "",
+        spec: rec.spec || "",
+        cat: rec.cat || "",
+        use: rec.use || "",
+        unit: rec.unit ?? "",
+        note: rec.note || "",
+        updatedAt: Date.now(),
+      };
+  }
+  const keys = Object.keys(w);
+  try {
+    for (let i = 0; i < keys.length; i += 500) {
+      const part = {};
+      for (const k of keys.slice(i, i + 500)) part[k] = w[k];
+      await C.store.update("bulbs", part);
     }
-  C.toast(`${list.length}件 取り込みました`);
+    C.toast(`${list.length}件 取り込みました`);
+  } catch (e) {
+    C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
+  }
 }
 
 
@@ -1054,14 +1195,15 @@ const OIL_SYN_RAW = [
 const OIL_SYN = OIL_SYN_RAW.map((g) => g.map(S.norm));
 // 入力途中（「えきじ」など）でも、読みの前方一致で漢字の名称を拾う
 const KANA_ONLY = /^[ァ-ヶー]+$/;
-function oilExpand(tok) {
-  const alts = new Set(S.expand(tok, [...OIL_SYN, ...C.st.syn]));
+function kanaExpand(tok, groups) {
+  const alts = new Set(S.expand(tok, groups));
   const t = S.norm(tok);
   if (KANA_ONLY.test(t) && t.length >= 2)
-    for (const g of [...OIL_SYN, ...C.st.syn])
+    for (const g of groups)
       if (g.some((w) => KANA_ONLY.test(w) && w.length > t.length && w.startsWith(t))) for (const o of g) alts.add(o);
   return [...alts];
 }
+const oilExpand = (tok) => kanaExpand(tok, [...OIL_SYN, ...C.st.syn]);
 let oilIdx = null,
   oilSrc = null;
 function oilList() {
