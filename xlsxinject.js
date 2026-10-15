@@ -204,6 +204,25 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
     ctAdd += `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
     sheetsAdd += `<sheet name="${esc(name)}" sheetId="${sid}"${nsDecl} r:id="${rid}"/>`;
   }
+  // 印刷範囲・見出し行の繰り返し（シート名に紐づく定義）を、こちらのシートぶんだけ足す
+  const aWb = (await text(A, "xl/workbook.xml")) || "";
+  const baseCount = [...wb.matchAll(/<sheet\b/g)].length; // 差し込む前のシート数
+  const ours = [...aWb.matchAll(/<definedName\b[^>]*\bname="(_xlnm\.Print_(?:Area|Titles))"[^>]*\blocalSheetId="(\d+)"[^>]*>([\s\S]*?)<\/definedName>/g)];
+  const namesAdd = ours
+    .map((x) => `<definedName name="${x[1]}" localSheetId="${baseCount + +x[2]}">${x[3]}</definedName>`)
+    .join("");
+  if (namesAdd) {
+    if (/<definedNames\s*\/>/.test(wb)) wb = wb.replace(/<definedNames\s*\/>/, `<definedNames>${namesAdd}</definedNames>`);
+    else if (wb.includes("</definedNames>")) wb = wb.replace("</definedNames>", namesAdd + "</definedNames>");
+    else {
+      // 決まった順番（sheets → externalReferences → definedNames → calcPr…）の位置に入れる
+      const after = ["<calcPr", "<oleSize", "<customWorkbookViews", "<pivotCaches", "<smartTagPr", "<smartTagTypes", "<webPublishing", "<fileRecoveryPr", "<webPublishObjects", "<extLst", "</workbook>"]
+        .map((t) => wb.indexOf(t))
+        .filter((i) => i >= 0);
+      const at = Math.min(...after);
+      wb = wb.slice(0, at) + `<definedNames>${namesAdd}</definedNames>` + wb.slice(at);
+    }
+  }
   rels = rels.replace("</Relationships>", relsAdd + "</Relationships>");
   ct = ct.replace("</Types>", ctAdd + "</Types>");
   wb = wb.replace("</sheets>", sheetsAdd + "</sheets>");
