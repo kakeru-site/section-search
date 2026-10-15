@@ -78,14 +78,14 @@ const guideBlocks = (protect) => [
   ["b", "「?」と「*」は検索で特別な意味になる記号なので、入れないでください"],
   ["h", "商品を追加・修正・削除する（すべて「オイル・ケミカルデータ」シートで行います）"],
   ["step", "追加", "「オイル・ケミカルデータ」シートの、データが入っている最後の行のすぐ下（空き行）に入れてください。空き行は300行ぶん用意してあります"],
-  ["b", "A列：品番（必ず入れる）　B列：名称（必ず入れる）"],
-  ["b", "C列：容量（例：4L）　D列：用途　E列：分類　← この3つは空でもOK"],
+  ["b", "A列：品番（必ず入れる）　B列：名称（必ず入れる）　C列：Google（自動。触らない）"],
+  ["b", "D列：容量（例：4L）　E列：用途　F列：分類　← この3つは空でもOK"],
   ["step", "修正", "「オイル・ケミカルデータ」シートの直したい行を、そのまま書き換えればOK。検索にもすぐ反映されます"],
-  ["step", "削除", "「オイル・ケミカルデータ」シートで、その行のA〜E列の中身だけを消してください（選んで Delete）"],
-  ["step", "分類", "E列に文字を入れるだけで、新しい分類も作れます。検索シートのプルダウンにも出したいときは、K列の「分類一覧」の一番下に足してください"],
+  ["step", "削除", "「オイル・ケミカルデータ」シートで、その行のA・B・D・E・F列の中身だけを消してください（選んで Delete）"],
+  ["step", "分類", "F列に文字を入れるだけで、新しい分類も作れます。検索シートのプルダウンにも出したいときは、L列の「分類一覧」の一番下に足してください"],
   ["b", "並べ替えや絞り込みは、「オイル・ケミカルデータ」シートの見出しのボタンから自由にどうぞ"],
   ["ng", "行ごと削除したり、データの途中や空き行の間に行を「挿入」したりしないでください（検索に出なくなります）"],
-  ["ng", "F〜J列は計算用の隠し列です。表示したり、中身を消したり、列を削除したりしないでください"],
+  ["ng", "G〜K列は計算用の隠し列です。表示したり、中身を消したり、列を削除したりしないでください"],
   ["h", "困ったときは"],
   ["b", "何も出ない・計算されない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
   ["b", "あるはずなのに出ない → 全角になっていないか、分類が「すべて」になっているか見てください"],
@@ -228,6 +228,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   wd.columns = [
     { header: "品番", width: L.w.code },
     { header: "名称", width: L.w.name },
+    { header: "Google", width: 10 },
     { header: "容量", width: L.w.cap },
     { header: "用途", width: L.w.use },
     { header: "分類", width: L.w.cat },
@@ -241,37 +242,43 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const hr = wd.getRow(1);
   hr.font = { ...font, bold: true, color: { argb: DK } };
   hr.eachCell((c, i) => {
-    if (i <= 5) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AC } };
+    if (i <= 6) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AC } };
   });
   const cats = [...new Set(items.map((o) => o.cat).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
-  wd.getCell("K2").value = "すべて";
-  cats.forEach((c, i) => (wd.getCell(`K${i + 3}`).value = c));
+  wd.getCell("L2").value = "すべて";
+  cats.forEach((c, i) => (wd.getCell(`L${i + 3}`).value = c));
   for (let r = 2; r <= LAST; r++) {
     const o = items[r - 2];
     const row = wd.getRow(r);
     if (o) {
       row.getCell(1).value = o.code;
       row.getCell(2).value = o.name;
-      row.getCell(3).value = o.cap || "";
-      row.getCell(4).value = o.use || "";
-      row.getCell(5).value = o.cat || "";
-      row.getCell(6).value = readingsText(o, groups);
+      row.getCell(4).value = o.cap || "";
+      row.getCell(5).value = o.use || "";
+      row.getCell(6).value = o.cat || "";
+      row.getCell(7).value = readingsText(o, groups);
     }
+    // Google：品番＋名称から数式で作る（行を足しても、品番を直しても、そのまま使える）
+    row.getCell(3).value = {
+      formula: `IF($A${r}="","",HYPERLINK("https://www.google.com/search?q="&_xlfn.ENCODEURL($A${r}&" "&$B${r}),"Google"))`,
+      result: o ? "Google" : "",
+    };
+    row.getCell(3).font = { ...font, color: { argb: "FF1A73E8" }, underline: true };
     // 検索用：今の品番・名称などから数式で作る（書き換え・追加しても検索に反映される）
-    row.getCell(7).value = {
-      formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$C${r}&" "&$D${r}&" "&$E${r}&" "&$F${r}&" "&SUBSTITUTE(SUBSTITUTE($A${r}&$B${r},"-","")," ","")))`,
-      result: o ? searchCell(o, row.getCell(6).value) : "",
-    };
     row.getCell(8).value = {
-      result: o ? 1 : 0,
-      formula: `IF($A${r}="",0,IF(AND(OR(${QS}!$K$2="",ISNUMBER(SEARCH(${QS}!$K$2,$G${r}))),OR(${QS}!$K$3="",ISNUMBER(SEARCH(${QS}!$K$3,$G${r}))),OR(${QS}!$K$4="",ISNUMBER(SEARCH(${QS}!$K$4,$G${r}))),OR(${QS}!$B$3="すべて",${QS}!$B$3="",$E${r}=${QS}!$B$3)),1,0))`,
+      formula: `IF($A${r}="","",LOWER($A${r}&" "&$B${r}&" "&$D${r}&" "&$E${r}&" "&$F${r}&" "&$G${r}&" "&SUBSTITUTE(SUBSTITUTE($A${r}&$B${r},"-","")," ","")))`,
+      result: o ? searchCell(o, row.getCell(7).value) : "",
     };
-    row.getCell(9).value = { formula: `IF($H${r}=1,COUNTIF($H$2:$H${r},1),"")`, result: o ? r - 1 : "" };
+    row.getCell(9).value = {
+      result: o ? 1 : 0,
+      formula: `IF($A${r}="",0,IF(AND(OR(${QS}!$K$2="",ISNUMBER(SEARCH(${QS}!$K$2,$H${r}))),OR(${QS}!$K$3="",ISNUMBER(SEARCH(${QS}!$K$3,$H${r}))),OR(${QS}!$K$4="",ISNUMBER(SEARCH(${QS}!$K$4,$H${r}))),OR(${QS}!$B$3="すべて",${QS}!$B$3="",$F${r}=${QS}!$B$3)),1,0))`,
+    };
+    row.getCell(10).value = { formula: `IF($I${r}=1,COUNTIF($I$2:$I${r},1),"")`, result: o ? r - 1 : "" };
   }
   wd.autoFilter = { from: "A1", to: "F1" };
-  for (const c of [6, 7, 8, 9, 10]) wd.getColumn(c).hidden = true; // 計算用の列は見せない（触らせない）
-  for (let r = 2; r <= N + 1; r++) for (const c of [1, 2, 3, 4, 5]) wd.getRow(r).getCell(c).alignment = { vertical: "middle", wrapText: true };
-  for (const c of ["F", "G", "H", "I"]) wd.getColumn(c).font = { ...font, color: { argb: "FF9AA0A6" } };
+  for (const c of [7, 8, 9, 10, 11]) wd.getColumn(c).hidden = true; // 計算用の列は見せない（触らせない）
+  for (let r = 2; r <= N + 1; r++) for (const c of [1, 2, 3, 4, 5, 6]) wd.getRow(r).getCell(c).alignment = { vertical: "middle", wrapText: true };
+  for (const c of ["G", "H", "I", "J"]) wd.getColumn(c).font = { ...font, color: { argb: "FF9AA0A6" } };
 
   // ---- 検索 ----
   ws.columns = [
@@ -303,7 +310,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getCell("B3").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`${QD}!$K$2:$K$${Math.max(cats.length + 2, 30)}`],
+    formulae: [`${QD}!$L$2:$L$${Math.max(cats.length + 2, 30)}`],
   };
   ws.getCell("C3").value = "← ▼から分類を選ぶと、その分類だけに絞れます";
   ws.getCell("C3").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
@@ -313,7 +320,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getRow(5).height = 8;
   ws.getCell("A4").value = {
     result: `${N} 件ヒット（全 ${N} 件）${N > MAXROWS ? `　※先頭の${MAXROWS}件まで表示。語を足して絞ってください` : ""}`,
-    formula: `SUM(${QD}!$H$2:$H$${LAST})&" 件ヒット（全 "&COUNTA(${QD}!$A$2:$A$${LAST})&" 件）"&IF(SUM(${QD}!$H$2:$H$${LAST})>${MAXROWS},"　※先頭の${MAXROWS}件まで表示。語を足して絞ってください","")`,
+    formula: `SUM(${QD}!$I$2:$I$${LAST})&" 件ヒット（全 "&COUNTA(${QD}!$A$2:$A$${LAST})&" 件）"&IF(SUM(${QD}!$I$2:$I$${LAST})>${MAXROWS},"　※先頭の${MAXROWS}件まで表示。語を足して絞ってください","")`,
   };
   ws.getCell("A4").font = { ...font, bold: true, color: { argb: "FFB06A00" } };
   // 検索語を3つまでに分ける（計算用・K列は非表示）
@@ -336,7 +343,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     const r = FIRST - 1 + k;
     const row = ws.getRow(r);
     const o = items[k - 1];
-    row.getCell(9).value = { formula: `IFERROR(MATCH(${k},${QD}!$I$1:$I$${LAST},0),"")`, result: o ? k + 1 : "" };
+    row.getCell(9).value = { formula: `IFERROR(MATCH(${k},${QD}!$J$1:$J$${LAST},0),"")`, result: o ? k + 1 : "" };
     const at = (col, v) => ({
       formula: `IF($I${r}="","",INDEX(${QD}!$${col}$1:$${col}$${LAST},$I${r})&"")`,
       result: o ? String(v ?? "") : "",
@@ -344,9 +351,9 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     row.getCell(1).value = { formula: `IF($I${r}="","",${k})`, result: o ? k : "" };
     row.getCell(2).value = at("A", o?.code);
     row.getCell(3).value = at("B", o?.name);
-    row.getCell(4).value = at("C", o?.cap);
-    row.getCell(5).value = at("D", o?.use);
-    row.getCell(6).value = at("E", o?.cat);
+    row.getCell(4).value = at("D", o?.cap);
+    row.getCell(5).value = at("E", o?.use);
+    row.getCell(6).value = at("F", o?.cat);
     row.getCell(7).value = {
       formula: `IF($I${r}="","",HYPERLINK("https://www.google.com/search?q="&_xlfn.ENCODEURL($B${r}&" "&$C${r}),"Google"))`,
       result: o ? "Google" : "",
