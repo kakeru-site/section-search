@@ -1,8 +1,8 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014u";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014u";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014u";
+import * as S from "./search.js?v=20261014v";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014v";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014v";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {

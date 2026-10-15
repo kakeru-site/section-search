@@ -57,6 +57,14 @@ export const KINDS = {
   },
 };
 
+// HYPERLINK は、リンク先が255文字までしか使えない（日本語は1文字が9文字ぶんに増える）。
+// 長いときは、名称の先頭だけにして必ず収まるようにする
+const gLink = (code, name) => {
+  const full = `ENCODEURL(${code}&" "&${name})`;
+  const short = `ENCODEURL(${code}&" "&LEFT(${name},10))`;
+  return `HYPERLINK("https://www.google.com/search?q="&IF(LEN(_xlfn.${full})>200,_xlfn.${short},_xlfn.${full}),"Google")`;
+};
+
 const MAXROWS = 200; // 検索シートに出す最大件数
 const SPARE = 300; // データシートの空き行（あとから足せる）
 
@@ -290,7 +298,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     }
     // Google：品番＋名称から数式で作る（行を足しても、品番を直しても、そのまま使える）
     row.getCell(3).value = {
-      formula: `IF($A${r}="","",HYPERLINK("https://www.google.com/search?q="&_xlfn.ENCODEURL($A${r}&" "&$B${r}),"Google"))`,
+      formula: `IF($A${r}="","",${gLink(`$A${r}`, `$B${r}`)})`,
       result: o ? "Google" : "",
     };
     row.getCell(3).font = { ...font, color: { argb: "FF1A73E8" }, underline: true };
@@ -385,7 +393,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     row.getCell(5).value = at("E", o?.use);
     row.getCell(6).value = at("F", o?.cat);
     row.getCell(7).value = {
-      formula: `IF($I${r}="","",HYPERLINK("https://www.google.com/search?q="&_xlfn.ENCODEURL($B${r}&" "&$C${r}),"Google"))`,
+      formula: `IF($I${r}="","",${gLink(`$B${r}`, `$C${r}`)})`,
       result: o ? "Google" : "",
     };
     for (let i = 1; i <= 7; i++) {
