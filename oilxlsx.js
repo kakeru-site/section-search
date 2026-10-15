@@ -1,5 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261015e";
+import { yomiText } from "./yomi.js?v=20261015f";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -112,7 +112,10 @@ export function layoutFor(items) {
   const useLines = Math.ceil((maxW("use") * 1.1) / (w.use - 1));
   lines = Math.min(lines, USE_LINES);
   const useLimit =
-    useLines > USE_LINES ? Math.floor(((USE_LINES * (w.use - 1)) / 1.1 / 1.9) * 0.92) - USE_SUFFIX.length : Infinity;
+    useLines > USE_LINES
+      ? // HYPERLINK の表示する文字は、255文字までしか使えない（超えると #VALUE! になる）ので、余裕をみて250文字以内にする
+        Math.min(Math.floor(((USE_LINES * (w.use - 1)) / 1.1 / 1.9) * 0.92), 250) - USE_SUFFIX.length
+      : Infinity;
   return { w, lines, height: Math.max(24, lines * 19 + 4), useLimit };
 }
 
@@ -623,7 +626,8 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
       const x = `INDEX(${QD}!$E$1:$E$${LAST},$I${r})`;
       row.getCell(5).value = {
         // 省略したものは、押すと「データ」シートのその行に飛んで、全文が読める
-        formula: `IF($I${r}="","",IF(LEN(${x})>${L.useLimit},HYPERLINK("#'${nameD.replace(/'/g, "''")}'!E"&$I${r},LEFT(${x},${L.useLimit})&"${USE_SUFFIX}"),${x}&""))`,
+        // 万一リンクが作れなくても、エラーにせず、省略した文字だけは出す
+        formula: `IF($I${r}="","",IF(LEN(${x})>${L.useLimit},IFERROR(HYPERLINK("#'${nameD.replace(/'/g, "''")}'!E"&$I${r},LEFT(${x},${L.useLimit})&"${USE_SUFFIX}"),LEFT(${x},${L.useLimit})&"${USE_SUFFIX}"),${x}&""))`,
         result: o ? cutUse(o.use, L.useLimit) : "",
       };
     } else row.getCell(5).value = at("E", o?.use);
