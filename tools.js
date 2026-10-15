@@ -1,9 +1,9 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014y";
-import { yomiText } from "./yomi.js?v=20261014y";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014y";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014y";
+import * as S from "./search.js?v=20261014z";
+import { yomiText } from "./yomi.js?v=20261014z";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014z";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014z";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -1858,6 +1858,7 @@ async function exportIntoBase(file, kind = "oil") {
   const items = x.items();
   const nameS = uniqueName(base.names, `${title}検索`);
   const nameG = uniqueName(base.names, "使い方");
+  const nameP = uniqueName(base.names, `${title}印刷用`);
   const nameD = uniqueName(base.names, `${title}データ`);
   const r = await C.modal(`<h3>Excelに検索機能を追加</h3>
     <div class="xlinfo">
@@ -1866,8 +1867,8 @@ async function exportIntoBase(file, kind = "oil") {
       <div><span>最終更新者</span><b>${esc(base.lastModifiedBy || "（記録なし）")}</b></div>
       ${base.company ? `<div><span>会社名</span><b>${esc(base.company)}</b></div>` : ""}
       <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
-      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameG)}・${esc(nameD)}（${items.length}件）</b></div>
-      <div><span>シート保護</span><b>${x.opt().protect !== false ? "あり（検索・使い方のシート。パスワードなし）" : "なし"}</b></div>
+      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameG)}・${esc(nameP)}（紙に印刷する用）・${esc(nameD)}（${items.length}件）</b></div>
+      <div><span>シート保護</span><b>${x.opt().protect !== false ? "あり（検索・使い方・印刷用のシート。パスワードなし）" : "なし"}</b></div>
     </div>
     <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容（シート・グラフ・表・書式など）には手を触れず、検索のシートだけを後ろに足します。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
@@ -1876,11 +1877,11 @@ async function exportIntoBase(file, kind = "oil") {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
     const { wb } = buildOilWorkbook(X, items, x.groups(), {
-      names: { search: nameS, guide: nameG, data: nameD },
+      names: { search: nameS, guide: nameG, print: nameP, data: nameD },
       protect: x.opt().protect !== false,
       kind,
     });
-    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameG, nameD });
+    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameG, nameP, nameD });
     downloadXlsx(out, `${title}検索.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {

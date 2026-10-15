@@ -1,5 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261014y";
+import { yomiText } from "./yomi.js?v=20261014z";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -108,7 +108,7 @@ export function layoutFor(items) {
 
 // ---- 使い方シート ----
 const GW = { b: 7, c: 28, d: 62 }; // 列の幅（B・C・D）
-const guideBlocks = (protect, K) => [
+const guideBlocks = (protect, K, nameP) => [
   ["title", `${K.title}検索の使い方`],
   ["sub", "お客さんに聞かれたとき、ぱっと探してぱっと答えるためのシートです。むずかしくないので、さくっと読んでみてください！"],
   ["h", "まずはこれだけ（3ステップ）"],
@@ -131,6 +131,10 @@ const guideBlocks = (protect, K) => [
   ["b", `並べ替えや絞り込みは、「${K.title}データ」シートの見出しのボタンから自由にどうぞ`],
   ["ng", "行ごと削除したり、データの途中や空き行の間に行を「挿入」したりしないでください（検索に出なくなります）"],
   ["ng", "G〜K列は計算用の隠し列です。表示したり、中身を消したり、列を削除したりしないでください"],
+  ["h", "紙に印刷したいとき"],
+  ["step", "全部", `「${nameP}」シートを開いて、そのまま印刷（Ctrl+P）。文字は大きめ（14ポイント）、A4たてで、1つずつ見やすく並んでいます`],
+  ["step", "分類ごと", `「${nameP}」の1ページ目に、分類ごとのページ番号の表があります。印刷の「設定」のページ指定に、そのページ番号を入れてください`],
+  ["b", `「${nameP}」は、このファイルを作った時点の内容です。あとから追加・修正したぶんは入りません（検索シートで確認してください）`],
   ["h", "困ったときは"],
   ["b", "何も出ない・計算されない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
   ["b", `あるはずなのに出ない → 全角になっていないか、${K.catH}が「すべて」になっているか見てください`],
@@ -149,7 +153,7 @@ const guideBlocks = (protect, K) => [
     : []),
 ];
 
-function fillGuide(ws, { font, protect, K }) {
+function fillGuide(ws, { font, protect, K, nameP }) {
   const AC = "FFF2C230";
   const DK = "FF17191C";
   ws.columns = [{ width: 2 }, { width: GW.b }, { width: GW.c }, { width: GW.d }];
@@ -157,7 +161,7 @@ function fillGuide(ws, { font, protect, K }) {
   const lines = (text, width) => Math.max(1, Math.ceil((dispW(text) * 1.12) / (width - 2)));
   const hairs = { bottom: { style: "hair", color: { argb: "FFB0B4BA" } } };
   let r = 1;
-  for (const blk of guideBlocks(protect, K)) {
+  for (const blk of guideBlocks(protect, K, nameP)) {
     const [kind, a, b] = blk;
     const row = ws.getRow(r);
     const span = (text, o = {}) => {
@@ -231,6 +235,197 @@ function fillGuide(ws, { font, protect, K }) {
   if (protect) ws.sheetProtection = { sheet: true };
 }
 
+
+// ---- 印刷用シート：紙で見やすい大きな文字（14pt）・A4たて・1商品ずつ区切って並べる ----
+// 分類ごとに新しいページから始める。先頭ページ（目次）に、分類ごとのページ番号を載せる。
+// 関数ではなく書き出した時点の内容をそのまま入れる（ページの区切りを正確に決めるため）
+const PR = { a: 24, b: 36, c: 20 }; // 列の幅（品番・名称・容量）。A4たてに余裕を持って収まる幅
+const PT = (u) => u * 5.25; // 列の幅（文字数）→ 点（pt）のおおよその換算
+const PAGE_CAP = 700; // 1ページに積める高さ（pt）。A4たての印刷できる高さより少し小さめ
+export function planPrint(items) {
+  const cw = { code: PT(PR.a), name: PT(PR.b), cap: PT(PR.c) };
+  const total = PT(PR.a + PR.b + PR.c);
+  const perLine = (width) => Math.max(4, Math.floor((width - 10) / 7.1));
+  const linesOf = (text, width) => Math.max(1, Math.ceil((dispW(text) * 1.08) / perLine(width)));
+  const useLines = (t) => linesOf(t, total);
+  // 用途が長いとき、1行の高さの上限（409pt）を超えないよう、いくつかの行に分ける
+  const chunks = (text) => {
+    const out = [];
+    const limit = (17 * perLine(total)) / 1.08;
+    let cur = "";
+    let w = 0;
+    for (const ch of String(text ?? "")) {
+      const cwid = dispW(ch);
+      if (w + cwid > limit && /[、。，．\s]/.test(cur.slice(-1))) (out.push(cur), (cur = ""), (w = 0));
+      else if (w + cwid > limit * 1.08) (out.push(cur), (cur = ""), (w = 0));
+      cur += ch;
+      w += cwid;
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+  const block = (o) => {
+    const lines = Math.max(
+      1,
+      Math.ceil((dispW(o.code) * 1.2 * 7.7) / (cw.code - 8)),
+      linesOf(o.name, cw.name),
+      linesOf(o.cap || "", cw.cap),
+    );
+    const head = lines * 21 + 12;
+    const uses = chunks(o.use).map((t) => ({ t, h: useLines(t) * 21 + 12 }));
+    return { o, head, uses };
+  };
+  const bycat = new Map();
+  for (const o of items) {
+    const k = o.cat || "未分類";
+    if (!bycat.has(k)) bycat.set(k, []);
+    bycat.get(k).push(block(o));
+  }
+  const TITLE_H = 40;
+  // ページに詰める（商品の見出し＋用途の最初の行は、必ず同じページに）
+  const sections = [];
+  for (const [cat, blocks] of bycat) {
+    const pages = [[]];
+    let used = TITLE_H;
+    for (const b of blocks) {
+      const need = b.head + (b.uses[0]?.h || 0) + 8;
+      if (used + need > PAGE_CAP && pages[pages.length - 1].length) (pages.push([]), (used = TITLE_H));
+      pages[pages.length - 1].push(b);
+      used += b.head;
+      b.uses.forEach((u, i) => {
+        if (i > 0 && used + u.h > PAGE_CAP) (pages.push([]), (used = TITLE_H));
+        used += u.h;
+      });
+      used += 8;
+    }
+    sections.push({ cat, n: blocks.length, pages });
+  }
+  return sections;
+}
+
+function fillPrint(ws, items, { font, protect, K, date }) {
+  const DK = "FF17191C";
+  ws.columns = [{ width: PR.a }, { width: PR.b }, { width: PR.c }];
+  ws.views = [{ showGridLines: false }];
+  ws.pageSetup = {
+    paperSize: 9,
+    orientation: "portrait",
+    scale: 100,
+    horizontalCentered: true,
+    margins: { left: 0.4, right: 0.4, top: 0.55, bottom: 0.7, header: 0.25, footer: 0.3 },
+  };
+  ws.headerFooter = { oddFooter: `&L&11${K.title}　一覧（${date}）&R&12ページ &P / &N` };
+  const total = PT(PR.a + PR.b + PR.c);
+  const sections = planPrint(items);
+  const grey = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDEDED" } };
+  const line = (style) => ({ style, color: { argb: "FF303030" } });
+  // 目次のページ数（1行28pt）
+  const TOC_FIRST = 13; // 1ページ目に入る分類の数（見出しなどの下）
+  const TOC_NEXT = 21; // 2ページ目以降
+  const tocPages = 1 + Math.ceil(Math.max(0, sections.length - TOC_FIRST) / TOC_NEXT);
+  let page = tocPages + 1;
+  const start = new Map();
+  for (const sec of sections) {
+    start.set(sec.cat, [page, page + sec.pages.length - 1]);
+    page += sec.pages.length;
+  }
+  let r = 1;
+  const merged = (row, v, o = {}) => {
+    ws.mergeCells(row, 1, row, 3);
+    const c = ws.getRow(row).getCell(1);
+    c.value = v;
+    c.font = o.font || { name: font.name, size: 14 };
+    c.alignment = { vertical: "middle", wrapText: true, horizontal: o.h || "left", indent: o.indent || 0 };
+    if (o.fill) for (let i = 1; i <= 3; i++) ws.getRow(row).getCell(i).fill = o.fill;
+    ws.getRow(row).height = o.height || 24;
+    return c;
+  };
+  // --- 目次 ---
+  merged(r++, `${K.title}　一覧`, { font: { name: font.name, size: 26, bold: true, color: { argb: "FFFFFFFF" } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: DK } }, height: 52, indent: 1 });
+  merged(r++, `作成日　${date}　／　全 ${items.length} 件`, { font: { name: font.name, size: 15 }, height: 30, indent: 1 });
+  r++;
+  ws.getRow(r - 1).height = 10;
+  merged(r++, "分類ごとに印刷するとき", { font: { name: font.name, size: 16, bold: true }, height: 30 });
+  const howTo = [
+    "① 下の表で、印刷したい分類の「ページ」を見る",
+    "② ［ファイル］→［印刷］の「設定」で、ページ指定の「から」「まで」に、そのページ番号を入れる",
+    "③ 全部印刷するときは、ページ指定をしないで、そのまま印刷する",
+  ];
+  for (const t of howTo) merged(r++, t, { font: { name: font.name, size: 14 }, height: 30, indent: 1 });
+  r++;
+  ws.getRow(r - 1).height = 12;
+  const hdr = ws.getRow(r);
+  hdr.height = 30;
+  [["分類", 1], ["件数", 2], ["ページ", 3]].forEach(([t, i]) => {
+    const c = hdr.getCell(i);
+    c.value = t;
+    c.font = { name: font.name, size: 15, bold: true };
+    c.fill = grey;
+    c.border = { top: line("medium"), bottom: line("medium") };
+    c.alignment = { vertical: "middle", horizontal: i === 1 ? "left" : "center", indent: i === 1 ? 1 : 0 };
+  });
+  r++;
+  sections.forEach((sec, i) => {
+    if (i === TOC_FIRST || (i > TOC_FIRST && (i - TOC_FIRST) % TOC_NEXT === 0)) ws.getRow(r - 1).addPageBreak();
+    const row = ws.getRow(r);
+    row.height = 30;
+    const [a, b] = start.get(sec.cat);
+    row.getCell(1).value = sec.cat;
+    row.getCell(2).value = `${sec.n}件`;
+    row.getCell(3).value = a === b ? `${a}` : `${a} 〜 ${b}`;
+    row.getCell(1).font = { name: font.name, size: 16, bold: true };
+    row.getCell(2).font = { name: font.name, size: 15 };
+    row.getCell(3).font = { name: font.name, size: 16, bold: true };
+    for (let k = 1; k <= 3; k++) {
+      row.getCell(k).border = { bottom: { style: "thin", color: { argb: "FF808080" } } };
+      row.getCell(k).alignment = { vertical: "middle", horizontal: k === 1 ? "left" : "center", indent: k === 1 ? 1 : 0 };
+    }
+    r++;
+  });
+  // 目次が複数ページになるとき（分類がとても多いとき）は、ここで区切る
+  const brk = () => {
+    ws.getRow(r - 1).addPageBreak();
+  };
+  // --- 各分類 ---
+  for (const sec of sections) {
+    sec.pages.forEach((blocks, pi) => {
+      brk();
+      const of = sec.pages.length;
+      merged(r++, `${sec.cat}　${of > 1 ? `（${pi + 1} / ${of}）` : ""}`, {
+        font: { name: font.name, size: 20, bold: true, color: { argb: "FFFFFFFF" } },
+        fill: { type: "pattern", pattern: "solid", fgColor: { argb: DK } },
+        height: 40,
+        indent: 1,
+      });
+      for (const b of blocks) {
+        const o = b.o;
+        const hr = ws.getRow(r++);
+        hr.height = b.head;
+        const vals = [o.code, o.name, o.cap || ""];
+        vals.forEach((v, i) => {
+          const c = hr.getCell(i + 1);
+          c.value = v;
+          c.font = i === 0 ? { name: "Consolas", size: 15, bold: true } : { name: font.name, size: 14, bold: i === 1 };
+          c.fill = grey;
+          c.border = { top: line("medium") };
+          c.alignment = { vertical: "middle", wrapText: true, horizontal: i === 2 ? "right" : "left", indent: i === 0 ? 1 : 0 };
+        });
+        for (const u of b.uses) {
+          ws.mergeCells(r, 1, r, 3);
+          const c = ws.getRow(r).getCell(1);
+          c.value = u.t;
+          c.font = { name: font.name, size: 14 };
+          c.alignment = { vertical: "top", wrapText: true, indent: 1 };
+          ws.getRow(r).height = u.h;
+          r++;
+        }
+        ws.getRow(r++).height = 8; // 商品と商品のあき
+      }
+    });
+  }
+  if (protect) ws.sheetProtection = { sheet: true };
+}
+
 // 既存のブックに同じ名前のシートがあれば「検索2」のように避ける
 export function freeName(wb, base) {
   let n = base,
@@ -251,6 +446,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const nameS = opt.names?.search || freeName(wb, `${K.title}検索`);
   const QS = quote(nameS);
   const nameG = opt.names?.guide || freeName(wb, "使い方");
+  const nameP = opt.names?.print || freeName(wb, `${K.title}印刷用`);
   const nameD = opt.names?.data || freeName(wb, `${K.title}データ`);
   const QD = quote(nameD);
   const N = items.length;
@@ -268,6 +464,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     views: [{ state: "frozen", ySplit: 6, showGridLines: false, tabSelected: true }],
   });
   const wg = wb.addWorksheet(nameG, { views: [{ showGridLines: false }] });
+  const wp = wb.addWorksheet(nameP);
   const wd = wb.addWorksheet(nameD, { views: [{ state: "frozen", ySplit: 1 }] });
 
   // ---- データ ----
@@ -417,7 +614,9 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getColumn(11).hidden = true;
   ws.getColumn(12).hidden = true;
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
-  fillGuide(wg, { font, protect: !!opt.protect, K });
+  fillGuide(wg, { font, protect: !!opt.protect, K, nameP });
+  const dt = new Date();
+  fillPrint(wp, items, { font, protect: !!opt.protect, K, date: `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日` });
   // 検索シートから使い方へ飛べるリンク
   ws.getCell("F1").value = { formula: `HYPERLINK("#"&"'${nameG.replace(/'/g, "''")}'!A1","使い方はこちら →")`, result: "使い方はこちら →" };
   ws.getCell("F1").font = { ...font, color: { argb: "FF1A73E8" }, underline: true };
@@ -428,5 +627,5 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   }
   const idx = wb.worksheets.indexOf(ws);
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: idx, visibility: "visible" }];
-  return { wb, nameS, nameG, nameD };
+  return { wb, nameS, nameG, nameP, nameD };
 }
