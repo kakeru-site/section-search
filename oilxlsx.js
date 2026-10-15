@@ -316,6 +316,8 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getCell("C3").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
   ws.getCell("A5").value = "↑ 黄色い欄に入れて Enter（品番・名称・用途・容量。空白で区切ると絞り込み。ひらがなもOK）";
   ws.getCell("A5").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
+  ws.getCell("A5").alignment = { vertical: "middle" };
+  ws.getRow(5).height = 20;
   ws.getCell("A4").value = {
     result: `${N} 件ヒット（全 ${N} 件）${N > MAXROWS ? `　※先頭の${MAXROWS}件まで表示。語を足して絞ってください` : ""}`,
     formula: `SUM(${QD}!$H$2:$H$${LAST})&" 件ヒット（全 "&COUNTA(${QD}!$A$2:$A$${LAST})&" 件）"&IF(SUM(${QD}!$H$2:$H$${LAST})>${MAXROWS},"　※先頭の${MAXROWS}件まで表示。語を足して絞ってください","")`,
