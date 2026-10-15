@@ -40,26 +40,20 @@ const dispW = (s) => {
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // どの商品も途切れず見えるように、列の幅と1行の高さを決める
 // （検索の結果は数式なので、行の高さが自動では変わらない。どの商品が出ても足りる高さに揃える）
-// 一覧に出す用途は、長いと最初の部分だけにする（全文は「詳細」の欄に出す）
-export const USE_MAX = 84;
-export const shortUse = (s) => {
-  const t = String(s ?? "");
-  return t.length > USE_MAX ? t.slice(0, USE_MAX) + "…" : t;
-};
 export function layoutFor(items) {
-  const val = (o, f) => (f === "use" ? shortUse(o.use) : o[f]);
+  const val = (o, f) => o[f];
   const maxW = (f) => Math.max(0, ...items.map((o) => dispW(val(o, f))));
   const w = {
     code: clamp(Math.ceil(maxW("code") * 1.15) + 2, 14, 28),
     name: clamp(Math.ceil(maxW("name") * 1.1) + 2, 24, 56),
     cap: clamp(Math.ceil(maxW("cap") * 1.15) + 2, 8, 16),
-    use: clamp(Math.ceil(maxW("use") * 1.1) + 2, 24, 62),
+    use: clamp(Math.ceil(maxW("use") * 1.1) + 2, 24, 110),
     cat: clamp(Math.ceil(maxW("cat") * 1.15) + 2, 12, 26),
   };
   let lines = 1;
   for (const o of items)
     for (const f of Object.keys(w)) lines = Math.max(lines, Math.ceil((dispW(val(o, f)) * 1.1) / (w[f] - 1)));
-  lines = Math.min(lines, 6);
+  lines = Math.min(lines, 21); // Excelの行の高さは409ptまで
   return { w, lines, height: Math.max(24, lines * 19 + 4) };
 }
 
@@ -69,11 +63,10 @@ const GW = { b: 7, c: 28, d: 62 }; // 列の幅（B・C・D）
 const guideBlocks = (protect) => [
   ["title", "オイル・ケミカル検索の使い方"],
   ["sub", "お客さんに聞かれたとき、ぱっと探してぱっと答えるためのシートです。むずかしくないので、さくっと読んでみてください！"],
-  ["h", "まずはこれだけ（4ステップ）"],
+  ["h", "まずはこれだけ（3ステップ）"],
   ["step", "①", "「検索」シートの黄色いところに、探したい言葉を入れて Enter！（品番でも名前でも用途でもOK）"],
   ["step", "②", "下に結果がズラッと出ます。多すぎるときは「分類」のプルダウンで絞ってください"],
   ["step", "③", "もっと調べたいときは、右端の「Google」を押せば検索ページが開きます"],
-  ["step", "④", "一覧の「用途」は、長いと最初の部分だけ出ます。全部読みたいときは、一覧の上の「詳細」の欄に、その商品の No を入れて Enter！（全文がその下に出ます）"],
   ["h", "検索のコツ"],
   ["th", "入れる言葉", "こうなる"],
   ["tr", "atf", "「ATF」が入っている商品が出ます。大文字・小文字はどっちでもOK！"],
@@ -226,7 +219,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   // 既存のシートが選ばれたままだと、まとめて編集されてしまうので外す
   for (const w of wb.worksheets) w.views = (w.views || []).map((v) => ({ ...v, tabSelected: false }));
   const ws = wb.addWorksheet(nameS, {
-    views: [{ state: "frozen", ySplit: 5, showGridLines: false, tabSelected: true }],
+    views: [{ state: "frozen", ySplit: 6, showGridLines: false, tabSelected: true }],
   });
   const wg = wb.addWorksheet(nameG, { views: [{ showGridLines: false }] });
   const wd = wb.addWorksheet(nameD, { views: [{ state: "frozen", ySplit: 1 }] });
@@ -330,41 +323,8 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getCell("K4").value = { formula: `IFERROR(MID($L$5,FIND(" ",$L$5)+1,200),"")`, result: "" };
   ws.getCell("K5").value = { formula: `LOWER(TRIM(SUBSTITUTE($B$2,"　"," ")))`, result: "" };
   ws.getCell("L5").value = { formula: `IFERROR(MID($K$5,FIND(" ",$K$5)+1,200),"")`, result: "" };
-  // ---- 詳細パネル：一覧のNoを入れると、その商品の用途の全文が出る ----
-  const FIRST = 11; // 一覧の最初の行（見出しは10行目）
-  const o0 = items[0];
-  const panelW = L.w.code + L.w.name + L.w.cap + L.w.use + L.w.cat + 10;
-  const maxUse = Math.max(0, ...items.map((o) => dispW(o.use)));
-  const panelLines = Math.max(1, Math.ceil((maxUse * 1.12) / (panelW - 3)));
-  ws.getCell("A6").value = "詳細";
-  ws.getCell("A6").font = { ...font, bold: true };
-  ws.getCell("B6").value = 1;
-  ws.getCell("B6").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3C4" } };
-  ws.getCell("B6").font = { ...font, size: 13, bold: true };
-  ws.getCell("B6").border = box;
-  ws.getCell("B6").alignment = { horizontal: "center", vertical: "middle" };
-  ws.getRow(6).height = 24;
-  ws.getCell("C6").value = "← 下の一覧の No を入れて Enter（用途が長いとき、全文がこの下に出ます）";
-  ws.getCell("C6").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
-  ws.getCell("K6").value = { formula: `IFERROR(MATCH($B$6,${QD}!$I$1:$I$${LAST},0),"")`, result: o0 ? 2 : "" };
-  const dat = (col) => `INDEX(${QD}!$${col}$1:$${col}$${LAST},$K$6)`;
-  ws.mergeCells("B7:G7");
-  ws.getCell("B7").value = {
-    formula: `IF($K$6="","",${dat("B")}&"　"&${dat("A")}&"　"&${dat("C")}&"　"&${dat("E")})`,
-    result: o0 ? `${o0.name}　${o0.code}　${o0.cap || ""}　${o0.cat || ""}` : "",
-  };
-  ws.getCell("B7").font = { ...font, size: 12, bold: true };
-  ws.getCell("B7").alignment = { vertical: "middle", wrapText: true };
-  ws.getRow(7).height = 28;
-  ws.mergeCells("B8:G8");
-  ws.getCell("B8").value = { formula: `IF($K$6="","",${dat("D")}&"")`, result: o0 ? String(o0.use || "") : "" };
-  ws.getCell("B8").font = font;
-  ws.getCell("B8").alignment = { vertical: "top", wrapText: true };
-  ws.getCell("B8").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F7F7" } };
-  for (const a of ["B8", "C8", "D8", "E8", "F8", "G8"]) ws.getCell(a).border = box;
-  ws.getRow(8).height = Math.min(409, Math.max(34, panelLines * 19 + 12));
-  ws.getRow(9).height = 8;
-  const H = ["No", "品番", "名称", "容量", "用途（概要）", "分類", "Google"];
+  const FIRST = 7; // 一覧の最初の行（見出しは6行目）
+  const H = ["No", "品番", "名称", "容量", "用途", "分類", "Google"];
   H.forEach((h, i) => {
     const c = ws.getRow(FIRST - 1).getCell(i + 1);
     c.value = h;
@@ -385,10 +345,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     row.getCell(2).value = at("A", o?.code);
     row.getCell(3).value = at("B", o?.name);
     row.getCell(4).value = at("C", o?.cap);
-    row.getCell(5).value = {
-      formula: `IF($I${r}="","",IF(LEN(INDEX(${QD}!$D$1:$D$${LAST},$I${r}))>${USE_MAX},LEFT(INDEX(${QD}!$D$1:$D$${LAST},$I${r}),${USE_MAX})&"…",INDEX(${QD}!$D$1:$D$${LAST},$I${r})&""))`,
-      result: o ? shortUse(o.use) : "",
-    };
+    row.getCell(5).value = at("D", o?.use);
     row.getCell(6).value = at("E", o?.cat);
     row.getCell(7).value = {
       formula: `IF($I${r}="","",HYPERLINK("https://www.google.com/search?q="&_xlfn.ENCODEURL($B${r}&" "&$C${r}),"Google"))`,
@@ -413,7 +370,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getCell("F1").font = { ...font, color: { argb: "FF1A73E8" }, underline: true };
   if (opt.protect) {
     // 入力できるのは、黄色い検索欄とプルダウンだけ（パスワードなし。「校閲→シート保護の解除」で外せる）
-    for (const a of ["B2", "C2", "D2", "E2", "B3", "B6"]) ws.getCell(a).protection = { locked: false };
+    for (const a of ["B2", "C2", "D2", "E2", "B3"]) ws.getCell(a).protection = { locked: false };
     ws.sheetProtection = { sheet: true };
   }
   const idx = wb.worksheets.indexOf(ws);
