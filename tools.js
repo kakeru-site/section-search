@@ -1,9 +1,9 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014z";
-import { yomiText } from "./yomi.js?v=20261014z";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014z";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014z";
+import * as S from "./search.js?v=20261015a";
+import { yomiText } from "./yomi.js?v=20261015a";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261015a";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261015a";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {

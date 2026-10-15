@@ -1,5 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261014z";
+import { yomiText } from "./yomi.js?v=20261015a";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -351,7 +351,11 @@ function fillPrint(ws, items, { font, protect, K, date }) {
     "② ［ファイル］→［印刷］の「設定」で、ページ指定の「から」「まで」に、そのページ番号を入れる",
     "③ 全部印刷するときは、ページ指定をしないで、そのまま印刷する",
   ];
-  for (const t of howTo) merged(r++, t, { font: { name: font.name, size: 14 }, height: 30, indent: 1 });
+  for (const t of howTo) {
+    // 長い行は折り返して2行以上になるので、文字の量に合わせて高さを決める
+    const n = Math.max(1, Math.ceil((dispW(t) * 1.1) / Math.floor((total - 24) / 7.1)));
+    merged(r++, t, { font: { name: font.name, size: 14 }, height: Math.max(30, n * 21 + 10), indent: 1 });
+  }
   r++;
   ws.getRow(r - 1).height = 12;
   const hdr = ws.getRow(r);
