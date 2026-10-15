@@ -1,8 +1,8 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261014t";
-import { buildOilWorkbook } from "./oilxlsx.js?v=20261014t";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014t";
+import * as S from "./search.js?v=20261014u";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261014u";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261014u";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -119,7 +119,7 @@ const T = Object.assign(
     },
     cost: { mode: "ex", rows: blank(20, () => ({ p: "", q: "" })) },
     pad: { pad: "", padCost: "", rotorCost: "", rotorList: "" },
-    bulb: { q: "", shape: "", volt: "" },
+    bulb: { q: "", shape: "", volt: "", protect: true },
     oil: { q: "", cat: "", protect: true },
   },
   load() || {},
@@ -646,7 +646,7 @@ const shapeKey = (s) =>
     .toUpperCase()
     .replace(/\s/g, "");
 // お客さんの呼び方 ⇔ カタログの書き方
-const BULB_SYN = [
+const BULB_SYN_RAW = [
   "ウインカー=方向指示=ターン",
   "ブレーキ=制動=ストップ",
   "テール=尾灯",
@@ -656,9 +656,38 @@ const BULB_SYN = [
   "ポジション=車幅",
   "ヘッドライト=前照灯=ヘッド",
   "フォグ=霧灯",
-].map((l) => l.split("=").map(S.norm));
+].map((l) => l.split("="));
+const BULB_SYN = BULB_SYN_RAW.map((g) => g.map(S.norm));
 let bulbIdx = null,
   bulbSrc = null;
+let bulbLimit = 30;
+const bulbQuery = (b) => `${b.code} ${b.shape || ""} ${prettySpec(b.spec)}`.replace(/\s+/g, " ").trim();
+// 写真本体は bulbPhoto/{id}、bulbs/{id}/photo には更新時刻だけ
+const bulbPhotoCache = new Map();
+function bulbPhoto(id) {
+  const o = C.st.bulbs[id];
+  if (!o?.photo) return Promise.resolve(null);
+  const hit = bulbPhotoCache.get(id);
+  if (hit && hit.v === o.photo) return hit.p;
+  const p = C.store.get(`bulbPhoto/${id}`).catch(() => null);
+  bulbPhotoCache.set(id, { v: o.photo, p });
+  return p;
+}
+function fillBulbPhotos(root) {
+  $$("img[data-bphoto]", root).forEach(async (img) => {
+    const u = await bulbPhoto(img.dataset.bphoto);
+    if (u) img.src = u;
+    else img.closest(".oph")?.remove();
+  });
+}
+async function bulbView(id) {
+  const o = C.st.bulbs[id];
+  const u = await bulbPhoto(id);
+  if (!o || !u) return;
+  await C.modal(`<h3>${esc(o.shape || "")} ${esc(prettySpec(o.spec))} <span class="mono" style="color:var(--mu);font-size:14px">${esc(o.code)}</span></h3>
+    <img src="${u}" alt="" style="width:100%;border-radius:8px;display:block">
+    <div class="modal-foot"><button class="btn pri" data-m="cancel">閉じる</button></div>`);
+}
 function bulbList() {
   const raw = C.st.bulbs || {};
   if (raw === bulbSrc && bulbIdx) return bulbIdx;
@@ -677,10 +706,12 @@ function renderBulb() {
   box.innerHTML = `<label class="search">${C.IC.search}<input id="bq" type="search" autocomplete="off" placeholder="形状・規格・用途・品番（例：t10、h4、ウインカー、24v）" value="${esc(T.bulb.q)}"><span class="cnt" id="bcnt"></span></label>
     <div class="chips" id="bchips"></div>
     <div id="blist"></div>
-    <div class="tacts"><input type="file" id="fbulb" accept=".xlsx,.xlsm,.xls,.json" hidden><button class="btn" data-bpick="1">Excelから取り込み</button><button class="btn pri" data-bedit="">＋ バルブを追加</button></div>`;
+    <div class="tacts"><input type="file" id="fbulb" accept=".xlsx,.xlsm,.xls,.json" hidden><button class="btn" data-bpick="1">Excelから取り込み</button><button class="btn" data-bcats="1">分類を整理</button><button class="btn" data-bxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><button class="chip ${T.bulb.protect !== false ? "on" : ""}" data-bprot="1" title="書き出すExcelの検索・使い方シートに保護をかける（パスワードなし）">シート保護 ${T.bulb.protect !== false ? "ON" : "OFF"}</button><input type="file" id="fbulbbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-bxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-bedit="">＋ 追加</button></div>`;
+  bulbLimit = 30;
   const q = $("#bq", box);
   q.addEventListener("input", () => {
     T.bulb.q = q.value;
+    bulbLimit = 30;
     save();
     renderBulbList();
   });
@@ -693,22 +724,42 @@ function renderBulb() {
   $("#fbulb", box).addEventListener("change", (e) =>
     importBulbs(e.target.files[0]).finally(() => (e.target.value = "")),
   );
+  $("#fbulbbase", box).addEventListener("change", (e) =>
+    exportIntoBase(e.target.files[0], "bulb").finally(() => (e.target.value = "")),
+  );
   box.addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (!b) return;
     const d = b.dataset;
+    const o = d.bid ? C.st.bulbs[d.bid] && { id: d.bid, ...C.st.bulbs[d.bid] } : null;
     if (d.bpick) $("#fbulb").click();
     else if (d.bedit !== undefined) bulbForm(d.bedit || null);
-    else if (d.bshape !== undefined) {
+    else if (d.bcats) catsForm("bulb");
+    else if (d.bxlsx) exportXlsx("bulb");
+    else if (d.bxbase) $("#fbulbbase").click();
+    else if (d.bprot) {
+      T.bulb.protect = T.bulb.protect === false;
+      save();
+      b.classList.toggle("on", T.bulb.protect);
+      b.textContent = `シート保護 ${T.bulb.protect ? "ON" : "OFF"}`;
+    } else if (d.bshape !== undefined) {
       T.bulb.shape = T.bulb.shape === d.bshape ? "" : d.bshape;
+      bulbLimit = 30;
       save();
       renderBulbList();
     } else if (d.bvolt !== undefined) {
       T.bulb.volt = T.bulb.volt === d.bvolt ? "" : d.bvolt;
+      bulbLimit = 30;
       save();
       renderBulbList();
+    } else if (d.bmore) {
+      bulbLimit += 60;
+      renderBulbList();
     } else if (d.bcopy) C.copyText(d.bcopy).then(() => C.toast(`${d.bcopy} をコピーしました`));
-    else if (d.bgoogle) C.googleOpen(d.bgoogle);
+    else if (o && d.bact === "google") C.googleOpen(bulbQuery(o));
+    else if (o && d.bact === "memo") C.openMemoForBulb(o);
+    else if (o && d.bact === "edit") bulbForm(o.id);
+    else if (o && d.bact === "view") bulbView(o.id);
   });
   renderBulbList();
   if (matchMedia("(hover: hover)").matches) setTimeout(() => q.focus(), 0);
@@ -757,32 +808,77 @@ function renderBulbList() {
       a._sh.localeCompare(b._sh, "ja", { numeric: true }),
   );
   $("#bcnt").textContent = `${hits.length} / ${list.length}件`;
+  const shown = hits.slice(0, bulbLimit);
+  const memoCnt = {};
+  for (const m of Object.values(C.st.memos || {})) if (m.bulbId) memoCnt[m.bulbId] = (memoCnt[m.bulbId] || 0) + 1;
   box.innerHTML =
-    hits
+    shown
       .map(
-        (b) => `<div class="brow">
-      <div class="bmain"><div class="bt1"><span class="shape">${esc(b.shape || "?")}</span><b>${esc(prettySpec(b.spec))}</b><span class="cat">${esc(b.cat)}</span>${b.note ? `<span class="hot">${b.note.includes("一番") ? "★" : ""}${esc(b.note)}</span>` : ""}</div>
-        <div class="buse">${esc(b.use)}</div></div>
-      <div class="bside"><button class="bcode" data-bcopy="${esc(b.code)}" title="品番をコピー">${esc(b.code)}</button><small>${b.unit ? `${esc(b.unit)}個入` : ""}</small>
-        <div class="bbtn"><button class="btn sm" data-bgoogle="${esc(b.code)}">Google</button><button class="btn sm" data-bedit="${esc(b.id)}">編集</button></div></div></div>`,
+        (b) => `<div class="orow">
+      ${b.photo ? `<button class="oph" data-bact="view" data-bid="${esc(b.id)}" title="写真を大きく見る"><img data-bphoto="${esc(b.id)}" alt=""></button>` : ""}
+      <div class="omain">
+        <div class="ot1"><span class="shape">${esc(b.shape || "?")}</span><b class="oname">${esc(prettySpec(b.spec))}</b>${b.unit ? `<span class="ocap">${esc(b.unit)}個入</span>` : ""}${b.cat ? `<span class="cat">${esc(b.cat)}</span>` : ""}${b.note ? `<span class="hot">${b.note.includes("一番") ? "★" : ""}${esc(b.note)}</span>` : ""}</div>
+        <div class="ot2"><button class="bcode" data-bcopy="${esc(b.code)}" title="品番をコピー">${esc(b.code)}</button></div>
+        ${b.use ? `<div class="buse">${esc(b.use)}</div>` : ""}
+        <div class="oacts"><button class="btn" data-bact="google" data-bid="${esc(b.id)}" title="品番と形状・規格でGoogle検索">${C.IC.search}Google</button><button class="btn ${memoCnt[b.id] ? "has" : ""}" data-bact="memo" data-bid="${esc(b.id)}">${C.IC.note}メモ${memoCnt[b.id] ? `<span class="cnt">${memoCnt[b.id]}</span>` : ""}</button><button class="btn sm" data-bact="edit" data-bid="${esc(b.id)}">編集</button></div>
+      </div></div>`,
       )
-      .join("") || '<p class="empty">該当なし</p>';
+      .join("") +
+    (hits.length > shown.length
+      ? `<button class="btn more-btn" data-bmore="1">さらに表示（残り ${hits.length - shown.length}件）</button>`
+      : "") || '<p class="empty">該当なし</p>';
+  fillBulbPhotos(box);
 }
 async function bulbForm(id) {
-  const b = id ? C.st.bulbs[id] : { spec: "", code: "", cat: "", shape: "", use: "", unit: "", note: "" };
-  if (!b) return;
+  const o = id ? C.st.bulbs[id] : null;
+  if (id && !o) return;
+  const b = o || { spec: "", code: "", cat: "", shape: "", use: "", unit: "", note: "" };
+  let photo = null,
+    changed = false;
   const f = (k, l, extra = "", cls = "") =>
     `<div class="field"><label>${l}</label><input class="inp ${cls}" name="${k}" value="${esc(b[k])}" ${extra}></div>`;
-  const r = await C.modal(`<h3>${id ? "バルブを編集" : "バルブを追加"}</h3><form>
-    <div class="grid2">${f("code", "品番", "required", "mono")}${f("unit", "販売単位（個入）", 'inputmode="numeric"')}</div>
-    <div class="grid2">${f("shape", "形状（T10・H4 など）", "required")}${f("spec", "規格（12V 5W など）")}</div>
-    <div class="grid2">${f("cat", "分類（ウェッジ・シングル球 など）")}${f("note", "メモ（よく出る、など）")}</div>
-    ${f("use", "用途・呼び方")}</form>
-    <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`);
+  const r = await C.modal(
+    `<h3>${id ? "バルブを編集" : "バルブを追加"}</h3><form>
+    <div class="grid2">${f("code", "品番", "required autocomplete=off", "mono")}${f("unit", "販売単位（個入）", 'inputmode="numeric"')}</div>
+    <div class="grid2">${f("shape", "形状（T10・H4 など）", "required autocomplete=off")}${f("spec", "規格（12V 5W など）", "autocomplete=off")}</div>
+    <div class="grid2">${f("cat", "分類（ウェッジ・シングル球 など）", "autocomplete=off")}${f("note", "メモ（よく出る、など）", "autocomplete=off")}</div>
+    ${f("use", "用途・呼び方", "autocomplete=off")}
+    <div class="field"><label>商品の写真（任意）</label><div id="bf-photo"></div></div></form>
+    <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button>${id ? "" : '<button class="btn" data-m="next">保存して次へ</button>'}<button class="btn pri" data-m="ok">保存</button></div>`,
+    {
+      onOpen(bg) {
+        const wrap = $("#bf-photo", bg);
+        const draw = () => {
+          wrap.innerHTML = C.photoBox(photo, "商品の写真（任意）");
+          C.wirePhotoBox($(".kdrop", wrap), (url) => {
+            photo = url;
+            changed = true;
+            draw();
+          });
+        };
+        draw();
+        if (id) bulbPhoto(id).then((u) => !changed && u && ((photo = u), draw()));
+        bg.addEventListener("paste", async (e) => {
+          const file = C.pasteFile(e);
+          if (!file) return;
+          e.preventDefault();
+          try {
+            photo = await C.blobToPhoto(file);
+            changed = true;
+            draw();
+          } catch (err) {
+            C.toast(err.message, true);
+          }
+        });
+      },
+    },
+  );
   if (!r) return;
   if (r.act === "delete") {
     if (!(await C.confirmBox(`${b.code}（${b.shape}）を削除しますか？`, "削除", true))) return;
     await C.store.remove(`bulbs/${id}`);
+    await C.store.remove(`bulbPhoto/${id}`).catch(() => {});
+    bulbPhotoCache.delete(id);
     return C.toast("削除しました");
   }
   const N = (s) =>
@@ -793,9 +889,28 @@ async function bulbForm(id) {
   for (const k of ["code", "shape", "spec", "cat", "use", "note"]) rec[k] = N(r.data[k]);
   rec.code = rec.code.toUpperCase();
   rec.unit = toNum(r.data.unit) ?? "";
-  if (id) await C.store.set(`bulbs/${id}`, rec);
-  else await C.store.push("bulbs", rec);
+  rec.photo = o?.photo ?? null;
+  rec.updatedAt = Date.now();
+  if (!rec.code || !rec.shape) {
+    C.toast("品番と形状を入れてください", true);
+    return bulbForm(id);
+  }
+  if (
+    !id &&
+    bulbList().some((x) => String(x.code).toUpperCase() === rec.code) &&
+    !(await C.confirmBox(`品番 ${rec.code} はすでに登録されています。\nもうひとつ追加しますか？`, "追加する"))
+  )
+    return;
+  const key = id || C.localKey();
+  if (changed) {
+    rec.photo = photo ? Date.now() : null;
+    if (photo) await C.store.set(`bulbPhoto/${key}`, photo);
+    else await C.store.remove(`bulbPhoto/${key}`).catch(() => {});
+    bulbPhotoCache.delete(key);
+  }
+  await C.store.set(`bulbs/${key}`, rec);
   C.toast("保存しました");
+  if (r.act === "next") bulbForm(null);
 }
 
 // Excel（DBシート＋ロケーションのシート）または bulbs.json
@@ -872,19 +987,33 @@ async function importBulbs(file) {
     "取り込む",
   );
   if (!ok) return;
+  // 同じ品番は、いまの登録（写真・メモとの紐付け）を引き継ぐ
+  const old = new Map(bulbList().map((x) => [String(x.code).toUpperCase(), x]));
   const obj = {};
+  const kept = new Set();
   list.forEach((b) => {
-    obj[C.localKey()] = {
-      code: String(b.code || "").toUpperCase(),
+    const code = String(b.code || "").toUpperCase();
+    const prev = old.get(code);
+    const key = prev && !kept.has(prev.id) ? prev.id : C.localKey();
+    if (prev) kept.add(prev.id);
+    obj[key] = {
+      code,
       spec: b.spec || "",
       cat: b.cat || "",
       shape: b.shape || "",
       use: b.use || "",
       unit: b.unit ?? "",
       note: b.note || "",
+      photo: (key === prev?.id && prev.photo) || null,
+      updatedAt: Date.now(),
     };
   });
   await C.store.set("bulbs", obj);
+  for (const x of old.values())
+    if (!kept.has(x.id) && x.photo) {
+      C.store.remove(`bulbPhoto/${x.id}`).catch(() => {});
+      bulbPhotoCache.delete(x.id);
+    }
   C.toast(`${list.length}件 取り込みました`);
 }
 
@@ -997,7 +1126,7 @@ function renderOil() {
     importOils(e.target.files[0]).finally(() => (e.target.value = "")),
   );
   $("#foilbase", box).addEventListener("change", (e) =>
-    exportIntoBase(e.target.files[0]).finally(() => (e.target.value = "")),
+    exportIntoBase(e.target.files[0], "oil").finally(() => (e.target.value = "")),
   );
   box.addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -1006,8 +1135,8 @@ function renderOil() {
     const o = d.oid ? C.st.oils[d.oid] && { id: d.oid, ...C.st.oils[d.oid] } : null;
     if (d.opick) $("#foil").click();
     else if (d.oedit !== undefined) oilForm(d.oedit || null);
-    else if (d.ocats) oilCatsForm();
-    else if (d.oxlsx) exportOils();
+    else if (d.ocats) catsForm("oil");
+    else if (d.oxlsx) exportXlsx("oil");
     else if (d.oxbase) $("#foilbase").click();
     else if (d.oprot) {
       T.oil.protect = T.oil.protect === false;
@@ -1200,10 +1329,12 @@ async function oilForm(id) {
   if (r.act === "next") oilForm(null);
 }
 // 分類の名前を直す・消す（商品は消えません）
-async function oilCatsForm() {
-  const cats = oilCats();
+async function catsForm(kind = "oil") {
+  const isB = kind === "bulb";
+  const listFn = isB ? bulbList : oilList;
+  const cats = oilCats(listFn());
   if (!cats.length) return C.toast("分類はまだありません。商品の登録時に入力すると増えます");
-  const r = await C.modal(`<h3>分類を整理</h3><p style="margin:0 0 10px;font-size:12px;color:var(--mu);line-height:1.6">名前を直すと、その分類の商品すべてに反映されます。同じ名前にすると1つにまとまります。削除しても商品は残り「未分類」になります。</p><form>
+  const r = await C.modal(`<h3>分類を整理</h3><p style="margin:0 0 10px;font-size:12px;color:var(--mu);line-height:1.6">名前を直すと、その分類の${isB ? "バルブ" : "商品"}すべてに反映されます。同じ名前にすると1つにまとまります。削除しても${isB ? "バルブ" : "商品"}は残り「未分類」になります。</p><form>
     ${cats
       .map(
         (c, i) => `<div class="catrow"><input class="inp" name="r${i}" value="${esc(c.name)}"><small>${c.n}件</small>
@@ -1218,10 +1349,10 @@ async function oilCatsForm() {
     const del = r.data[`d${i}`] === "on";
     const to = del ? "" : oilN(r.data[`r${i}`]);
     if (to === c.name) return;
-    for (const o of oilList()) if (o.cat === c.name) (upd[`${o.id}/cat`] = to), n++;
+    for (const o of listFn()) if (o.cat === c.name) (upd[`${o.id}/cat`] = to), n++;
   });
   if (!n) return;
-  await C.store.update("oils", upd);
+  await C.store.update(isB ? "bulbs" : "oils", upd);
   C.toast("分類を更新しました");
 }
 
@@ -1519,14 +1650,43 @@ function downloadXlsx(buf, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 const oilGroups = () => [...OIL_SYN_RAW, ...(C.st.syn || [])];
-async function exportOils() {
-  if (!oilList().length) return C.toast("書き出す商品がまだありません", true);
+// バルブはExcelの列に合わせる：名称＝形状＋規格（分類）、入数、分類＝形状（プルダウンで絞れる）、用途＋メモ
+function bulbExportItems() {
+  return [...bulbList()]
+    .sort(
+      (a, b) =>
+        String(a.shape || "").localeCompare(String(b.shape || ""), "ja", { numeric: true }) ||
+        (b.note?.includes("一番") ? 1 : 0) - (a.note?.includes("一番") ? 1 : 0) ||
+        String(a.spec).localeCompare(String(b.spec), "ja", { numeric: true }),
+    )
+    .map((b) => ({
+      code: b.code,
+      name: `${b.shape || ""} ${prettySpec(b.spec)}${b.cat ? `（${b.cat}）` : ""}`.trim(),
+      cap: b.unit ? `${b.unit}個入` : "",
+      use: [b.use, b.note ? `【${b.note}】` : ""].filter(Boolean).join(" "),
+      cat: b.shape || "",
+    }));
+}
+// 種類ごとの違い（オイル・ケミカル／バルブ）をまとめる
+const XK = {
+  oil: { list: oilList, items: oilExportItems, groups: oilGroups, opt: () => T.oil },
+  bulb: {
+    list: bulbList,
+    items: bulbExportItems,
+    groups: () => [...BULB_SYN_RAW, ...(C.st.syn || [])],
+    opt: () => T.bulb,
+  },
+};
+async function exportXlsx(kind) {
+  const x = XK[kind];
+  const title = KINDS[kind].title;
+  if (!x.list().length) return C.toast("書き出すデータがまだありません", true);
   try {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
-    const items = oilExportItems();
-    const { wb } = buildOilWorkbook(X, items, oilGroups(), { protect: T.oil.protect !== false });
-    downloadXlsx(await wb.xlsx.writeBuffer(), "オイル・ケミカル検索.xlsx");
+    const items = x.items();
+    const { wb } = buildOilWorkbook(X, items, x.groups(), { protect: x.opt().protect !== false, kind });
+    downloadXlsx(await wb.xlsx.writeBuffer(), `${title}検索.xlsx`);
     C.toast(`${items.length}件 をExcelにしました`);
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);
@@ -1534,9 +1694,11 @@ async function exportOils() {
 }
 // 会社指定のExcelを選ぶ → 内容を確認 → 実行で、そのExcelに検索シートを足して保存
 // 元ファイルの中身には手を触れず、シートだけを差し込む（グラフ・表・図・書式はそのまま）
-async function exportIntoBase(file) {
+async function exportIntoBase(file, kind = "oil") {
   if (!file) return;
-  if (!oilList().length) return C.toast("書き出す商品がまだありません", true);
+  const x = XK[kind];
+  const title = KINDS[kind].title;
+  if (!x.list().length) return C.toast("書き出すデータがまだありません", true);
   const ext = (file.name.match(/\.(xlsx|xlsm)$/i) || [])[1];
   if (!ext)
     return C.toast("対応しているのは .xlsx（.xlsm）です。古い .xls は、Excelで「.xlsx」として保存し直してください", true);
@@ -1548,10 +1710,10 @@ async function exportIntoBase(file) {
   } catch (e) {
     return C.toast("このExcelを開けませんでした：" + e.message, true);
   }
-  const items = oilExportItems();
-  const nameS = uniqueName(base.names, "オイル・ケミカル検索");
+  const items = x.items();
+  const nameS = uniqueName(base.names, `${title}検索`);
   const nameG = uniqueName(base.names, "使い方");
-  const nameD = uniqueName(base.names, "オイル・ケミカルデータ");
+  const nameD = uniqueName(base.names, `${title}データ`);
   const r = await C.modal(`<h3>Excelに検索機能を追加</h3>
     <div class="xlinfo">
       <div><span>ファイル</span><b>${esc(file.name)}</b></div>
@@ -1560,7 +1722,7 @@ async function exportIntoBase(file) {
       ${base.company ? `<div><span>会社名</span><b>${esc(base.company)}</b></div>` : ""}
       <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
       <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameG)}・${esc(nameD)}（${items.length}件）</b></div>
-      <div><span>シート保護</span><b>${T.oil.protect !== false ? "あり（検索・使い方のシート。パスワードなし）" : "なし"}</b></div>
+      <div><span>シート保護</span><b>${x.opt().protect !== false ? "あり（検索・使い方のシート。パスワードなし）" : "なし"}</b></div>
     </div>
     <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容（シート・グラフ・表・書式など）には手を触れず、検索のシートだけを後ろに足します。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
@@ -1568,12 +1730,13 @@ async function exportIntoBase(file) {
   try {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
-    const { wb } = buildOilWorkbook(X, items, oilGroups(), {
+    const { wb } = buildOilWorkbook(X, items, x.groups(), {
       names: { search: nameS, guide: nameG, data: nameD },
-      protect: T.oil.protect !== false,
+      protect: x.opt().protect !== false,
+      kind,
     });
     const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameG, nameD });
-    downloadXlsx(out, `オイル・ケミカル検索.${ext.toLowerCase()}`);
+    downloadXlsx(out, `${title}検索.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);

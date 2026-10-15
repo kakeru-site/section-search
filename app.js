@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261014t";
-import * as S from "./search.js?v=20261014t";
-import * as FID from "./faceid.js?v=20261014t";
-import * as IMG from "./imgtools.js?v=20261014t";
-import * as CAT from "./catalog.js?v=20261014t";
-import * as TOOLS from "./tools.js?v=20261014t";
+import { createStore, DEMO, localKey } from "./store.js?v=20261014u";
+import * as S from "./search.js?v=20261014u";
+import * as FID from "./faceid.js?v=20261014u";
+import * as IMG from "./imgtools.js?v=20261014u";
+import * as CAT from "./catalog.js?v=20261014u";
+import * as TOOLS from "./tools.js?v=20261014u";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -127,6 +127,7 @@ const st = {
   memoPart: null,
   memoKata: null,
   memoOil: null,
+  memoBulb: null,
   // 履歴
   histFilter: "all",
   histQ: "",
@@ -1143,10 +1144,11 @@ function memoMatches(m) {
   if (st.memoPart && m.partId !== st.memoPart) return false;
   if (st.memoKata && m.kataCode !== st.memoKata) return false;
   if (st.memoOil && m.oilId !== st.memoOil) return false;
+  if (st.memoBulb && m.bulbId !== st.memoBulb) return false;
   const q = S.norm(st.memoQ);
   if (
     q &&
-    !S.norm(`${m.title} ${m.body} ${m.partLabel || ""} ${m.oilLabel || ""} ${m.kataCode || ""} ${m.kataName || ""}`).includes(q)
+    !S.norm(`${m.title} ${m.body} ${m.partLabel || ""} ${m.oilLabel || ""} ${m.bulbLabel || ""} ${m.kataCode || ""} ${m.kataName || ""}`).includes(q)
   )
     return false;
   return true;
@@ -1191,7 +1193,8 @@ function renderMemoList() {
       .join("") +
     (st.memoPart ? `<button class="chip secf" data-mpoff="1">部品で絞り込み中 ×</button>` : "") +
     (st.memoKata ? `<button class="chip secf" data-mkoff="1">${esc(st.memoKata)} ×</button>` : "") +
-    (st.memoOil ? `<button class="chip secf" data-mooff="1">オイル・ケミカルで絞り込み中 ×</button>` : "");
+    (st.memoOil ? `<button class="chip secf" data-mooff="1">オイル・ケミカルで絞り込み中 ×</button>` : "") +
+    (st.memoBulb ? `<button class="chip secf" data-mboff="1">バルブで絞り込み中 ×</button>` : "");
   const list = all.filter(memoMatches).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $("#memo-list").innerHTML =
     list
@@ -1200,7 +1203,7 @@ function renderMemoList() {
           m,
         ) => `<button class="mitem ${m.id === st.memoSel ? "on" : ""} ${m.done ? "done" : ""}" data-memo="${esc(m.id)}">
       <div class="mt"><span class="dot"></span><span>${m.kind === "miss" ? '<span class="misstag">ミス</span>' : ""}${esc(m.title || "（無題）")}</span></div>
-      <div class="mm"><span>${fmtWhen(m.updatedAt)}</span>${m.kind === "miss" && m.missType ? `<span>${esc(m.missType)}</span>` : ""}${m.recur ? `<span class="recur">再発 ${m.recur}回</span>` : ""}${m.partLabel ? `<span>🔧 ${esc(m.partLabel)}</span>` : ""}${m.oilLabel ? `<span>🛢 ${esc(m.oilLabel)}</span>` : ""}${m.kataCode ? `<span>🚗 ${esc(m.kataCode)} ${esc(m.kataName || "")}</span>` : ""}</div></button>`,
+      <div class="mm"><span>${fmtWhen(m.updatedAt)}</span>${m.kind === "miss" && m.missType ? `<span>${esc(m.missType)}</span>` : ""}${m.recur ? `<span class="recur">再発 ${m.recur}回</span>` : ""}${m.partLabel ? `<span>🔧 ${esc(m.partLabel)}</span>` : ""}${m.oilLabel ? `<span>🛢 ${esc(m.oilLabel)}</span>` : ""}${m.bulbLabel ? `<span>💡 ${esc(m.bulbLabel)}</span>` : ""}${m.kataCode ? `<span>🚗 ${esc(m.kataCode)} ${esc(m.kataName || "")}</span>` : ""}</div></button>`,
       )
       .join("") ||
     `<p class="empty">${st.memoFilter === "open" ? "未解決のメモはありません 👍" : st.memoFilter === "miss" ? "ミス記録はありません" : "メモはありません"}</p>`;
@@ -1232,7 +1235,8 @@ function renderMemoEditor() {
       ${m.partId ? `<button class="ltag" data-q="${esc(part ? part.name : "")}" title="セクション検索で開く">🔧 <b>${esc(part ? part.sec : "")}</b>${esc(part ? `${part.code} ${part.name}` : m.partLabel || "（削除された部品）")}</button><button class="x" data-unlink="part" title="紐付けを外す">×</button>` : ""}
       ${m.kataCode ? `<button class="ltag" data-kq="${esc(m.kataCode)}">🚗 <b>${esc(m.kataCode)}</b>${esc(st.kata[m.kataCode]?.name || m.kataName || "")}</button><button class="x" data-unlink="kata" title="紐付けを外す">×</button>` : ""}
       ${m.oilId ? `<span class="ltag">🛢 ${esc(st.oils[m.oilId] ? `${st.oils[m.oilId].code} ${st.oils[m.oilId].name}` : m.oilLabel || "（削除された商品）")}</span><button class="x" data-unlink="oil" title="紐付けを外す">×</button>` : ""}
-      ${!m.partId && !m.kataCode && !m.oilId ? '<span style="color:var(--mu2)">なし（部品の「メモ」ボタンや型式画面から作ると自動で紐付きます）</span>' : ""}
+      ${m.bulbId ? `<span class="ltag">💡 ${esc(st.bulbs[m.bulbId] ? `${st.bulbs[m.bulbId].code} ${st.bulbs[m.bulbId].shape || ""} ${st.bulbs[m.bulbId].spec || ""}` : m.bulbLabel || "（削除されたバルブ）")}</span><button class="x" data-unlink="bulb" title="紐付けを外す">×</button>` : ""}
+      ${!m.partId && !m.kataCode && !m.oilId && !m.bulbId ? '<span style="color:var(--mu2)">なし（部品の「メモ」ボタンや型式画面から作ると自動で紐付きます）</span>' : ""}
     </div>
     <textarea class="inp" id="me-body" rows="${miss ? 8 : 14}" placeholder="${miss ? "詳細・正しい答え など（任意）" : "疑問点・調べたこと・答え など"}">${esc(m.body)}</textarea>
     <div class="ed-foot"><span class="meta" id="me-meta">作成 ${fmtWhen(m.createdAt)} ／ 更新 ${fmtWhen(m.updatedAt)}</span>
@@ -1297,6 +1301,7 @@ async function openMemoForPart(p) {
   st.memoPart = ms.length > 1 ? p.id : null;
   st.memoKata = null;
   st.memoOil = null;
+  st.memoBulb = null;
   st.memoQ = "";
   go("memo");
 }
@@ -1309,6 +1314,22 @@ async function openMemoForOil(o) {
   st.memoSel = ms[0].id;
   st.memoFilter = "all";
   st.memoOil = ms.length > 1 ? o.id : null;
+  st.memoBulb = null;
+  st.memoPart = null;
+  st.memoKata = null;
+  st.memoQ = "";
+  go("memo");
+}
+async function openMemoForBulb(b) {
+  const label = `${b.code} ${b.shape || ""} ${b.spec || ""}`.replace(/\s+/g, " ").trim();
+  const ms = vals(st.memos)
+    .filter((m) => m.bulbId === b.id)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!ms.length) return newMemo({ title: `${b.shape || b.code}について`, bulbId: b.id, bulbLabel: label });
+  st.memoSel = ms[0].id;
+  st.memoFilter = "all";
+  st.memoBulb = ms.length > 1 ? b.id : null;
+  st.memoOil = null;
   st.memoPart = null;
   st.memoKata = null;
   st.memoQ = "";
@@ -1324,6 +1345,7 @@ async function openMemoForKata(code) {
   st.memoKata = ms.length > 1 ? code : null;
   st.memoPart = null;
   st.memoOil = null;
+  st.memoBulb = null;
   st.memoQ = "";
   go("memo");
 }
@@ -1622,11 +1644,13 @@ function strip(o) {
 async function saveBackup() {
   let imageData = {},
     kataPhotos = {},
-    oilPhotos = {};
+    oilPhotos = {},
+    bulbPhotos = {};
   try {
     imageData = (await store.get("imageData")) || {};
     kataPhotos = (await store.get("kataPhoto")) || {};
     oilPhotos = (await store.get("oilPhoto")) || {};
+    bulbPhotos = (await store.get("bulbPhoto")) || {};
   } catch (e) {
     toast("画像本体を読めなかったので、画像は一覧だけ保存します", true);
   }
@@ -1645,6 +1669,8 @@ async function saveBackup() {
         kataPhoto: kataPhotos,
         oils: st.oils,
         oilPhoto: oilPhotos,
+        bulbs: st.bulbs,
+        bulbPhoto: bulbPhotos,
         catalog: st.catalog,
       },
       null,
@@ -1690,6 +1716,7 @@ async function restoreBackup(file) {
       imageData: j.imageData || null,
       kataPhoto: j.kataPhoto || null,
       ...(j.oils ? { oils: j.oils, oilPhoto: j.oilPhoto || null } : {}),
+      ...(j.bulbs ? { bulbs: j.bulbs, bulbPhoto: j.bulbPhoto || null } : {}),
       ...(j.catalog ? { catalog: j.catalog, catalogMeta: { version: Date.now() } } : {}),
     });
     toast("復元しました");
@@ -2907,6 +2934,10 @@ document.addEventListener("click", async (e) => {
     st.memoOil = null;
     return renderMemoList();
   }
+  if (d.mboff) {
+    st.memoBulb = null;
+    return renderMemoList();
+  }
   if (d.delmemo) {
     if (await confirmBox("このメモを削除しますか？", "削除", true)) {
       await store.remove(`memos/${d.delmemo}`);
@@ -2926,7 +2957,9 @@ document.addEventListener("click", async (e) => {
         ? { partId: null, partLabel: null }
         : d.unlink === "oil"
           ? { oilId: null, oilLabel: null }
-          : { kataCode: null, kataName: null },
+          : d.unlink === "bulb"
+            ? { bulbId: null, bulbLabel: null }
+            : { kataCode: null, kataName: null },
     );
     return renderMemoEditor();
   }
@@ -3048,5 +3081,6 @@ TOOLS.setup({
   pasteFile,
   blobToPhoto,
   openMemoForOil,
+  openMemoForBulb,
 });
 boot();
