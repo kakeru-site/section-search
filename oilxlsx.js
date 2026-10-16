@@ -1,5 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261015f";
+import { yomiText } from "./yomi.js?v=20261016a";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -44,6 +44,20 @@ export const KINDS = {
       ["オイル 4l", "空白で区切ると、両方入っているものだけ出ます（3つまで）"],
       ["もれ", "ひらがな・カタカナでもOK。「漏れ」のような漢字の言葉も出ます（読みが入っている言葉だけ。出ないときは漢字で入れてください）"],
       ["0w20", "ハイフンなしでも「0W-20」が出ます"],
+    ],
+  },
+  sph: {
+    title: "スフィアライト",
+    item: "商品",
+    nameH: "商品名",
+    capH: "明るさ・色温度",
+    catH: "種類",
+    capEx: "明るさ・色温度（例：6000lm／6000K）",
+    eg: [
+      ["6000k", "「6000K」の商品が出ます。大文字・小文字はどっちでもOK！"],
+      ["h4 6000k", "空白で区切ると、両方入っているものだけ出ます（3つまで）"],
+      ["slrzh4a060", "括弧の中の市販品番（SLRZH4A060など）でも探せます。ハイフンなしでもOK"],
+      ["ふぉぐ", "ひらがなでもOK。「フォグ」の商品が出ます"],
     ],
   },
   bulb: {

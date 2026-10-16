@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261015f";
-import * as S from "./search.js?v=20261015f";
-import * as FID from "./faceid.js?v=20261015f";
-import * as IMG from "./imgtools.js?v=20261015f";
-import * as CAT from "./catalog.js?v=20261015f";
-import * as TOOLS from "./tools.js?v=20261015f";
+import { createStore, DEMO, localKey } from "./store.js?v=20261016a";
+import * as S from "./search.js?v=20261016a";
+import * as FID from "./faceid.js?v=20261016a";
+import * as IMG from "./imgtools.js?v=20261016a";
+import * as CAT from "./catalog.js?v=20261016a";
+import * as TOOLS from "./tools.js?v=20261016a";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -82,6 +82,7 @@ const st = {
   kata: {},
   memos: {},
   oils: {},
+  spheres: {},
   history: {},
   settings: {},
   stats: {},
@@ -128,6 +129,7 @@ const st = {
   memoKata: null,
   memoOil: null,
   memoBulb: null,
+  memoSph: null,
   // 履歴
   histFilter: "all",
   histQ: "",
@@ -356,6 +358,7 @@ function startData() {
   sub("kata", "kata");
   sub("memos", "memos");
   sub("oils", "oils");
+  sub("spheres", "spheres");
   sub("history", "history");
   sub("settings", "settings", () => {
     st.syn = S.parseSynonyms(setting("synonyms", S.DEFAULT_SYNONYMS));
@@ -1145,10 +1148,11 @@ function memoMatches(m) {
   if (st.memoKata && m.kataCode !== st.memoKata) return false;
   if (st.memoOil && m.oilId !== st.memoOil) return false;
   if (st.memoBulb && m.bulbId !== st.memoBulb) return false;
+  if (st.memoSph && m.sphereId !== st.memoSph) return false;
   const q = S.norm(st.memoQ);
   if (
     q &&
-    !S.norm(`${m.title} ${m.body} ${m.partLabel || ""} ${m.oilLabel || ""} ${m.bulbLabel || ""} ${m.kataCode || ""} ${m.kataName || ""}`).includes(q)
+    !S.norm(`${m.title} ${m.body} ${m.partLabel || ""} ${m.oilLabel || ""} ${m.bulbLabel || ""} ${m.sphereLabel || ""} ${m.kataCode || ""} ${m.kataName || ""}`).includes(q)
   )
     return false;
   return true;
@@ -1194,7 +1198,8 @@ function renderMemoList() {
     (st.memoPart ? `<button class="chip secf" data-mpoff="1">部品で絞り込み中 ×</button>` : "") +
     (st.memoKata ? `<button class="chip secf" data-mkoff="1">${esc(st.memoKata)} ×</button>` : "") +
     (st.memoOil ? `<button class="chip secf" data-mooff="1">オイル・ケミカルで絞り込み中 ×</button>` : "") +
-    (st.memoBulb ? `<button class="chip secf" data-mboff="1">バルブで絞り込み中 ×</button>` : "");
+    (st.memoBulb ? `<button class="chip secf" data-mboff="1">バルブで絞り込み中 ×</button>` : "") +
+    (st.memoSph ? `<button class="chip secf" data-msoff="1">スフィアライトで絞り込み中 ×</button>` : "");
   const list = all.filter(memoMatches).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   $("#memo-list").innerHTML =
     list
@@ -1203,7 +1208,7 @@ function renderMemoList() {
           m,
         ) => `<button class="mitem ${m.id === st.memoSel ? "on" : ""} ${m.done ? "done" : ""}" data-memo="${esc(m.id)}">
       <div class="mt"><span class="dot"></span><span>${m.kind === "miss" ? '<span class="misstag">ミス</span>' : ""}${esc(m.title || "（無題）")}</span></div>
-      <div class="mm"><span>${fmtWhen(m.updatedAt)}</span>${m.kind === "miss" && m.missType ? `<span>${esc(m.missType)}</span>` : ""}${m.recur ? `<span class="recur">再発 ${m.recur}回</span>` : ""}${m.partLabel ? `<span>🔧 ${esc(m.partLabel)}</span>` : ""}${m.oilLabel ? `<span>🛢 ${esc(m.oilLabel)}</span>` : ""}${m.bulbLabel ? `<span>💡 ${esc(m.bulbLabel)}</span>` : ""}${m.kataCode ? `<span>🚗 ${esc(m.kataCode)} ${esc(m.kataName || "")}</span>` : ""}</div></button>`,
+      <div class="mm"><span>${fmtWhen(m.updatedAt)}</span>${m.kind === "miss" && m.missType ? `<span>${esc(m.missType)}</span>` : ""}${m.recur ? `<span class="recur">再発 ${m.recur}回</span>` : ""}${m.partLabel ? `<span>🔧 ${esc(m.partLabel)}</span>` : ""}${m.oilLabel ? `<span>🛢 ${esc(m.oilLabel)}</span>` : ""}${m.bulbLabel ? `<span>💡 ${esc(m.bulbLabel)}</span>` : ""}${m.sphereLabel ? `<span>✨ ${esc(m.sphereLabel)}</span>` : ""}${m.kataCode ? `<span>🚗 ${esc(m.kataCode)} ${esc(m.kataName || "")}</span>` : ""}</div></button>`,
       )
       .join("") ||
     `<p class="empty">${st.memoFilter === "open" ? "未解決のメモはありません 👍" : st.memoFilter === "miss" ? "ミス記録はありません" : "メモはありません"}</p>`;
@@ -1236,7 +1241,8 @@ function renderMemoEditor() {
       ${m.kataCode ? `<button class="ltag" data-kq="${esc(m.kataCode)}">🚗 <b>${esc(m.kataCode)}</b>${esc(st.kata[m.kataCode]?.name || m.kataName || "")}</button><button class="x" data-unlink="kata" title="紐付けを外す">×</button>` : ""}
       ${m.oilId ? `<span class="ltag">🛢 ${esc(st.oils[m.oilId] ? `${st.oils[m.oilId].code} ${st.oils[m.oilId].name}` : m.oilLabel || "（削除された商品）")}</span><button class="x" data-unlink="oil" title="紐付けを外す">×</button>` : ""}
       ${m.bulbId ? `<span class="ltag">💡 ${esc(st.bulbs[m.bulbId] ? `${st.bulbs[m.bulbId].code} ${st.bulbs[m.bulbId].shape || ""} ${st.bulbs[m.bulbId].spec || ""}` : m.bulbLabel || "（削除されたバルブ）")}</span><button class="x" data-unlink="bulb" title="紐付けを外す">×</button>` : ""}
-      ${!m.partId && !m.kataCode && !m.oilId && !m.bulbId ? '<span style="color:var(--mu2)">なし（部品の「メモ」ボタンや型式画面から作ると自動で紐付きます）</span>' : ""}
+      ${m.sphereId ? `<span class="ltag">✨ ${esc(st.spheres[m.sphereId] ? `${st.spheres[m.sphereId].code} ${st.spheres[m.sphereId].name}` : m.sphereLabel || "（削除された商品）")}</span><button class="x" data-unlink="sph" title="紐付けを外す">×</button>` : ""}
+      ${!m.partId && !m.kataCode && !m.oilId && !m.bulbId && !m.sphereId ? '<span style="color:var(--mu2)">なし（部品の「メモ」ボタンや型式画面から作ると自動で紐付きます）</span>' : ""}
     </div>
     <textarea class="inp" id="me-body" rows="${miss ? 8 : 14}" placeholder="${miss ? "詳細・正しい答え など（任意）" : "疑問点・調べたこと・答え など"}">${esc(m.body)}</textarea>
     <div class="ed-foot"><span class="meta" id="me-meta">作成 ${fmtWhen(m.createdAt)} ／ 更新 ${fmtWhen(m.updatedAt)}</span>
@@ -1302,6 +1308,7 @@ async function openMemoForPart(p) {
   st.memoKata = null;
   st.memoOil = null;
   st.memoBulb = null;
+  st.memoSph = null;
   st.memoQ = "";
   go("memo");
 }
@@ -1314,6 +1321,23 @@ async function openMemoForOil(o) {
   st.memoSel = ms[0].id;
   st.memoFilter = "all";
   st.memoOil = ms.length > 1 ? o.id : null;
+  st.memoBulb = null;
+  st.memoSph = null;
+  st.memoPart = null;
+  st.memoKata = null;
+  st.memoQ = "";
+  go("memo");
+}
+async function openMemoForSph(o) {
+  const label = `${o.code} ${o.name}`;
+  const ms = vals(st.memos)
+    .filter((m) => m.sphereId === o.id)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!ms.length) return newMemo({ title: `${o.name}について`, sphereId: o.id, sphereLabel: label });
+  st.memoSel = ms[0].id;
+  st.memoFilter = "all";
+  st.memoSph = ms.length > 1 ? o.id : null;
+  st.memoOil = null;
   st.memoBulb = null;
   st.memoPart = null;
   st.memoKata = null;
@@ -1330,6 +1354,7 @@ async function openMemoForBulb(b) {
   st.memoFilter = "all";
   st.memoBulb = ms.length > 1 ? b.id : null;
   st.memoOil = null;
+  st.memoSph = null;
   st.memoPart = null;
   st.memoKata = null;
   st.memoQ = "";
@@ -1346,6 +1371,7 @@ async function openMemoForKata(code) {
   st.memoPart = null;
   st.memoOil = null;
   st.memoBulb = null;
+  st.memoSph = null;
   st.memoQ = "";
   go("memo");
 }
@@ -1645,12 +1671,14 @@ async function saveBackup() {
   let imageData = {},
     kataPhotos = {},
     oilPhotos = {},
-    bulbPhotos = {};
+    bulbPhotos = {},
+    spherePhotos = {};
   try {
     imageData = (await store.get("imageData")) || {};
     kataPhotos = (await store.get("kataPhoto")) || {};
     oilPhotos = (await store.get("oilPhoto")) || {};
     bulbPhotos = (await store.get("bulbPhoto")) || {};
+    spherePhotos = (await store.get("spherePhoto")) || {};
   } catch (e) {
     toast("画像本体を読めなかったので、画像は一覧だけ保存します", true);
   }
@@ -1671,6 +1699,8 @@ async function saveBackup() {
         oilPhoto: oilPhotos,
         bulbs: st.bulbs,
         bulbPhoto: bulbPhotos,
+        spheres: st.spheres,
+        spherePhoto: spherePhotos,
         catalog: st.catalog,
       },
       null,
@@ -1717,6 +1747,7 @@ async function restoreBackup(file) {
       kataPhoto: j.kataPhoto || null,
       ...(j.oils ? { oils: j.oils, oilPhoto: j.oilPhoto || null } : {}),
       ...(j.bulbs ? { bulbs: j.bulbs, bulbPhoto: j.bulbPhoto || null } : {}),
+      ...(j.spheres ? { spheres: j.spheres, spherePhoto: j.spherePhoto || null } : {}),
       ...(j.catalog ? { catalog: j.catalog, catalogMeta: { version: Date.now() } } : {}),
     });
     toast("復元しました");
@@ -2938,6 +2969,10 @@ document.addEventListener("click", async (e) => {
     st.memoBulb = null;
     return renderMemoList();
   }
+  if (d.msoff) {
+    st.memoSph = null;
+    return renderMemoList();
+  }
   if (d.delmemo) {
     if (await confirmBox("このメモを削除しますか？", "削除", true)) {
       await store.remove(`memos/${d.delmemo}`);
@@ -2959,7 +2994,9 @@ document.addEventListener("click", async (e) => {
           ? { oilId: null, oilLabel: null }
           : d.unlink === "bulb"
             ? { bulbId: null, bulbLabel: null }
-            : { kataCode: null, kataName: null },
+            : d.unlink === "sph"
+              ? { sphereId: null, sphereLabel: null }
+              : { kataCode: null, kataName: null },
     );
     return renderMemoEditor();
   }
@@ -3082,5 +3119,6 @@ TOOLS.setup({
   blobToPhoto,
   openMemoForOil,
   openMemoForBulb,
+  openMemoForSph,
 });
 boot();

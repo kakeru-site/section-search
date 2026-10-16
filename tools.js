@@ -1,9 +1,10 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261015f";
-import { yomiText } from "./yomi.js?v=20261015f";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261015f";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261015f";
+import * as S from "./search.js?v=20261016a";
+import { yomiText } from "./yomi.js?v=20261016a";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016a";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016a";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016a";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -122,6 +123,7 @@ const T = Object.assign(
     pad: { pad: "", padCost: "", rotorCost: "", rotorList: "" },
     bulb: { q: "", shape: "", volt: "", cat: "", protect: true },
     oil: { q: "", cat: "", protect: true },
+    sph: { q: "", cat: "", k: "", view: "list", protect: true },
   },
   load() || {},
 );
@@ -151,6 +153,7 @@ const TABS = [
   ["pad", "パッド・ローター"],
   ["bulb", "バルブ検索"],
   ["oil", "オイル・ケミカル"],
+  ["sph", "スフィアライト"],
 ];
 export function render(main) {
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">ツール</h1>
@@ -164,7 +167,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -176,6 +179,7 @@ function fresh() {
 export function onData(key) {
   if (T.tab === "bulb" && key === "bulbs" && $("#blist")) renderBulbList();
   if (T.tab === "oil" && (key === "oils" || key === "memos") && $("#olist")) renderOilList();
+  if (T.tab === "sph" && (key === "spheres" || key === "memos") && $("#slist")) renderSphList();
   if (T.tab === "pad" && key === "settings" && $("#padres") && !document.activeElement?.dataset?.pk)
     renderPad();
 }
@@ -1476,7 +1480,8 @@ async function oilForm(id) {
 // 分類の名前を直す・消す（商品は消えません）
 async function catsForm(kind = "oil") {
   const isB = kind === "bulb";
-  const listFn = isB ? bulbList : oilList;
+  const isS = kind === "sph";
+  const listFn = isB ? bulbList : isS ? sphList : oilList;
   const cats = oilCats(listFn());
   if (!cats.length) return C.toast("分類はまだありません。商品の登録時に入力すると増えます");
   const r = await C.modal(`<h3>分類を整理</h3><p style="margin:0 0 10px;font-size:12px;color:var(--mu);line-height:1.6">名前を直すと、その分類の${isB ? "バルブ" : "商品"}すべてに反映されます。同じ名前にすると1つにまとまります。削除しても${isB ? "バルブ" : "商品"}は残り「未分類」になります。</p><form>
@@ -1497,7 +1502,7 @@ async function catsForm(kind = "oil") {
     for (const o of listFn()) if (o.cat === c.name) (upd[`${o.id}/cat`] = to), n++;
   });
   if (!n) return;
-  await C.store.update(isB ? "bulbs" : "oils", upd);
+  await C.store.update(isB ? "bulbs" : isS ? "spheres" : "oils", upd);
   C.toast("分類を更新しました");
 }
 
@@ -1519,7 +1524,7 @@ const OIL_COL = {
     /メーカー|分類|コード|番号|価格|単価|在庫|数量|区分|仕入|取引|カナ|ｶﾅ|略/,
   ],
   cap: [
-    ["容量", "内容量", "規格", "サイズ", "荷姿", "容器", "容量規格", "volume", "size", "リットル"],
+    ["容量", "内容量", "規格", "サイズ", "荷姿", "容器", "容量規格", "volume", "size", "リットル", "明るさ", "ルーメン", "明るさ色温度", "明るさケルビン", "色温度"],
     ["容量", "内容量", "規格", "サイズ", "荷姿"],
     /価格|単価|在庫|数量|分類/,
   ],
@@ -1741,6 +1746,431 @@ async function importOils(file) {
   }
 }
 
+let sphIdx = null,
+  sphSrc = null;
+function sphList() {
+  const raw = C.st.spheres || {};
+  if (raw === sphSrc && sphIdx) return sphIdx;
+  sphSrc = raw;
+  sphIdx = Object.entries(raw).map(([id, o]) => ({
+    id,
+    ...o,
+    _s: S.norm(
+      `${o.code} ${String(o.code || "").replace(/[^0-9A-Za-z]/g, "")} ${o.name} ${o.use} ${o.cat} ${o.cap}`,
+    ) + yomiIdx(`${o.name} ${o.use} ${o.cat}`),
+    _c: S.norm(String(o.code || "").replace(/[^0-9A-Za-z]/g, "")),
+    _k: [...new Set([...`${o.cap} ${o.name}`.matchAll(/(\d{4})\s*K\b/gi)].map((m) => `${m[1]}K`))],
+  }));
+  return sphIdx;
+}
+// 写真本体は spherePhoto/{id}、spheres/{id}/photo には更新時刻だけ
+const sphPhotoCache = new Map();
+function sphPhoto(id) {
+  const o = C.st.spheres[id];
+  if (!o?.photo) return Promise.resolve(null);
+  const hit = sphPhotoCache.get(id);
+  if (hit && hit.v === o.photo) return hit.p;
+  const p = C.store.get(`spherePhoto/${id}`).catch(() => null);
+  sphPhotoCache.set(id, { v: o.photo, p });
+  return p;
+}
+function fillSphPhotos(root) {
+  $$("img[data-sphoto]", root).forEach(async (img) => {
+    const u = await sphPhoto(img.dataset.sphoto);
+    if (u) img.src = u;
+    else img.closest(".oph")?.remove();
+  });
+}
+let sphLimit = 30;
+function renderSph() {
+  const box = fresh();
+  sphLimit = 30;
+  const tog = `<div class="chips sviews">${[
+    ["list", "検索"],
+    ["docs", "補足資料"],
+  ]
+    .map(
+      ([k, l]) =>
+        `<button class="chip ${(T.sph.view || "list") === k ? "on" : ""}" data-sview="${k}">${l}</button>`,
+    )
+    .join("")}</div>`;
+  if (T.sph.view === "docs") {
+    box.innerHTML = tog + sphDocsHtml();
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      const d = b.dataset;
+      if (d.sview) {
+        T.sph.view = d.sview;
+        save();
+        renderSph();
+      } else if (d.sdgo) $(`#sd-${d.sdgo}`, box)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      else if (d.sdprint) {
+        document.body.classList.add("print-sdoc");
+        const off = () => (document.body.classList.remove("print-sdoc"), removeEventListener("afterprint", off));
+        addEventListener("afterprint", off);
+        print();
+      }
+    });
+    return;
+  }
+  box.innerHTML = tog + `<label class="search">${C.IC.search}<input id="sq" type="search" autocomplete="off" placeholder="品番・名称・明るさ・色（例：h4 6000k、slrzh4a060、フォグ、5000lm）" value="${esc(T.sph.q)}"><span class="cnt" id="scnt"></span></label>
+    <div class="chips" id="schips"></div>
+    <div class="chips" id="schips2"></div>
+    <div id="slist"></div>
+    <div class="tacts"><input type="file" id="fsph" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-spick="1">Excelから取り込み</button><button class="btn" data-scats="1">種類を整理</button><button class="btn" data-sxlsx="1" title="検索機能つきのExcelを作る">Excelに書き出し</button><button class="chip ${T.sph.protect !== false ? "on" : ""}" data-sprot="1" title="書き出すExcelの検索・使い方シートに保護をかける（パスワードなし）">シート保護 ${T.sph.protect !== false ? "ON" : "OFF"}</button><input type="file" id="fsphbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-sxbase="1" title="会社のExcelに検索シートを足す">会社のExcelに追加</button><button class="btn pri" data-sedit="">＋ 追加</button></div>`;
+  const q = $("#sq", box);
+  q.addEventListener("input", () => {
+    T.sph.q = q.value;
+    sphLimit = 30;
+    save();
+    renderSphList();
+  });
+  q.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      q.value = T.sph.q = "";
+      renderSphList();
+    }
+  });
+  $("#fsph", box).addEventListener("change", (e) =>
+    importSphs(e.target.files[0]).finally(() => (e.target.value = "")),
+  );
+  $("#fsphbase", box).addEventListener("change", (e) =>
+    exportIntoBase(e.target.files[0], "sph").finally(() => (e.target.value = "")),
+  );
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+    const o = d.sid ? C.st.spheres[d.sid] && { id: d.sid, ...C.st.spheres[d.sid] } : null;
+    if (d.sview) {
+      T.sph.view = d.sview;
+      save();
+      return renderSph();
+    }
+    if (d.sk !== undefined) {
+      T.sph.k = T.sph.k === d.sk ? "" : d.sk;
+      sphLimit = 30;
+      save();
+      return renderSphList();
+    }
+    if (d.sseed) return seedSphs();
+    if (d.spick) $("#fsph").click();
+    else if (d.sedit !== undefined) sphForm(d.sedit || null);
+    else if (d.scats) catsForm("sph");
+    else if (d.sxlsx) exportXlsx("sph");
+    else if (d.sxbase) $("#fsphbase").click();
+    else if (d.sprot) {
+      T.sph.protect = T.sph.protect === false;
+      save();
+      b.classList.toggle("on", T.sph.protect);
+      b.textContent = `シート保護 ${T.sph.protect ? "ON" : "OFF"}`;
+    }
+    else if (d.scat !== undefined) {
+      T.sph.cat = T.sph.cat === d.scat ? "" : d.scat;
+      sphLimit = 30;
+      save();
+      renderSphList();
+    } else if (d.smore) {
+      sphLimit += 60;
+      renderSphList();
+    } else if (d.scopy) C.copyText(d.scopy).then(() => C.toast(`${d.scopy} をコピーしました`));
+    else if (o && d.sact === "google") C.googleOpen(`${o.code} ${o.name}`);
+    else if (o && d.sact === "memo") C.openMemoForSph(o);
+    else if (o && d.sact === "edit") sphForm(o.id);
+    else if (o && d.sact === "view") sphView(o.id);
+  });
+  renderSphList();
+  if (matchMedia("(hover: hover)").matches) setTimeout(() => q.focus(), 0);
+}
+function renderSphList() {
+  const list = sphList();
+  const box = $("#slist");
+  if (!box) return;
+  const cats = oilCats(list);
+  if (T.sph.cat && T.sph.cat !== "__none" && !cats.some((c) => c.name === T.sph.cat)) T.sph.cat = "";
+  const noCat = list.filter((o) => !o.cat).length;
+  $("#schips").innerHTML =
+    cats
+      .map(
+        (c) =>
+          `<button class="chip ${T.sph.cat === c.name ? "on" : ""}" data-scat="${esc(c.name)}">${esc(c.name)} ${c.n}</button>`,
+      )
+      .join("") +
+    (noCat && cats.length
+      ? `<button class="chip ${T.sph.cat === "__none" ? "on" : ""}" data-scat="__none">未分類 ${noCat}</button>`
+      : "");
+  const kc = {};
+  for (const o of list) for (const k of o._k) kc[k] = (kc[k] || 0) + 1;
+  const ks = Object.keys(kc).sort((a, b) => parseInt(a) - parseInt(b));
+  if (T.sph.k && !kc[T.sph.k]) T.sph.k = "";
+  $("#schips2").innerHTML = ks
+    .map((k) => `<button class="chip ${T.sph.k === k ? "on" : ""}" data-sk="${k}">${k} ${kc[k]}</button>`)
+    .join("");
+  if (!list.length) {
+    $("#scnt").textContent = "";
+    box.innerHTML = `<div class="panel"><h3>スフィアライトがまだ登録されていません</h3><p style="margin:0 0 10px;font-size:12.5px;color:var(--mu);line-height:1.7">カタログの内容（品番・明るさ・ケルビン・セールスポイント）を、まとめて入れられます。下の「初期データを入れる」を押してください。ほかに、「＋ 追加」で1件ずつ登録することも、「Excelから取り込み」で、品番・名称の入ったExcel／CSVを選ぶこともできます。</p><button class="btn pri" data-sseed="1">初期データを入れる</button></div>`;
+    return;
+  }
+  const toks = String(T.sph.q || "")
+    .normalize("NFKC")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => kanaExpand(t, [...SPH_SYN, ...C.st.syn]));
+  const qn = S.norm(String(T.sph.q || "").replace(/[^0-9A-Za-z]/g, ""));
+  const hits = list.filter(
+    (o) =>
+      (!T.sph.cat || (T.sph.cat === "__none" ? !o.cat : o.cat === T.sph.cat)) &&
+      (!T.sph.k || o._k.includes(T.sph.k)) &&
+      toks.every((alts) => alts.some((a) => o._s.includes(a))),
+  );
+  // 品番が前方一致するものを先頭に
+  hits.sort(
+    (a, b) =>
+      (qn && b._c.startsWith(qn) ? 1 : 0) - (qn && a._c.startsWith(qn) ? 1 : 0) ||
+      String(a.name).localeCompare(String(b.name), "ja", { numeric: true }),
+  );
+  $("#scnt").textContent = `${hits.length} / ${list.length}件`;
+  const shown = hits.slice(0, sphLimit);
+  const memoCnt = {};
+  for (const m of Object.values(C.st.memos || {})) if (m.sphereId) memoCnt[m.sphereId] = (memoCnt[m.sphereId] || 0) + 1;
+  box.innerHTML =
+    shown
+      .map(
+        (o) => `<div class="orow">
+      ${o.photo ? `<button class="oph" data-sact="view" data-sid="${esc(o.id)}" title="写真を大きく見る"><img data-sphoto="${esc(o.id)}" alt=""></button>` : ""}
+      <div class="omain">
+        <div class="ot1"><b class="oname">${esc(o.name)}</b>${o.cap ? `<span class="ocap">${esc(o.cap)}</span>` : ""}${o.cat ? `<span class="cat">${esc(o.cat)}</span>` : ""}</div>
+        <div class="ot2"><button class="bcode" data-scopy="${esc(o.code)}" title="品番をコピー">${esc(o.code)}</button></div>
+        ${o.use ? `<div class="buse">${esc(o.use)}</div>` : ""}
+        <div class="oacts"><button class="btn" data-sact="google" data-sid="${esc(o.id)}" title="品番と名称でGoogle検索">${C.IC.search}Google</button><button class="btn ${memoCnt[o.id] ? "has" : ""}" data-sact="memo" data-sid="${esc(o.id)}">${C.IC.note}メモ${memoCnt[o.id] ? `<span class="cnt">${memoCnt[o.id]}</span>` : ""}</button><button class="btn sm" data-sact="edit" data-sid="${esc(o.id)}">編集</button></div>
+      </div></div>`,
+      )
+      .join("") +
+    (hits.length > shown.length
+      ? `<button class="btn more-btn" data-smore="1">さらに表示（残り ${hits.length - shown.length}件）</button>`
+      : "") || '<p class="empty">該当なし</p>';
+  fillSphPhotos(box);
+}
+async function sphView(id) {
+  const o = C.st.spheres[id];
+  const u = await sphPhoto(id);
+  if (!o || !u) return;
+  await C.modal(`<h3>${esc(o.name)} <span class="mono" style="color:var(--mu);font-size:14px">${esc(o.code)}</span></h3>
+    <img src="${u}" alt="" style="width:100%;border-radius:8px;display:block">
+    <div class="modal-foot"><button class="btn pri" data-m="cancel">閉じる</button></div>`);
+}
+async function sphForm(id) {
+  const o = id ? C.st.spheres[id] : null;
+  if (id && !o) return;
+  const b = o || { code: "", name: "", cap: "", use: "", cat: "" };
+  let photo = null,
+    changed = false;
+  const f = (k, l, extra = "", cls = "") =>
+    `<div class="field"><label>${l}</label><input class="inp ${cls}" name="${k}" value="${esc(b[k])}" ${extra}></div>`;
+  const r = await C.modal(
+    `<h3>${id ? "スフィアライトを編集" : "スフィアライトを追加"}</h3><form>
+    ${f("code", "品番", "required autocomplete=off", "mono")}${f("name", "名称", "required autocomplete=off")}
+    <div class="grid2">${f("cap", "明るさ・色温度（任意）", 'placeholder="6000lm／6000K" autocomplete=off')}${f("use", "セールスポイント（任意）", "autocomplete=off")}</div>
+    <div class="field"><label>種類（任意）</label><input class="inp" name="cat" id="sf-cat" value="${esc(b.cat)}" placeholder="下から選ぶか、新しい名前を入力" autocomplete="off">
+      <div class="chips" id="sf-cats" style="margin:6px 0 0">${oilCats(sphList())
+        .map(
+          (c) =>
+            `<button type="button" class="chip ${c.name === b.cat ? "on" : ""}" data-pcat="${esc(c.name)}">${esc(c.name)}</button>`,
+        )
+        .join("")}</div></div>
+    <div class="field"><label>商品の写真（任意）</label><div id="sf-photo"></div></div></form>
+    <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button>${id ? "" : '<button class="btn" data-m="next">保存して次へ</button>'}<button class="btn pri" data-m="ok">保存</button></div>`,
+    {
+      onOpen(bg) {
+        const wrap = $("#sf-photo", bg);
+        const draw = () => {
+          wrap.innerHTML = C.photoBox(photo, "商品の写真（任意）");
+          C.wirePhotoBox($(".kdrop", wrap), (url) => {
+            photo = url;
+            changed = true;
+            draw();
+          });
+        };
+        draw();
+        if (id) sphPhoto(id).then((u) => !changed && u && ((photo = u), draw()));
+        bg.addEventListener("paste", async (e) => {
+          const file = C.pasteFile(e);
+          if (!file) return;
+          e.preventDefault();
+          try {
+            photo = await C.blobToPhoto(file);
+            changed = true;
+            draw();
+          } catch (err) {
+            C.toast(err.message, true);
+          }
+        });
+        bg.addEventListener("click", (e) => {
+          const c = e.target.closest("[data-pcat]");
+          if (!c) return;
+          const inp = $("#sf-cat", bg);
+          inp.value = inp.value === c.dataset.pcat ? "" : c.dataset.pcat;
+          $$("#sf-cats .chip", bg).forEach((x) => x.classList.toggle("on", x.dataset.pcat === inp.value));
+        });
+        $("#sf-cat", bg).addEventListener("input", (e) =>
+          $$("#sf-cats .chip", bg).forEach((x) => x.classList.toggle("on", x.dataset.pcat === oilN(e.target.value))),
+        );
+      },
+    },
+  );
+  if (!r) return;
+  if (r.act === "delete") {
+    if (!(await C.confirmBox(`${b.code}（${b.name}）を削除しますか？`, "削除", true))) return;
+    await C.store.remove(`spheres/${id}`);
+    await C.store.remove(`spherePhoto/${id}`).catch(() => {});
+    sphPhotoCache.delete(id);
+    return C.toast("削除しました");
+  }
+  const rec = {
+    code: oilN(r.data.code).toUpperCase(),
+    name: oilN(r.data.name),
+    cap: oilN(r.data.cap),
+    use: oilN(r.data.use),
+    cat: oilN(r.data.cat),
+    photo: o?.photo ?? null,
+    updatedAt: Date.now(),
+  };
+  if (!rec.code || !rec.name) {
+    C.toast("品番と名称を入れてください", true);
+    return sphForm(id);
+  }
+  if (
+    !id &&
+    sphList().some((x) => String(x.code).toUpperCase() === rec.code) &&
+    !(await C.confirmBox(`品番 ${rec.code} はすでに登録されています。\nもうひとつ追加しますか？`, "追加する"))
+  )
+    return;
+  const key = id || C.localKey();
+  if (changed) {
+    rec.photo = photo ? Date.now() : null;
+    if (photo) await C.store.set(`spherePhoto/${key}`, photo);
+    else await C.store.remove(`spherePhoto/${key}`).catch(() => {});
+    sphPhotoCache.delete(key);
+  }
+  await C.store.set(`spheres/${key}`, rec);
+  C.toast("保存しました");
+  if (r.act === "next") sphForm(null);
+}
+async function importSphs(file) {
+  if (!file) return;
+  let res;
+  try {
+    const X = await C.loadXlsx();
+    let wb;
+    if (/\.csv$/i.test(file.name)) {
+      const buf = await file.arrayBuffer();
+      let txt;
+      try {
+        txt = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+      } catch {
+        txt = new TextDecoder("shift_jis").decode(buf); // Excelで保存したCSVはShift-JIS
+      }
+      wb = X.read(txt, { type: "string" });
+    } else wb = X.read(await file.arrayBuffer(), { type: "array" });
+    res = oilsFromWorkbook(
+      wb.SheetNames.map((n) => [n, X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" })]),
+    );
+  } catch (e) {
+    return C.toast("取り込めませんでした：" + e.message, true);
+  }
+  return applySphs(res);
+}
+async function applySphs(res) {
+  const have = new Map(sphList().map((o) => [String(o.code).toUpperCase(), o]));
+  const add = res.items.filter((x) => !have.has(x.code)).length;
+  const upd = res.items.length - add;
+  const L = { code: "品番", name: "名称", cap: "明るさ・色温度", use: "セールスポイント", cat: "種類" };
+  const detail = res.sheets
+    .map(
+      (s) =>
+        `■ ${s.name}（${s.n}件）\n` +
+        Object.keys(L)
+          .filter((k) => s.how[k])
+          .map((k) => `　${L[k]} ← ${s.how[k]}`)
+          .join("\n"),
+    )
+    .join("\n");
+  const ex = res.items
+    .slice(0, 3)
+    .map((x) => `　${x.code}　${x.name}${x.cap ? `　${x.cap}` : ""}`)
+    .join("\n");
+  const ok = await C.confirmBox(
+    `${res.items.length}件 を見つけました（新規 ${add}件／更新 ${upd}件）。\n今ある商品は消えません。同じ品番は上書きします。\n\n${detail}\n\n例：\n${ex}`,
+    "取り込む",
+  );
+  if (!ok) return;
+  const w = {};
+  for (const it of res.items) {
+    const old = have.get(it.code);
+    if (old) {
+      w[`${old.id}/name`] = it.name;
+      if (it.cap) w[`${old.id}/cap`] = it.cap;
+      if (it.use) w[`${old.id}/use`] = it.use;
+      if (it.cat) w[`${old.id}/cat`] = it.cat;
+      w[`${old.id}/updatedAt`] = Date.now();
+    } else
+      w[C.localKey()] = {
+        code: it.code,
+        name: it.name,
+        cap: it.cap || "",
+        use: it.use || "",
+        cat: it.cat || "",
+        updatedAt: Date.now(),
+      };
+  }
+  const keys = Object.keys(w);
+  try {
+    for (let i = 0; i < keys.length; i += 500) {
+      const part = {};
+      for (const k of keys.slice(i, i + 500)) part[k] = w[k];
+      await C.store.update("spheres", part);
+    }
+    C.toast(`${res.items.length}件 取り込みました`);
+  } catch (e) {
+    C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
+  }
+}
+
+
+// カタログの内容（spheres.json）を、まとめて入れる
+async function seedSphs() {
+  let items;
+  try {
+    const j = await (await fetch("./spheres.json", { cache: "no-store" })).json();
+    items = (j.items || []).map((x) => ({ code: oilN(x.code).toUpperCase(), name: oilN(x.name), cap: oilN(x.cap), use: oilN(x.use), cat: oilN(x.cat) }));
+    if (!items.length) throw new Error("データが空です");
+  } catch (e) {
+    return C.toast("初期データを読めませんでした：" + e.message, true);
+  }
+  return applySphs({ items, sheets: [{ name: "スフィアライト（カタログの内容）", n: items.length, how: {} }] });
+}
+// スフィアライトの言い換え（お客さんの呼び方 ⇔ カタログの書き方）
+const SPH_SYN_RAW = [
+  "車検=しゃけん",
+  "純正=じゅんせい",
+  "ハロゲン=はろげん",
+  "ヘッドライト=ヘッドランプ=前照灯",
+  "フォグ=フォグランプ=フォグライト=霧灯",
+  "ウインカー=ウィンカー=方向指示",
+  "バックランプ=バック=後退灯",
+  "ライセンス=ナンバー",
+  "ルームランプ=室内灯=ルーム",
+  "ポジション=車幅",
+  "テールランプ=テール=尾灯",
+  "ホワイト=白=白色",
+  "イエロー=黄色=黄=クロムイエロー=淡黄色",
+  "サンライト=4500K",
+  "デュアルカラー=2色切替=2色",
+].map((l) => l.split("="));
+const SPH_SYN = SPH_SYN_RAW.map((g) => g.map(S.norm));
+
 // ---- 検索機能つきExcelの書き出し（Excel 2016 の関数だけで動く） ----
 const libPromises = {};
 function loadLib(key, urls) {
@@ -1813,7 +2243,17 @@ function bulbExportItems() {
     }));
 }
 // 種類ごとの違い（オイル・ケミカル／バルブ）をまとめる
+function sphExportItems() {
+  return [...sphList()]
+    .sort(
+      (a, b) =>
+        String(a.cat || "").localeCompare(String(b.cat || ""), "ja") ||
+        String(a.name).localeCompare(String(b.name), "ja", { numeric: true }),
+    )
+    .map((o) => ({ code: o.code, name: o.name, cap: o.cap || "", use: o.use || "", cat: o.cat || "" }));
+}
 const XK = {
+  sph: { list: sphList, items: sphExportItems, groups: () => [...SPH_SYN_RAW, ...(C.st.syn || [])], opt: () => T.sph },
   oil: { list: oilList, items: oilExportItems, groups: oilGroups, opt: () => T.oil },
   bulb: {
     list: bulbList,

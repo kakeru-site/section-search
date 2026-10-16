@@ -3302,3 +3302,169 @@ img.blur {
 .xlinfo b {
   word-break: break-all;
 }
+
+/* ---- スフィアライト 補足資料 ---- */
+.sviews {
+  margin-bottom: 10px;
+}
+.sdoc {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 24px;
+}
+.sd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sd-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.sd-sub {
+  color: var(--mu);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+.sd-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sd-sec {
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 14px 16px;
+}
+.sd-sec h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  border-left: 4px solid var(--ac);
+  padding-left: 8px;
+}
+.sd-sec h4 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+.sd-lead {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.sd-ul {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.sd-box,
+.sd-warn {
+  border: 1px solid var(--ln2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+.sd-warn {
+  border-color: #d93025;
+  background: rgba(217, 48, 37, 0.08);
+}
+.sd-note,
+.sd-s {
+  color: var(--mu);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sd-note {
+  margin: 8px 0 0;
+}
+.sd-tw {
+  overflow-x: auto;
+}
+.sd-t {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.sd-t th,
+.sd-t td {
+  border: 1px solid var(--ln2);
+  padding: 6px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+.sd-t thead th {
+  background: var(--in);
+  white-space: nowrap;
+}
+.sd-t tbody th {
+  background: var(--in);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sd-wide {
+  min-width: 860px;
+}
+.sd-qa {
+  border-top: 1px solid var(--ln);
+  padding: 10px 0;
+}
+.sd-qa:first-child {
+  border-top: 0;
+}
+.sd-q {
+  font-weight: 800;
+  font-size: 14.5px;
+  margin-bottom: 4px;
+}
+.sd-q::before {
+  content: "Q. ";
+  color: var(--ac);
+}
+.sd-a {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.sd-a::before {
+  content: "A. ";
+  font-weight: 800;
+}
+@media print {
+  body.print-sdoc * {
+    visibility: hidden !important;
+  }
+  body.print-sdoc #sdoc,
+  body.print-sdoc #sdoc * {
+    visibility: visible !important;
+  }
+  body.print-sdoc #sdoc {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+  }
+  body.print-sdoc .sd-toc,
+  body.print-sdoc [data-sdprint] {
+    display: none !important;
+  }
+  body.print-sdoc .sd-sec {
+    break-inside: avoid;
+    border-color: #999;
+    background: #fff;
+  }
+  body.print-sdoc .sd-t th,
+  body.print-sdoc .sd-t td {
+    border-color: #666;
+    color: #000;
+    background: #fff;
+  }
+  body.print-sdoc .sd-wide {
+    min-width: 0;
+    font-size: 11px;
+  }
+}
