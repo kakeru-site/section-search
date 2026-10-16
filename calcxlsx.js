@@ -48,7 +48,7 @@ const guideBlocks = (protect, nm) => [
   ["step", "入力", "1行に1台ぶん：パッド通常売価・パッド原価・ローター原価（1枚）を入れます。ローター通常売価（1枚）は、お得額を出したいときだけ入れます"],
   ["b", "ローター1枚 ＝（セット価格 − パッド通常売価）÷ 2（割り切れないときは1円下げてパッドに回します）"],
   ["b", "ローターが原価割れするときは、ローター ＝ 原価＋利益、パッド ＝ セット価格 − ローター×2 になります"],
-  ["b", "それでもパッドが原価を下回るときは「値引きが必要」と出て、右の「提案」にパッド売価の案（原価＋案1／案2）が出ます"],
+  ["b", "それでもパッドが原価を下回るときは「値引きが必要」と出て、右の「提案」にパッド売価の案（原価＋案1／案2）と、「ローターはローター通常売価の○掛け＋パッドは通常売価」の案（ローター通常売価を入れたとき）が出ます"],
   ["h", "困ったとき"],
   ["b", "何も出ない・計算されない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
   ["b", "答えが出ない行がある → 数字の途中に文字（円、カンマ以外）が入っていないか見てください"],
@@ -291,8 +291,8 @@ function fillCost(ws, nm, cost, protect) {
 // ================= パッド・ローター =================
 function fillPad(ws, nm, pad, protect) {
   // 列：B車種メモ C〜F入力 ／ 普通車 G〜K ／ 軽 L〜P ／ 提案 Q〜S
-  ws.columns = [{ width: 2 }, { width: 18 }, ...Array(4).fill({ width: 13 }), ...Array(10).fill({ width: 12.5 }), ...Array(3).fill({ width: 13 })];
-  titleBand(ws, "パッド・ローター", 19, nm.guide);
+  ws.columns = [{ width: 2 }, { width: 18 }, ...Array(4).fill({ width: 13 }), ...Array(10).fill({ width: 12.5 }), ...Array(3).fill({ width: 13 }), { width: 16 }, { width: 15 }];
+  titleBand(ws, "パッド・ローター", 21, nm.guide);
   const s = pad;
   label(ws, "B3", "普通車のセット価格");
   inputCell(ws, "C3", s.normal, { fmt: YEN });
@@ -304,6 +304,8 @@ function fillPad(ws, nm, pad, protect) {
   inputCell(ws, "I4", s.plus1, { fmt: "#,##0" });
   label(ws, "E5", "値引きが必要なとき 提案②（パッド原価＋）", { alignment: { horizontal: "left" } });
   inputCell(ws, "I5", s.plus2, { fmt: "#,##0" });
+  label(ws, "E6", "値引きが必要なとき 提案③（ローター通常売価の何掛け）", { alignment: { horizontal: "left" } });
+  inputCell(ws, "I6", s.kake ?? 45, { fmt: "0.##" });
   note(ws, "B5", "※ ローター通常売価は、お得額を出したいときだけ（任意）");
   // 見出し（グループ）
   ws.getRow(7).height = 8;
@@ -326,18 +328,18 @@ function fillPad(ws, nm, pad, protect) {
   grp("C", "F", "入力", AC);
   grp("G", "K", "普通車セット", DK);
   grp("L", "P", "軽自動車セット", DK);
-  grp("Q", "S", "値引きが必要なとき", AC);
+  grp("Q", "U", "値引きが必要なとき", AC);
   ws.getCell("G8").value = { formula: `"普通車セット　"&TEXT($C$3,"#,##0")&"円"`, result: `普通車セット　${s.normal.toLocaleString("en-US")}円` };
   ws.getCell("L8").value = { formula: `"軽自動車セット　"&TEXT($C$4,"#,##0")&"円"`, result: `軽自動車セット　${s.kei.toLocaleString("en-US")}円` };
   ws.getRow(8).height = 24;
   const head = ["車種・メモ（任意）", "パッド通常売価", "パッド原価", "ローター原価（1枚）", "ローター通常売価（任意）"];
   const grpHead = ["ローター 1枚", "パッド", "セット利益", "判定", "通常より お得"];
-  header(ws, 9, [...head, ...grpHead, ...grpHead, "ローター 1枚", "パッド 提案①", "パッド 提案②"]);
+  header(ws, 9, [...head, ...grpHead, ...grpHead, "ローター 1枚", "パッド 提案①", "パッド 提案②", "ローター 提案③（通常売価の掛け）", "セット合計 提案③"]);
   const fmts = {};
   for (const i of [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]) fmts[i] = i >= 7 ? YEN : "#,##0";
   fmts[3] = fmts[4] = fmts[5] = fmts[6] = "#,##0";
   for (let r = FIRST; r <= LAST; r++) {
-    rowStyle(ws, r, [2, 3, 4, 5, 6], 18, { left: [2], fmts, fonts: { 7: { bold: true }, 12: { bold: true } } });
+    rowStyle(ws, r, [2, 3, 4, 5, 6], 20, { left: [2], fmts, fonts: { 7: { bold: true }, 12: { bold: true } } });
     ws.getRow(r).height = 22;
     const valid = `AND(ISNUMBER($C${r}),ISNUMBER($D${r}),ISNUMBER($E${r}))`;
     const sets = [
@@ -363,7 +365,13 @@ function fillPad(ws, nm, pad, protect) {
     ws.getCell(`Q${r}`).value = { formula: `IF(${need},$E${r}+$I$3,"")`, result: "" };
     ws.getCell(`R${r}`).value = { formula: `IF(${need},$D${r}+$I$4,"")`, result: "" };
     ws.getCell(`S${r}`).value = { formula: `IF(${need},$D${r}+$I$5,"")`, result: "" };
-    for (const c of ["Q", "R", "S"]) {
+    // 提案③：ローター＝ローター通常売価×掛け率（10円単位に切り上げ）、パッド＝通常売価。ローター通常売価を入れたときだけ
+    ws.getCell(`T${r}`).value = {
+      formula: `IF(AND(${need},ISNUMBER($F${r})),ROUNDUP(ROUND($F${r},0)*ROUND($I$6*100,0)/(10000*10),0)*10,"")`,
+      result: "",
+    };
+    ws.getCell(`U${r}`).value = { formula: `IF(ISNUMBER($T${r}),$C${r}+$T${r}*2,"")`, result: "" };
+    for (const c of ["Q", "R", "S", "T", "U"]) {
       ws.getCell(`${c}${r}`).numFmt = YEN;
       ws.getCell(`${c}${r}`).border = r < FIRST + ROWS ? box : hair;
       ws.getCell(`${c}${r}`).font = font;

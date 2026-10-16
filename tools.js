@@ -1,11 +1,11 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016h";
-import { yomiText } from "./yomi.js?v=20261016h";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016h";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016h";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016h";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016h";
+import * as S from "./search.js?v=20261016i";
+import { yomiText } from "./yomi.js?v=20261016i";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016i";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016i";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016i";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016i";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -147,6 +147,7 @@ const padSets = () => ({
 });
 const padMargin = () => +setting("padMargin", 10) || 10;
 // 値引きが必要なときの提案：パッド原価にいくら乗せるか
+const padKake = () => +setting("padKake", 45) || 45; // 値引きが必要なとき：通常売価の合計の何掛けにするか
 const padPlus = () => [+setting("padPlus1", 500) || 500, +setting("padPlus2", 1000) || 1000];
 
 // ---- 画面 ----
@@ -571,7 +572,7 @@ function renderPad() {
       ${f("padCost", "パッド原価", "例：3,510")}
       ${f("rotorCost", "ローター原価（1枚）", "例：3,290")}
       ${f("rotorList", "ローター通常売価（1枚・任意）", "お得額の表示用")}
-      <div class="pad-set">セット価格：普通車 <b>${yen(sets.normal)}</b> ／ 軽 <b>${yen(sets.kei)}</b> ／ 原価割れ時のローター利益 <b>+${padMargin()}円</b> ／ 値引き時のパッド <b>+${padPlus()[0]}円・+${padPlus()[1]}円</b>
+      <div class="pad-set">セット価格：普通車 <b>${yen(sets.normal)}</b> ／ 軽 <b>${yen(sets.kei)}</b> ／ 原価割れ時のローター利益 <b>+${padMargin()}円</b> ／ 値引き時のパッド <b>+${padPlus()[0]}円・+${padPlus()[1]}円</b> ／ ローター <b>通常売価の${padKake()}掛け</b>
         <button class="linkbtn" data-padset="1">変更</button></div>
     </div>
     <div id="padres" class="pad-res"></div></div>
@@ -579,7 +580,7 @@ function renderPad() {
       <li>ローターを安くして、パッドで利益を取る</li><li>原価は割らない（値引きを使わない）</li>
       <li>ローター1枚 ＝（セット価格 − パッド通常売価）÷ 2。割り切れないときは、ローターを1円下げてパッドに回す</li>
       <li>ローターが原価割れするとき：ローター ＝ 原価＋${padMargin()}円、パッド ＝ セット価格 − ローター×2</li>
-      <li>そのパッドがパッド原価を下回るときは「値引き必要」→ ローター＝原価＋${padMargin()}円、パッド＝原価＋${padPlus()[0]}円 / ＋${padPlus()[1]}円 の2案を出す</li></ol></details>`;
+      <li>そのパッドがパッド原価を下回るときは「値引き必要」→ ローター＝原価＋${padMargin()}円、パッド＝原価＋${padPlus()[0]}円 / ＋${padPlus()[1]}円 と、「ローターは通常売価の${padKake()}掛け＋パッドは通常売価」（ローター通常売価を入れたとき）の案を出す</li></ol></details>`;
   box.addEventListener("input", (e) => {
     const k = e.target.dataset.pk;
     if (!k) return;
@@ -620,10 +621,10 @@ function padCard(label, set, x, rotorList, pad) {
     <tr class="hl"><td>ローター 1枚</td><td class="mono">${yen(x.rotor)} <small>×2</small></td><td class="mono g">+${yen(x.rotorGain)}<small>/枚</small></td></tr>
     <tr class="tot"><td>セット合計</td><td class="mono">${yen(x.pad + x.rotor * 2)}</td><td class="mono g ${x.total < 0 ? "ng" : ""}">利益 ${yen(x.total)}</td></tr>
     ${normalTotal != null ? `<tr><td>通常で買うと</td><td class="mono">${yen(normalTotal)}</td><td class="mono save">${normalTotal > set ? `${yen(normalTotal - set)} お得` : ""}</td></tr>` : ""}</table>
-    ${x.needDiscount ? padOffers(x, normalTotal) : ""}</div>`;
+    ${x.needDiscount ? padOffers(x, normalTotal, rotorList, pad) : ""}</div>`;
 }
 // セット価格では原価割れ → ローターは原価＋10円、パッドは原価＋500円 / ＋1000円で出す
-function padOffers(x, normalTotal) {
+function padOffers(x, normalTotal, rotorList, pad) {
   const padCost = x.pad - x.padGain;
   return `<div class="offers"><div class="ot">提案価格（ローター 原価＋${padMargin()}円）</div>${padPlus()
     .map((plus) => {
@@ -635,7 +636,23 @@ function padOffers(x, normalTotal) {
         <tr class="tot"><td>セット合計</td><td class="mono">${yen(total)}</td><td class="mono g">利益 ${yen(plus + padMargin() * 2)}</td></tr>
         ${normalTotal != null && normalTotal > total ? `<tr><td>通常で買うと</td><td class="mono">${yen(normalTotal)}</td><td class="mono save">${yen(normalTotal - total)} お得</td></tr>` : ""}</table></div>`;
     })
-    .join("")}</div>`;
+    .join("")}${padKakeOffer(x, padCost, rotorList, pad)}</div>`;
+}
+// もう1つの案：ローターは「ローター通常売価」の○掛け（10円単位に切り上げ）、パッドは通常売価のまま
+function padKakeOffer(x, padCost, rotorList, pad) {
+  const k = padKake();
+  if (rotorList == null || pad == null)
+    return `<div class="offer"><div class="oh">ローター通常売価の${k}掛け</div><p class="mu" style="margin:6px 0 0;font-size:12px">「ローター通常売価」を入れると、ローター${k}掛け＋パッド通常売価の案も出ます</p></div>`;
+  const rotor = salePrice(rotorList, k, "up10");
+  const total = pad + rotor * 2;
+  const rotorCost = x.rotor - padMargin();
+  const gain = pad - padCost + (rotor - rotorCost) * 2;
+  const normalTotal = pad + rotorList * 2;
+  return `<div class="offer"><div class="oh">ローター 通常売価の${k}掛け ＋ パッド通常売価</div>
+    <table class="kv"><tr><td>パッド（通常売価）</td><td class="mono">${yen(pad)}</td><td class="mono g ${pad - padCost < 0 ? "ng" : ""}">${pad - padCost >= 0 ? "+" : ""}${yen(pad - padCost)}</td></tr>
+    <tr class="hl"><td>ローター 1枚（${k}掛け）</td><td class="mono">${yen(rotor)} <small>×2</small></td><td class="mono g ${rotor - rotorCost < 0 ? "ng" : ""}">${rotor - rotorCost >= 0 ? "+" : ""}${yen(rotor - rotorCost)}<small>/枚</small></td></tr>
+    <tr class="tot"><td>セット合計</td><td class="mono">${yen(total)}</td><td class="mono g ${gain < 0 ? "ng" : ""}">利益 ${yen(gain)}</td></tr>
+    ${normalTotal > total ? `<tr><td>通常で買うと</td><td class="mono">${yen(normalTotal)}</td><td class="mono save">${yen(normalTotal - total)} お得</td></tr>` : ""}</table></div>`;
 }
 function calcPad() {
   const box = $("#padres");
@@ -656,21 +673,24 @@ async function editPadSet() {
     <div class="field"><label>軽自動車のセット価格</label><input class="inp mono" name="kei" inputmode="numeric" value="${s.kei}" required></div></div>
     <div class="field"><label>原価割れのときのローター利益（円）</label><input class="inp mono" name="margin" inputmode="numeric" value="${padMargin()}" required></div>
     <div class="grid2"><div class="field"><label>値引きが必要なとき パッド原価＋（案1）</label><input class="inp mono" name="plus1" inputmode="numeric" value="${padPlus()[0]}" required></div>
-    <div class="field"><label>値引きが必要なとき パッド原価＋（案2）</label><input class="inp mono" name="plus2" inputmode="numeric" value="${padPlus()[1]}" required></div></div></form>
+    <div class="field"><label>値引きが必要なとき パッド原価＋（案2）</label><input class="inp mono" name="plus2" inputmode="numeric" value="${padPlus()[1]}" required></div></div>
+    <div class="field"><label>値引きが必要なとき ローター通常売価の何掛け（案3）</label><input class="inp mono" name="kake" inputmode="decimal" value="${padKake()}" required></div></form>
     <div class="modal-foot"><button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`);
   if (!r) return;
   const n = toNum(r.data.normal),
     k = toNum(r.data.kei),
     mg = toNum(r.data.margin),
     p1 = toNum(r.data.plus1),
-    p2 = toNum(r.data.plus2);
-  if (!n || !k || mg == null || !p1 || !p2) return C.toast("数字を入れてください", true);
+    p2 = toNum(r.data.plus2),
+    pk = toNum(r.data.kake);
+  if (!n || !k || mg == null || !p1 || !p2 || !pk) return C.toast("数字を入れてください", true);
   await C.store.update("settings", {
     padSetNormal: n,
     padSetKei: k,
     padMargin: mg,
     padPlus1: p1,
     padPlus2: p2,
+    padKake: pk,
   });
   C.toast("保存しました");
 }
@@ -2314,7 +2334,7 @@ const calcOpts = () => {
     protect: T.xcalc?.protect !== false,
     sale: { mode: s.mode, rate: +s.rate || 85, mark: +s.mark || 15, roundLabel: r.label },
     cost: { mode: T.cost.mode },
-    pad: { normal: padSets().normal, kei: padSets().kei, margin: padMargin(), plus1: padPlus()[0], plus2: padPlus()[1] },
+    pad: { normal: padSets().normal, kei: padSets().kei, margin: padMargin(), plus1: padPlus()[0], plus2: padPlus()[1], kake: padKake() },
   };
 };
 function addCalcXlsx(box) {
