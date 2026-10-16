@@ -134,11 +134,23 @@ function mergeStyles(bXml, aXml) {
       .replace(/\sxfId="\d+"/, ' xfId="0"'),
   );
   bXml = appendTo(bXml, "cellXfs", "xf", xfs, "cellStyles");
-  return { xml: bXml, xfOff };
+  // 条件付き書式の色（dxf）。シート側の dxfId は、足したぶんだけずらす
+  const dxfOff = children(bXml, "dxfs", "dxf").length;
+  const dxfs = children(aXml, "dxfs", "dxf");
+  if (dxfs.length) {
+    if (/<dxfs\b/.test(bXml)) bXml = appendTo(bXml, "dxfs", "dxf", dxfs, null);
+    else {
+      const node = `<dxfs count="${dxfs.length}">${dxfs.join("")}</dxfs>`;
+      const at = ["<tableStyles", "<colors", "<extLst", "</styleSheet>"].map((t) => bXml.indexOf(t)).filter((i) => i >= 0);
+      const i = Math.min(...at);
+      bXml = bXml.slice(0, i) + node + bXml.slice(i);
+    }
+  }
+  return { xml: bXml, xfOff, dxfOff };
 }
 
 // ExcelJS が作った1枚のシートを、元ファイル用に書き換える（スタイル番号・文字列）
-function remapSheet(xml, xfOff, strings) {
+function remapSheet(xml, xfOff, strings, dxfOff = 0) {
   xml = xml.replace(/<c\b([^>]*?)(\/>|>([\s\S]*?)<\/c>)/g, (all, attrs, tail, inner) => {
     let a = attrs.replace(/\ss="(\d+)"/, (_, n) => ` s="${+n + xfOff}"`);
     if (tail === "/>") return `<c${a}/>`;
@@ -149,6 +161,7 @@ function remapSheet(xml, xfOff, strings) {
     }
     return `<c${a}>${inner}</c>`;
   });
+  if (dxfOff) xml = xml.replace(/<cfRule\b[^>]*>/g, (t) => t.replace(/\sdxfId="(\d+)"/, (_, n) => ` dxfId="${+n + dxfOff}"`));
   xml = xml.replace(/<row\b[^>]*>/g, (t) => t.replace(/\ss="(\d+)"/, (_, n) => ` s="${+n + xfOff}"`));
   xml = xml.replace(/<col\b[^>]*>/g, (t) => t.replace(/\sstyle="(\d+)"/, (_, n) => ` style="${+n + xfOff}"`));
   return xml;
@@ -200,7 +213,7 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
     sid++;
     const path = `xl/worksheets/sheet${n}.xml`;
     // 元のシートの「選択中」には触れない代わりに、こちらの「選択中」を外す（複数選択でまとめて編集されないように）
-    const x = remapSheet(await text(A, src), merged.xfOff, strings).replace(/\stabSelected="1"/g, "");
+    const x = remapSheet(await text(A, src), merged.xfOff, strings, merged.dxfOff).replace(/\stabSelected="1"/g, "");
     put(path, x);
     const rid = `rIdOil${n}`;
     relsAdd += `<Relationship Id="${rid}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${n}.xml"/>`;
