@@ -1,5 +1,5 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261016f";
+import { yomiText } from "./yomi.js?v=20261016g";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -184,7 +184,7 @@ const guideBlocks = (protect, K, nameP) => [
     : []),
 ];
 
-function fillGuide(ws, { font, protect, K, nameP }) {
+export function fillGuide(ws, { font, protect, K, nameP, blocks }) {
   const AC = "FFF2C230";
   const DK = "FF17191C";
   ws.columns = [{ width: 2 }, { width: GW.b }, { width: GW.c }, { width: GW.d }];
@@ -192,7 +192,7 @@ function fillGuide(ws, { font, protect, K, nameP }) {
   const lines = (text, width) => Math.max(1, Math.ceil((dispW(text) * 1.12) / (width - 2)));
   const hairs = { bottom: { style: "hair", color: { argb: "FFB0B4BA" } } };
   let r = 1;
-  for (const blk of guideBlocks(protect, K, nameP)) {
+  for (const blk of blocks || guideBlocks(protect, K, nameP)) {
     const [kind, a, b] = blk;
     const row = ws.getRow(r);
     const span = (text, o = {}) => {

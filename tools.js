@@ -1,10 +1,11 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016f";
-import { yomiText } from "./yomi.js?v=20261016f";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016f";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016f";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016f";
+import * as S from "./search.js?v=20261016g";
+import { yomiText } from "./yomi.js?v=20261016g";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016g";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016g";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016g";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016g";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -273,6 +274,7 @@ function renderSale() {
     <div class="tacts"><button class="btn" data-add="sale">＋ 20行ふやす</button><button class="btn" data-copy="sale">売価をコピー</button><span class="sp"></span><button class="btn danger" data-clear="sale">入力を全部消す</button></div>`;
   wireSale(box);
   calcSale();
+  addCalcXlsx(box);
 }
 function saleRow(r, i) {
   const rate = T.sale.mode === "rate";
@@ -434,6 +436,7 @@ function renderCost() {
     <div class="tacts"><button class="btn" data-add="cost">＋ 20行ふやす</button><button class="btn" data-copy="cost">合計をコピー</button><span class="sp"></span><button class="btn danger" data-clear="cost">入力を全部消す</button></div>`;
   wireCost(box);
   calcCost();
+  addCalcXlsx(box);
 }
 function costRow(r, i) {
   return `<div class="tr" data-row="${i}"><span class="no">${i + 1}</span>
@@ -601,6 +604,7 @@ function renderPad() {
     if (b.dataset.padset) editPadSet();
   });
   calcPad();
+  addCalcXlsx(box);
 }
 function padCard(label, set, x, rotorList, pad) {
   if (!x)
@@ -2302,6 +2306,95 @@ const XK = {
     opt: () => T.bulb,
   },
 };
+// ---- 売価計算・原価計算・パッド／ローター → Excel（空の計算表。入力は20行ぶん＋予備） ----
+const calcOpts = () => {
+  const s = T.sale;
+  const r = ROUNDS.find((x) => x.id === s.round) || ROUNDS[2];
+  return {
+    protect: T.xcalc?.protect !== false,
+    sale: { mode: s.mode, rate: +s.rate || 85, mark: +s.mark || 15, roundLabel: r.label },
+    cost: { mode: T.cost.mode },
+    pad: { normal: padSets().normal, kei: padSets().kei, margin: padMargin(), plus1: padPlus()[0], plus2: padPlus()[1] },
+  };
+};
+function addCalcXlsx(box) {
+  const prot = T.xcalc?.protect !== false;
+  const bar = document.createElement("div");
+  bar.className = "tacts";
+  bar.innerHTML = `<input type="file" id="fcalcbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-cx="x" title="売価計算・原価計算・パッド／ローターの計算表を、空のExcelで作る">Excelに書き出し</button><button class="chip ${prot ? "on" : ""}" data-cx="prot" title="書き出すExcelのシートに保護をかける（パスワードなし）">シート保護 ${prot ? "ON" : "OFF"}</button><button class="btn" data-cx="base" title="会社のExcelに計算シートを足す">会社のExcelに追加</button>`;
+  box.appendChild(bar);
+  bar.addEventListener("click", (e) => {
+    const k = e.target.closest("button")?.dataset.cx;
+    if (k === "x") exportCalcXlsx();
+    else if (k === "base") $("#fcalcbase", bar).click();
+    else if (k === "prot") {
+      const on = T.xcalc?.protect === false; // 今がOFFならON、ONならOFFにする
+      T.xcalc = { ...(T.xcalc || {}), protect: on };
+      save();
+      const b = e.target.closest("button");
+      b.classList.toggle("on", on);
+      b.textContent = `シート保護 ${on ? "ON" : "OFF"}`;
+    }
+  });
+  $("#fcalcbase", bar).addEventListener("change", (e) =>
+    exportCalcIntoBase(e.target.files[0]).finally(() => (e.target.value = "")),
+  );
+}
+async function exportCalcXlsx() {
+  try {
+    C.toast("Excelを作っています…");
+    const X = await loadExcelJs();
+    const { wb } = buildCalcWorkbook(X, calcOpts());
+    downloadXlsx(await wb.xlsx.writeBuffer(), "売価・原価・パッド計算.xlsx");
+    C.toast("計算表をExcelにしました");
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
+async function exportCalcIntoBase(file) {
+  if (!file) return;
+  const ext = (file.name.match(/\.(xlsx|xlsm)$/i) || [])[1];
+  if (!ext)
+    return C.toast("対応しているのは .xlsx（.xlsm）です。古い .xls は、Excelで「.xlsx」として保存し直してください", true);
+  let JSZip, base;
+  try {
+    C.toast("Excelを読んでいます…");
+    JSZip = await loadJsZip();
+    base = await readBase(JSZip, await file.arrayBuffer());
+  } catch (e) {
+    return C.toast("このExcelを開けませんでした：" + e.message, true);
+  }
+  const names = {
+    sale: uniqueName(base.names, "売価計算"),
+    cost: uniqueName(base.names, "原価計算"),
+    pad: uniqueName(base.names, "パッド・ローター"),
+    guide: uniqueName(base.names, "計算の使い方"),
+  };
+  const opt = calcOpts();
+  const r = await C.modal(`<h3>Excelに計算シートを追加</h3>
+    <div class="xlinfo">
+      <div><span>ファイル</span><b>${esc(file.name)}</b></div>
+      <div><span>作成者</span><b>${esc(base.creator || "（記録なし）")}</b></div>
+      <div><span>最終更新者</span><b>${esc(base.lastModifiedBy || "（記録なし）")}</b></div>
+      ${base.company ? `<div><span>会社名</span><b>${esc(base.company)}</b></div>` : ""}
+      <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
+      <div><span>追加するシート</span><b>${esc(names.sale)}・${esc(names.cost)}・${esc(names.pad)}・${esc(names.guide)}</b></div>
+      <div><span>シート保護</span><b>${opt.protect ? "あり（パスワードなし）" : "なし"}</b></div>
+    </div>
+    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容（シート・グラフ・表・書式など）には手を触れず、計算のシートだけを後ろに足します。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。</p>
+    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
+  if (!r) return;
+  try {
+    C.toast("Excelを作っています…");
+    const X = await loadExcelJs();
+    const { wb, list } = buildCalcWorkbook(X, { ...opt, names });
+    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
+    downloadXlsx(out, `売価・原価・パッド計算.${ext.toLowerCase()}`);
+    C.toast("保存しました。開いたら「編集を有効にする」を押してください");
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
 async function exportXlsx(kind) {
   const x = XK[kind];
   const title = KINDS[kind].title;

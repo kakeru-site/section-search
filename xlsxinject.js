@@ -155,7 +155,7 @@ function remapSheet(xml, xfOff, strings) {
 }
 
 // base: readBase の結果 / ourBuf: ExcelJS が作った「検索」「使い方」「印刷用」「データ」の4枚だけのxlsx（この順）
-export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, nameD }) {
+export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, nameD, list }) {
   const B = base.zip;
   const put = (p, d) => B.file(p, d, { createFolders: false });
   const A = await JSZip.loadAsync(ourBuf);
@@ -179,12 +179,15 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
   // --- 新しいシートの置き場所 ---
   const existing = Object.keys(B.files).filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
   let n = Math.max(0, ...existing.map((f) => +f.match(/sheet(\d+)\.xml/)[1]));
-  const sheets = [
-    [nameS, "xl/worksheets/sheet1.xml"],
-    [nameG, "xl/worksheets/sheet2.xml"],
-    ...(nameP ? [[nameP, "xl/worksheets/sheet3.xml"]] : []),
-    [nameD, `xl/worksheets/sheet${nameP ? 4 : 3}.xml`],
-  ];
+  // list：差し込むシート名を、ブックに入っている順に並べたもの（省略すると 検索・使い方・印刷用・データ）
+  const sheets = list
+    ? list.map((nm, i) => [nm, `xl/worksheets/sheet${i + 1}.xml`])
+    : [
+        [nameS, "xl/worksheets/sheet1.xml"],
+        [nameG, "xl/worksheets/sheet2.xml"],
+        ...(nameP ? [[nameP, "xl/worksheets/sheet3.xml"]] : []),
+        [nameD, `xl/worksheets/sheet${nameP ? 4 : 3}.xml`],
+      ];
   const sheetIds = [...wb.matchAll(/<sheet\b[^>]*\bsheetId="(\d+)"/g)].map((x) => +x[1]);
   let sid = Math.max(0, ...sheetIds);
   let relsAdd = "",
