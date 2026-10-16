@@ -1,10 +1,10 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016e";
-import { yomiText } from "./yomi.js?v=20261016e";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016e";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016e";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016e";
+import * as S from "./search.js?v=20261016f";
+import { yomiText } from "./yomi.js?v=20261016f";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016f";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016f";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016f";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -261,11 +261,12 @@ function renderSale() {
               )}<span class="pin"><input id="rate" class="inp num sm" inputmode="decimal" value="${esc(s.rate)}"><i>%</i></span></div></div>`
           : `<div class="tfield"><label>上乗せする利益（仕切りに対して）</label><span class="pin"><input id="mark" class="inp num sm" inputmode="decimal" value="${esc(s.mark)}"><i>%</i></span></div>`
       }
+      <div class="tfield"><label>仕切りの入れ方</label><div class="segs"><button class="${s.buyIn !== "kake" ? "on" : ""}" data-bin="price" title="仕切り（仕入れ値）の金額を入れて、何掛けか調べる">金額を入れる</button><button class="${s.buyIn === "kake" ? "on" : ""}" data-bin="kake" title="何掛けかを入れて、仕切り（仕入れ値）の金額を調べる">掛けを入れる</button></div></div>
       <div class="tfield"><label>端数</label><div class="segs">${ROUNDS.map((r) => `<button class="${s.round === r.id ? "on" : ""}" data-round="${r.id}">${r.label}</button>`).join("")}</div></div>
       <button class="btn clear-all" data-clear="sale" title="金額・数量を全部消す（掛け率などの設定はそのまま）">入力を全部消す</button>
     </div>
-    <div class="tgrid sale ${s.mode}" id="sgrid">
-      <div class="th"><span>#</span><span>定価${s.mode === "mark" ? '<i class="opt">（任意）</i>' : ""}</span><span>仕切り</span><span>仕入れ掛</span><span>売価</span><span>粗利</span><span></span></div>
+    <div class="tgrid sale ${s.mode} ${s.buyIn === "kake" ? "kk" : ""}" id="sgrid">
+      <div class="th"><span>#</span><span>定価${s.mode === "mark" ? '<i class="opt">（任意）</i>' : ""}</span>${s.buyIn === "kake" ? "<span>仕入れ掛（入力）</span><span>仕切り</span>" : "<span>仕切り</span><span>仕入れ掛</span>"}<span>売価</span><span>粗利</span><span></span></div>
       ${s.rows.map((r, i) => saleRow(r, i)).join("")}
     </div>
     <div class="tfoot" id="sfoot"></div>
@@ -277,7 +278,11 @@ function saleRow(r, i) {
   const rate = T.sale.mode === "rate";
   return `<div class="tr" data-row="${i}"><span class="no">${i + 1}</span>
     <input class="inp num" data-r="${i}" data-k="l" value="${esc(showNum(r.l))}" inputmode="numeric" placeholder="${rate ? "定価" : "定価（任意）"}" autocomplete="off">
-    <input class="inp num" data-r="${i}" data-k="c" value="${esc(showNum(r.c))}" inputmode="numeric" placeholder="仕切り" autocomplete="off">
+    ${
+      T.sale.buyIn === "kake"
+        ? `<input class="inp num" data-r="${i}" data-k="k" value="${esc(r.k ?? "")}" inputmode="decimal" placeholder="掛け（例 75）" autocomplete="off">`
+        : `<input class="inp num" data-r="${i}" data-k="c" value="${esc(showNum(r.c))}" inputmode="numeric" placeholder="仕切り" autocomplete="off">`
+    }
     <div class="outs"><output class="o-buy"></output><output class="o-sale"></output><output class="o-gain"></output></div>
     <button class="x" data-delrow="${i}" title="この行を消す" aria-label="この行を消す">×</button></div>`;
 }
@@ -291,6 +296,15 @@ function wireSale(box) {
       s.mode = d.smode;
       if (s.mode === "mark" && s.round === "up5") s.round = "up10";
       if (s.mode === "rate" && s.round === "up10") s.round = "up5";
+    } else if (d.bin) {
+      // 入れ方を切り替えても、入れた内容が消えないように、もう一方の欄へ移す
+      if ((s.buyIn === "kake") !== (d.bin === "kake"))
+        for (const r of s.rows) {
+          const x = saleCalcRow(r);
+          if (d.bin === "kake") r.k = x.buy != null ? String(Math.round(x.buy * 10) / 10) : "";
+          else r.c = x.c != null ? String(x.c) : r.c;
+        }
+      s.buyIn = d.bin;
     } else if (d.rate) s.rate = +d.rate;
     else if (d.round) s.round = d.round;
     else if (d.add) s.rows.push(...blank(20, () => ({ l: "", c: "" })));
@@ -323,7 +337,7 @@ function wireSale(box) {
     calcSale();
   });
   gridKeys(grid, (r0, k0, lines) => {
-    const cols = ["l", "c"];
+    const cols = ["l", s.buyIn === "kake" ? "k" : "c"];
     const c0 = cols.indexOf(k0);
     while (s.rows.length < r0 + lines.length) s.rows.push(...blank(20, () => ({ l: "", c: "" })));
     lines.forEach((cells, i) =>
@@ -337,12 +351,20 @@ function wireSale(box) {
 }
 function saleCalcRow(r) {
   const s = T.sale;
-  const l = toNum(r.l),
-    c = toNum(r.c);
+  const l = toNum(r.l);
+  let c = toNum(r.c);
+  // 掛けから仕切りを出すとき：「75」でも「7.5」（7.5掛）でも、75掛として扱う
+  let kk = null;
+  if (s.buyIn === "kake") {
+    let k = toNum(String(r.k ?? "").replace(/掛け?/g, ""));
+    if (k != null && k > 0 && k <= 10) k *= 10;
+    kk = k;
+    c = l != null && k != null && k > 0 ? Math.round((l * k) / 100) : null;
+  }
   let sale = null;
   if (s.mode === "rate" && l != null) sale = salePrice(l, s.rate, s.round);
   if (s.mode === "mark" && c != null) sale = markupPrice(c, s.mark, s.round);
-  const buy = l && c != null ? (c / l) * 100 : null;
+  const buy = s.buyIn === "kake" ? kk : l && c != null ? (c / l) * 100 : null;
   const gain = sale != null && c != null ? sale - c : null;
   const sell = sale != null && l ? (sale / l) * 100 : null; // 売価が定価の何掛けか
   return { l, c, sale, buy, sell, gain, gp: gain != null && sale ? (gain / sale) * 100 : null };
@@ -364,7 +386,7 @@ function calcSale() {
     if (!row) return;
     const x = saleCalcRow(r);
     const ob = $(".o-buy", row);
-    if (ob) ob.textContent = kake(x.buy);
+    if (ob) ob.innerHTML = s.buyIn === "kake" ? (x.c != null ? `${yen(x.c)}<small>${kake(x.buy)}</small>` : "") : kake(x.buy);
     $(".o-sale", row).innerHTML =
       x.sale != null ? `${yen(x.sale)}${s.mode === "mark" && x.sell != null ? `<small>定価の${kake(x.sell)}</small>` : ""}` : "";
     $(".o-gain", row).innerHTML = x.gain != null ? `${yen(x.gain)}<small>${pct(x.gp)}</small>` : "";

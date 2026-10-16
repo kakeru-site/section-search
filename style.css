@@ -2763,6 +2763,9 @@ img.blur {
   .tgrid .o-buy::before {
     content: "仕入れ掛";
   }
+  .tgrid.kk .o-buy::before {
+    content: "仕切り";
+  }
   .tgrid .o-sale::before {
     content: "売価";
   }
@@ -3459,4 +3462,12 @@ img.blur {
     min-width: 0;
     font-size: 11px;
   }
+}
+
+.tgrid.kk .o-buy {
+  font-size: 15px;
+}
+.tgrid.kk .o-buy small {
+  color: var(--mu);
+  font-weight: 400;
 }
