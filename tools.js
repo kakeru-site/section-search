@@ -1,10 +1,10 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016d";
-import { yomiText } from "./yomi.js?v=20261016d";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016d";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016d";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016d";
+import * as S from "./search.js?v=20261016e";
+import { yomiText } from "./yomi.js?v=20261016e";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016e";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016e";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016e";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -20,6 +20,8 @@ const esc = (s) =>
   );
 const yen = (n) =>
   n == null || isNaN(n) ? "" : (n < 0 ? "-¥" : "¥") + Math.abs(Math.round(n)).toLocaleString();
+// 仕入れ掛け：75%→「75掛」、74.64%→「74.6掛」
+const kake = (v) => (v == null || !isFinite(v) ? "" : `${Math.round(v * 10) / 10}掛`);
 const pct = (n, d = 1) => (n == null || !isFinite(n) ? "" : `${n.toFixed(d)}%`);
 
 // 全角数字・カンマ・¥ を許して数字に
@@ -257,13 +259,13 @@ function renderSale() {
               .join(
                 "",
               )}<span class="pin"><input id="rate" class="inp num sm" inputmode="decimal" value="${esc(s.rate)}"><i>%</i></span></div></div>`
-          : `<div class="tfield"><label>上乗せする利益（原価に対して）</label><span class="pin"><input id="mark" class="inp num sm" inputmode="decimal" value="${esc(s.mark)}"><i>%</i></span></div>`
+          : `<div class="tfield"><label>上乗せする利益（仕切りに対して）</label><span class="pin"><input id="mark" class="inp num sm" inputmode="decimal" value="${esc(s.mark)}"><i>%</i></span></div>`
       }
       <div class="tfield"><label>端数</label><div class="segs">${ROUNDS.map((r) => `<button class="${s.round === r.id ? "on" : ""}" data-round="${r.id}">${r.label}</button>`).join("")}</div></div>
       <button class="btn clear-all" data-clear="sale" title="金額・数量を全部消す（掛け率などの設定はそのまま）">入力を全部消す</button>
     </div>
     <div class="tgrid sale ${s.mode}" id="sgrid">
-      <div class="th"><span>#</span>${s.mode === "rate" ? "<span>定価</span>" : ""}<span>原価</span>${s.mode === "rate" ? "<span>仕入れ掛</span>" : ""}<span>売価</span><span>粗利</span><span></span></div>
+      <div class="th"><span>#</span><span>定価${s.mode === "mark" ? '<i class="opt">（任意）</i>' : ""}</span><span>仕切り</span><span>仕入れ掛</span><span>売価</span><span>粗利</span><span></span></div>
       ${s.rows.map((r, i) => saleRow(r, i)).join("")}
     </div>
     <div class="tfoot" id="sfoot"></div>
@@ -274,9 +276,9 @@ function renderSale() {
 function saleRow(r, i) {
   const rate = T.sale.mode === "rate";
   return `<div class="tr" data-row="${i}"><span class="no">${i + 1}</span>
-    ${rate ? `<input class="inp num" data-r="${i}" data-k="l" value="${esc(showNum(r.l))}" inputmode="numeric" placeholder="定価" autocomplete="off">` : ""}
-    <input class="inp num" data-r="${i}" data-k="c" value="${esc(showNum(r.c))}" inputmode="numeric" placeholder="原価" autocomplete="off">
-    <div class="outs">${rate ? '<output class="o-buy"></output>' : ""}<output class="o-sale"></output><output class="o-gain"></output></div>
+    <input class="inp num" data-r="${i}" data-k="l" value="${esc(showNum(r.l))}" inputmode="numeric" placeholder="${rate ? "定価" : "定価（任意）"}" autocomplete="off">
+    <input class="inp num" data-r="${i}" data-k="c" value="${esc(showNum(r.c))}" inputmode="numeric" placeholder="仕切り" autocomplete="off">
+    <div class="outs"><output class="o-buy"></output><output class="o-sale"></output><output class="o-gain"></output></div>
     <button class="x" data-delrow="${i}" title="この行を消す" aria-label="この行を消す">×</button></div>`;
 }
 function wireSale(box) {
@@ -321,7 +323,7 @@ function wireSale(box) {
     calcSale();
   });
   gridKeys(grid, (r0, k0, lines) => {
-    const cols = s.mode === "rate" ? ["l", "c"] : ["c"];
+    const cols = ["l", "c"];
     const c0 = cols.indexOf(k0);
     while (s.rows.length < r0 + lines.length) s.rows.push(...blank(20, () => ({ l: "", c: "" })));
     lines.forEach((cells, i) =>
@@ -340,9 +342,10 @@ function saleCalcRow(r) {
   let sale = null;
   if (s.mode === "rate" && l != null) sale = salePrice(l, s.rate, s.round);
   if (s.mode === "mark" && c != null) sale = markupPrice(c, s.mark, s.round);
-  const buy = s.mode === "rate" && l && c != null ? (c / l) * 100 : null;
+  const buy = l && c != null ? (c / l) * 100 : null;
   const gain = sale != null && c != null ? sale - c : null;
-  return { l, c, sale, buy, gain, gp: gain != null && sale ? (gain / sale) * 100 : null };
+  const sell = sale != null && l ? (sale / l) * 100 : null; // 売価が定価の何掛けか
+  return { l, c, sale, buy, sell, gain, gp: gain != null && sale ? (gain / sale) * 100 : null };
 }
 function calcSale() {
   const grid = $("#sgrid");
@@ -350,6 +353,8 @@ function calcSale() {
   let n = 0,
     tl = 0,
     tc = 0,
+    al = 0,
+    ac = 0,
     ts = 0,
     tg = 0,
     warn = 0;
@@ -359,16 +364,21 @@ function calcSale() {
     if (!row) return;
     const x = saleCalcRow(r);
     const ob = $(".o-buy", row);
-    if (ob) ob.innerHTML = x.buy != null ? `${pct(x.buy)}<small>${(x.buy / 10).toFixed(1)}掛</small>` : "";
-    $(".o-sale", row).textContent = x.sale != null ? yen(x.sale) : "";
+    if (ob) ob.textContent = kake(x.buy);
+    $(".o-sale", row).innerHTML =
+      x.sale != null ? `${yen(x.sale)}${s.mode === "mark" && x.sell != null ? `<small>定価の${kake(x.sell)}</small>` : ""}` : "";
     $(".o-gain", row).innerHTML = x.gain != null ? `${yen(x.gain)}<small>${pct(x.gp)}</small>` : "";
+    if (x.l && x.c != null) {
+      al += x.l;
+      ac += x.c;
+    }
     const bad = x.gain != null && x.gain < 0;
     row.classList.toggle("bad", bad);
     row.classList.toggle("filled", x.sale != null);
     if (x.sale != null) {
       n++;
       ts += x.sale;
-      if (x.l != null && s.mode === "rate") tl += x.l;
+      if (x.l != null) tl += x.l;
       if (x.c != null) tc += x.c;
       if (x.gain != null) tg += x.gain;
       if (bad) warn++;
@@ -377,9 +387,10 @@ function calcSale() {
   const how =
     s.mode === "rate"
       ? `定価 × ${s.rate}% → ${roundOf(s.round).label}`
-      : `原価 ×（100＋${s.mark}）% → ${roundOf(s.round).label}`;
+      : `仕切り ×（100＋${s.mark}）% → ${roundOf(s.round).label}`;
   $("#sfoot").innerHTML = `<div class="sum"><span>${n}件</span><small class="how">${esc(how)}</small></div>
-    ${s.mode === "rate" ? `<div class="sum minor"><small>定価計</small><b>${yen(tl)}</b></div>` : ""}<div class="sum minor"><small>原価計</small><b>${yen(tc)}</b></div>
+    ${tl > 0 ? `<div class="sum minor"><small>定価計</small><b>${yen(tl)}</b></div>` : ""}<div class="sum minor"><small>仕切り計</small><b>${yen(tc)}</b></div>
+    ${al > 0 ? `<div class="sum hl2"><small>平均仕入れ掛（全体）</small><b>${kake((ac / al) * 100)}</b></div>` : ""}
     <div class="sum hl"><small>売価計</small><b>${yen(ts)}</b></div><div class="sum"><small>粗利計</small><b class="${tg < 0 ? "ng" : "ok"}">${yen(tg)}</b><small>${ts ? pct((tg / ts) * 100) : ""}</small></div>
     ${warn ? `<div class="sum warn">原価割れ ${warn}件</div>` : ""}`;
 }

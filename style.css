@@ -2180,10 +2180,6 @@ img.blur {
 .tgrid.sale .tr {
   grid-template-columns: 26px repeat(5, minmax(0, 1fr)) 26px;
 }
-.tgrid.sale.mark .th,
-.tgrid.sale.mark .tr {
-  grid-template-columns: 26px repeat(3, minmax(0, 1fr)) 26px;
-}
 .tgrid.cost .th,
 .tgrid.cost .tr {
   grid-template-columns: 26px minmax(0, 1.2fr) 70px minmax(0, 1fr) 26px;
@@ -2247,9 +2243,6 @@ img.blur {
 .tgrid .inp.qty {
   text-align: center;
 }
-.tgrid .sale.mark .th span:nth-child(3) {
-  color: var(--mu2);
-}
 .tgrid output {
   font-family: var(--mono);
   text-align: right;
@@ -2267,8 +2260,16 @@ img.blur {
   font-size: 15px;
   color: var(--ac);
 }
-.tgrid .o-buy small {
-  color: var(--mu2);
+.tgrid .o-buy {
+  font-weight: 800;
+  font-size: 15px;
+}
+.tgrid .th .opt {
+  font-style: normal;
+  font-weight: 400;
+}
+.tfoot .hl2 b {
+  color: var(--ac);
 }
 .tgrid .tr.bad .o-gain {
   color: var(--ng);
@@ -2679,7 +2680,6 @@ img.blur {
   }
   .tgrid .tr,
   .tgrid.sale .tr,
-  .tgrid.sale.mark .tr,
   .tgrid.cost .tr,
   .tgrid.cost.in .tr {
     border: 1px solid var(--ln);
@@ -2691,9 +2691,6 @@ img.blur {
   }
   .tgrid .tr {
     grid-template-areas: "no a b x";
-  }
-  .tgrid.sale.mark .tr {
-    grid-template-areas: "no a a x";
   }
   .tgrid .tr:focus-within {
     border-color: var(--ac);
@@ -2732,11 +2729,6 @@ img.blur {
   .tgrid .tr.filled {
     grid-template-areas:
       "no a b x"
-      "no r r x";
-  }
-  .tgrid.sale.mark .tr.filled {
-    grid-template-areas:
-      "no a a x"
       "no r r x";
   }
   .tgrid .tr.filled .outs {
