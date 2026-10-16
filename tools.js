@@ -1,10 +1,10 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016a";
-import { yomiText } from "./yomi.js?v=20261016a";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016a";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016a";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016a";
+import * as S from "./search.js?v=20261016b";
+import { yomiText } from "./yomi.js?v=20261016b";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016b";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016b";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016b";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -1814,7 +1814,7 @@ function renderSph() {
     });
     return;
   }
-  box.innerHTML = tog + `<label class="search">${C.IC.search}<input id="sq" type="search" autocomplete="off" placeholder="品番・名称・明るさ・色（例：h4 6000k、slrzh4a060、フォグ、5000lm）" value="${esc(T.sph.q)}"><span class="cnt" id="scnt"></span></label>
+  box.innerHTML = tog + `<label class="search">${C.IC.search}<input id="sq" type="search" autocomplete="off" placeholder="品番・名称・明るさ・色（例：h4 6000k、bs09l-s300b、フォグ、5000lm）" value="${esc(T.sph.q)}"><span class="cnt" id="scnt"></span></label>
     <div class="chips" id="schips"></div>
     <div class="chips" id="schips2"></div>
     <div id="slist"></div>
