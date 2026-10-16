@@ -1,10 +1,10 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016c";
-import { yomiText } from "./yomi.js?v=20261016c";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016c";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016c";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016c";
+import * as S from "./search.js?v=20261016d";
+import { yomiText } from "./yomi.js?v=20261016d";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016d";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016d";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016d";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -1786,10 +1786,10 @@ function renderSph() {
   const box = fresh();
   sphLimit = 30;
   // 前のバージョンで入れた名称にある「（市販品番 …）」を、自動で消す
-  const stale = sphList().filter((o) => /（市販品番[^）]*）/.test(o.name || ""));
+  const stale = sphList().filter((o) => /[（(]市販品番[^）)]*[）)]/.test(o.name || ""));
   if (stale.length) {
     const upd = {};
-    for (const o of stale) upd[`${o.id}/name`] = o.name.replace(/\s*（市販品番[^）]*）/g, "").trim();
+    for (const o of stale) upd[`${o.id}/name`] = o.name.replace(/\s*[（(]市販品番[^）)]*[）)]/g, "").trim();
     C.store.update("spheres", upd).catch(() => {});
   }
   const tog = `<div class="chips sviews">${[
