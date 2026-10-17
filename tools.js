@@ -1,13 +1,14 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016q";
-import { yomiText } from "./yomi.js?v=20261016q";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016q";
-import { docModel } from "./sphxlsx.js?v=20261016q";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261016q";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016q";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016q";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016q";
+import * as S from "./search.js?v=20261016r";
+import { yomiText } from "./yomi.js?v=20261016r";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016r";
+import { docModel } from "./sphxlsx.js?v=20261016r";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261016r";
+import { bulbGuideHtml } from "./bulbdocs.js?v=20261016r";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016r";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016r";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016r";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -772,7 +773,28 @@ function bulbList() {
 }
 function renderBulb() {
   const box = fresh();
-  box.innerHTML = `<label class="search">${C.IC.search}<input id="bq" type="search" autocomplete="off" placeholder="形状・規格・用途・品番（例：t10、h4、ウインカー、24v）" value="${esc(T.bulb.q)}"><span class="cnt" id="bcnt"></span></label>
+  const tog = `<div class="chips sviews">${[
+    ["list", "検索"],
+    ["guide", "解説書"],
+  ]
+    .map(([k, l]) => `<button class="chip ${(T.bulb.view || "list") === k ? "on" : ""}" data-bview="${k}">${l}</button>`)
+    .join("")}</div>`;
+  if (T.bulb.view === "guide") {
+    // 形状ごとの解説書（店のバルブデータとつながっている）
+    box.innerHTML = tog + bulbGuideHtml(bulbList());
+    fillBulbPhotos(box);
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.bview) {
+        T.bulb.view = b.dataset.bview;
+        save();
+        renderBulb();
+      } else if (b.dataset.bgo) $(`#bg-${b.dataset.bgo}`, box)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return;
+  }
+  box.innerHTML = tog + `<label class="search">${C.IC.search}<input id="bq" type="search" autocomplete="off" placeholder="形状・規格・用途・品番（例：t10、h4、ウインカー、24v）" value="${esc(T.bulb.q)}"><span class="cnt" id="bcnt"></span></label>
     <div class="chips" id="bchips"></div>
     <div class="chips" id="bchips2"></div>
     <div id="blist"></div>
@@ -802,6 +824,11 @@ function renderBulb() {
     if (!b) return;
     const d = b.dataset;
     const o = d.bid ? C.st.bulbs[d.bid] && { id: d.bid, ...C.st.bulbs[d.bid] } : null;
+    if (d.bview) {
+      T.bulb.view = d.bview;
+      save();
+      return renderBulb();
+    }
     if (d.bpick) $("#fbulb").click();
     else if (d.bedit !== undefined) bulbForm(d.bedit || null);
     else if (d.bcats) catsForm("bulb");
