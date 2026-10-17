@@ -1,14 +1,14 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016t";
-import { yomiText } from "./yomi.js?v=20261016t";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016t";
-import { docModel } from "./sphxlsx.js?v=20261016t";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261016t";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016t";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016t";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016t";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016t";
+import * as S from "./search.js?v=20261016u";
+import { yomiText } from "./yomi.js?v=20261016u";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016u";
+import { docModel } from "./sphxlsx.js?v=20261016u";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261016u";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016u";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016u";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016u";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016u";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -771,7 +771,7 @@ function bulbList() {
   }));
   return bulbIdx;
 }
-// ピットワークのバルブ早見表（カタログ）と照らし合わせて見つかった、古いデータの直し
+// ピットワークのバルブ早見表（最新のカタログ）と照らし合わせて見つかった、古いデータの直し
 // 今の値が「直す前」と同じときだけ直す（自分で書き換えたものは、そのまま残す）
 const BULB_FIXES = [
   ["AY080-00091", "use", "メーター・ポジション・表示灯(T11ウェッジ球)", "メーター・ポジション・表示灯(T10ウェッジ球/一般用)"],
@@ -780,6 +780,7 @@ const BULB_FIXES = [
   ["AY080-0Y016", "use", "方向指示灯・制動灯・尾灯(S25バヨネット球/BA15s系)", "方向指示灯・制動灯・尾灯(S25バヨネット球/BAU15s・ピン角150°・ECE認証取得品PY21W)"],
   ["AY080-10037", "cat", "シングル球", "ヘッドランプ用"],
   ["AY080-00035", "use", "ウインカー、ナンバー灯(ライセンスランプ)、バックランプ", "ライセンス・パーキング用(耐振)"],
+  ["AY080-00088", "use", "車幅灯・番号灯・表示灯(BA15s口金/トラック・商用車用)", "車幅灯・番号灯・表示灯(BA15s口金/トラック・商用車用・R10W表記・ガラスT19)"],
   ["AY080-0Y008", "use", "方向指示灯・後尾灯・表示灯(T20ウェッジ球/WY21W・アンバー", "方向指示灯・後尾灯・表示灯(T20ウェッジ球/WY21W・アンバー)"],
 ];
 // S25・G18は、差し込んで回すバヨネット式。「ウェッジ」と書かれた古いデータも、一度だけ直す
