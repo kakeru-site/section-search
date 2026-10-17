@@ -20,7 +20,10 @@ export function carFront(hl = "", click = false) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 196" class="ex-svg" role="img" aria-label="車を正面から見た模式図">
     <rect x="32" y="146" width="26" height="42" rx="7" ${TIRE}/><rect x="262" y="146" width="26" height="42" rx="7" ${TIRE}/>
     <path d="M44 150 L40 120 Q42 102 60 92 L78 54 Q82 40 98 38 L222 38 Q238 40 242 54 L260 92 Q278 102 280 120 L276 150 Z" ${BODY}/>
-    <path d="M92 52 L228 52 L246 88 L74 88 Z" ${GLS}/>
+    ${R("windshield", "M92 52 L228 52 L246 88 L74 88 Z", GLS)}
+    ${R("roof", "M98 38 L222 38 Q234 40 238 50 L82 50 Q86 40 98 38 Z", `fill="none" stroke="none"`, HL)}
+    ${R("ip", "M86 66 L234 66 L242 88 L78 88 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("vent", "M100 70 L124 70 L124 82 L100 82 Z M148 70 L172 70 L172 82 L148 82 Z M196 70 L220 70 L220 82 L196 82 Z", `fill="none" stroke="none"`, HL)}
     ${R("hood", "M74 88 L246 88 L262 114 L58 114 Z", `fill="#8a8f98" fill-opacity=".1" stroke="#8a8f98" stroke-width="1.6" stroke-linejoin="round"`)}
     ${R("coreSupport", "M68 112 L252 112 L252 156 L68 156 Z", `fill="none" stroke="none"`, HLD)}
     ${R("hoodLedgeL", "M64 90 L86 88 L92 114 L66 116 Z", `fill="none" stroke="none"`, HLD)}
@@ -45,6 +48,9 @@ export function carSide(hl = "") {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 176" class="ex-svg" role="img" aria-label="車を横から見た模式図">
     <path d="M12 124 L14 108 Q16 100 28 98 L100 86 L132 52 Q136 46 146 46 L238 46 Q248 46 254 54 L286 84 L326 96 Q340 100 342 112 L344 124 Q344 134 334 134 L22 134 Q12 134 12 124 Z" ${BODY}/>
     <path d="M136 56 L232 56 L262 84 L114 84 Z" ${GLS}/>
+    ${R("roofS", "M140 46 L240 46 Q248 46 254 54 L250 57 L134 57 Q132 50 140 46 Z", `fill="none" stroke="none"`, HL)}
+    ${R("windshieldS", "M98 86 L130 52 L138 57 L116 85 Z", `fill="none" stroke="none"`, HL)}
+    ${R("ipS", "M104 70 L132 66 L132 86 L106 88 Z", `fill="none" stroke="none"`, HLD)}
     <path d="M168 56 L168 134 M226 58 L226 134" fill="none" stroke="#8a8f98" stroke-width="1.4"/>
     ${R("fender", "M26 100 L114 86 L116 134 L102 134 A32 32 0 0 0 38 134 L26 134 Z", `fill="#8a8f98" fill-opacity=".1" stroke="#8a8f98" stroke-width="1.4" stroke-linejoin="round"`)}
     ${R("hood", "M24 98 L98 83 L116 83 L114 88 L26 104 Z", `fill="none" stroke="none"`, HL)}
@@ -146,8 +152,44 @@ EXT_GROUPS.push(
     one: "ダッシュパネル（仕切りの壁）の、車内側につく防音材と、足元まわりの飾り板です。",
     alias: ["ダッシュ", "だっしゅ", "インシュレーター", "防音", "フィニッシャー", "サイドフィニッシャー", "足元"],
   },
+  {
+    name: "インパネ",
+    en: "INSTRUMENT PANEL, PAD & CLUSTER LID; INST FITTING",
+    area: "室内",
+    figs: [["front", "ip", "正面から（ガラスの奥）"], ["side", "ipS", "横から（車内の前）"]],
+    hot: [],
+    one: "運転席の前にあるパネル（ダッシュボード）です。内側に、横に通る骨組み（ステアリングメンバー）があります。",
+    alias: ["インストルメントパネル", "いんぱね", "ダッシュボード", "ダッシュ", "パッド", "エアバッグ", "オーディオ", "ステアリングメンバー", "ステー", "ブラケット"],
+  },
+  {
+    name: "ベンチレーター",
+    en: "VENTILATOR",
+    area: "室内",
+    figs: [["front", "vent", "正面から（ガラスの奥・左・中央・右）"]],
+    hot: [],
+    one: "エアコンの風の吹き出し口です。ダッシュボードの左右と中央にあります。",
+    alias: ["吹き出し口", "吹出口", "送風口", "エアコン", "エアコンの吹き出し口", "ルーバー", "風", "ふきだしぐち"],
+  },
+  {
+    name: "フロントガラス",
+    en: "FRONT WINDSHIELD",
+    area: "ルーフ・ガラス",
+    figs: [["front", "windshield", "正面から"], ["side", "windshieldS", "横から"]],
+    hot: ["front:windshield"],
+    one: "車の前の窓ガラスです。上と下に、飾りのモールが付きます。ガラスは、シーラント（接着剤）でボディに付けます。",
+    alias: ["ガラス", "がらす", "ウインドシールド", "ウィンドシールド", "フロントウィンドウ", "前ガラス", "モール", "シーラント", "接着", "スペーサー"],
+  },
+  {
+    name: "ルーフ",
+    en: "ROOF PANEL & FITTING; STD ROOF",
+    area: "ルーフ・ガラス",
+    figs: [["front", "roof", "正面から"], ["side", "roofS", "横から"]],
+    hot: ["front:roof"],
+    one: "車の屋根です。内側に、骨組み（ボウ）が、前から後ろへ並びます。",
+    alias: ["屋根", "やね", "ルーフパネル", "ボウ", "ルーフボウ", "ルーフレール", "インシュレーター", "プロテクター"],
+  },
 );
-export const AREAS = ["フロント", "サイド", "リア"];
+export const AREAS = ["フロント", "室内", "ルーフ・ガラス", "サイド", "リア"];
 
 // 一覧に載せない小物（探すときの言葉）。入力されたら、部位のページへ案内する
 export const SMALL_RE = /クリップ|くりっぷ|ボルト|ぼると|ナット|なっと|ネジ|ねじ|ビス|ぴす|スクリュー|グロメット|プラグ|とめる|止める|留める|止め|留め|固定/g;
