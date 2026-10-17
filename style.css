@@ -3864,3 +3864,249 @@ img.blur {
     font-size: 11pt;
   }
 }
+
+/* ---- 外装検索 ---- */
+.ex-hint {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(242, 194, 48, 0.12);
+  border: 1px solid rgba(242, 194, 48, 0.4);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.ex-picker {
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 10px 14px 6px;
+  margin-bottom: 12px;
+}
+.ex-picker h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--ac);
+}
+.ex-pick {
+  max-width: 420px;
+  margin: 0 auto;
+}
+.ex-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ex-pick path.pk {
+  cursor: pointer;
+  transition: fill 0.12s;
+}
+.ex-pick path.pk:hover {
+  fill: #f2c230;
+  fill-opacity: 0.75;
+}
+.ex-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+.ex-card {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 4px 10px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  color: var(--tx);
+  font: inherit;
+  cursor: pointer;
+  align-items: start;
+}
+.ex-card:hover {
+  border-color: var(--ac);
+}
+.ex-card .ex-fig {
+  grid-row: 1 / span 4;
+  background: var(--in);
+  border-radius: 8px;
+  padding: 4px;
+}
+.ex-ct {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  font-size: 15px;
+}
+.ex-area {
+  white-space: nowrap;
+  font-style: normal;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--in);
+  color: var(--mu);
+}
+.ex-one {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--mu);
+}
+.ex-hits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12.5px;
+}
+.ex-hits code,
+.ex-t code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  color: var(--ac);
+}
+.ex-card small {
+  color: var(--mu);
+  font-size: 11.5px;
+}
+.ex-none {
+  color: var(--mu);
+  font-size: 13px;
+}
+.ex-det {
+  display: grid;
+  gap: 8px;
+}
+.ex-dh {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.ex-dh h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.ex-en {
+  color: var(--mu);
+  font-size: 12px;
+}
+.ex-one2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.ex-det h4 {
+  margin: 10px 0 2px;
+  font-size: 13.5px;
+  color: var(--ac);
+}
+.ex-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ex-figs figure {
+  margin: 0;
+  background: var(--in);
+  border: 1px solid var(--ln2);
+  border-radius: 10px;
+  padding: 8px;
+  width: min(320px, 100%);
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--mu);
+}
+.ex-tw {
+  overflow-x: auto;
+}
+.ex-t {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+}
+.ex-t th,
+.ex-t td {
+  border: 1px solid var(--ln2);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.ex-t thead th {
+  background: var(--in);
+  white-space: nowrap;
+}
+.ex-t td small {
+  display: block;
+  color: var(--mu);
+  font-size: 11.5px;
+}
+.ex-t td.mono b {
+  color: var(--ac);
+  font-size: 15px;
+}
+.ex-side {
+  font-style: normal;
+  font-size: 11px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--in);
+  color: var(--mu);
+}
+.ex-side.r {
+  background: rgba(217, 48, 37, 0.2);
+}
+.ex-side.l {
+  background: rgba(26, 115, 232, 0.25);
+}
+.ex-small {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mu);
+}
+.ex-phs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ex-ph {
+  position: relative;
+  margin: 0;
+}
+.ex-pimg {
+  display: block;
+  width: 150px;
+  height: 110px;
+  padding: 0;
+  border: 1px solid var(--ln2);
+  border-radius: 8px;
+  background: var(--in);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.ex-pimg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ex-ph .x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+.ex-addph {
+  width: 150px;
+  height: 110px;
+  border: 1px dashed var(--ln2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mu);
+  font: inherit;
+  cursor: pointer;
+}
+.ex-addph:hover {
+  border-color: var(--ac);
+  color: var(--ac);
+}

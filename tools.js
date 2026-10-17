@@ -1,14 +1,15 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016u";
-import { yomiText } from "./yomi.js?v=20261016u";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016u";
-import { docModel } from "./sphxlsx.js?v=20261016u";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261016u";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016u";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016u";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016u";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016u";
+import * as S from "./search.js?v=20261016v";
+import { yomiText } from "./yomi.js?v=20261016v";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016v";
+import { docModel } from "./sphxlsx.js?v=20261016v";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261016v";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016v";
+import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261016v";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016v";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016v";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016v";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -130,6 +131,7 @@ const T = Object.assign(
     bulb: { q: "", shape: "", volt: "", cat: "", protect: true },
     oil: { q: "", cat: "", protect: true },
     sph: { q: "", cat: "", k: "", view: "list", protect: true },
+    ext: { q: "", group: "" },
   },
   load() || {},
 );
@@ -161,6 +163,7 @@ const TABS = [
   ["bulb", "バルブ検索"],
   ["oil", "オイル・ケミカル"],
   ["sph", "スフィアライト"],
+  ["ext", "外装検索"],
 ];
 export function render(main) {
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">ツール</h1>
@@ -174,7 +177,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -187,6 +190,7 @@ export function onData(key) {
   if (T.tab === "bulb" && key === "bulbs" && $("#blist")) renderBulbList();
   if (T.tab === "oil" && (key === "oils" || key === "memos") && $("#olist")) renderOilList();
   if (T.tab === "sph" && (key === "spheres" || key === "memos") && $("#slist")) renderSphList();
+  if (T.tab === "ext" && (key === "exteriors" || key === "extGroups") && $("#exbody")) renderExtBody();
   if (T.tab === "pad" && key === "settings" && $("#padres") && !document.activeElement?.dataset?.pk)
     renderPad();
 }
@@ -2628,5 +2632,372 @@ async function exportIntoBase(file, kind = "oil") {
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
+
+// ================= 外装検索 =================
+// 部品の名前と図番（データ）は Firebase の exteriors に、部位ごとの写真は extGroups / extPhoto に入れる
+let extIdx = null,
+  extSrc = null;
+const byNo = (a, b) => (a.no ?? 9999) - (b.no ?? 9999) || String(a.code).localeCompare(String(b.code));
+function extList() {
+  const raw = C.st.exteriors || {};
+  if (raw === extSrc && extIdx) return extIdx;
+  extSrc = raw;
+  extIdx = Object.entries(raw).map(([id, o]) => ({
+    id,
+    ...o,
+    _s: S.norm(`${o.group} ${o.nameJa} ${o.nameEn} ${o.code} ${o.side || ""} ${o.note || ""}`) + yomiIdx(`${o.group} ${o.nameJa} ${o.note || ""}`),
+  }));
+  return extIdx;
+}
+// 部位ごとにまとめる（決まった並び → データだけにある部位）
+function extGroupList() {
+  const by = new Map();
+  for (const o of extList()) {
+    if (!by.has(o.group)) by.set(o.group, []);
+    by.get(o.group).push(o);
+  }
+  const names = [
+    ...EXT_GROUPS.map((g) => g.name).filter((n) => by.has(n)),
+    ...[...by.keys()].filter((n) => !metaOf(n)).sort((a, b) => a.localeCompare(b, "ja")),
+  ];
+  return names.map((name) => {
+    const meta = metaOf(name);
+    const parts = by.get(name).sort(byNo);
+    const words = `${name} ${meta?.en || ""} ${(meta?.alias || []).join(" ")}`;
+    return {
+      name,
+      meta,
+      parts,
+      _g: S.norm(words) + yomiIdx(words),
+    };
+  });
+}
+// 探す：クリップ・ボルトなどの言葉は、一覧に載せていないので、飛ばして、部位だけで探す
+function extSearch(q) {
+  const raw = String(q || "").normalize("NFKC").trim();
+  const small = new RegExp(SMALL_RE.source).test(raw);
+  const rest = raw.replace(new RegExp(SMALL_RE.source, "g"), " ").trim();
+  const toks = rest.split(/[\s、,]+/).filter(Boolean).map((t) => S.norm(t));
+  const groups = extGroupList();
+  if (!toks.length) return { small, toks, rows: groups.map((g) => ({ g, hits: [] })) };
+  const rows = [];
+  for (const g of groups) {
+    const all = `${g._g} ${g.parts.map((p) => p._s).join(" ")}`;
+    if (!toks.every((t) => all.includes(t))) continue;
+    const hits = g.parts.filter((p) => toks.every((t) => (p._s + " " + g._g).includes(t)) && !toks.every((t) => g._g.includes(t)));
+    rows.push({ g, hits });
+  }
+  return { small, toks, rows };
+}
+const sideTag = (s) => (s ? `<i class="ex-side ${s === "右" ? "r" : s === "左" ? "l" : ""}">${esc(s)}</i>` : "");
+function renderExt() {
+  const box = fresh();
+  const e = T.ext;
+  box.innerHTML = `<label class="search">${C.IC.search}<input id="exq" type="search" autocomplete="off" placeholder="部位・部品名・図番（例：フェンダー、バンパー、62050）" value="${esc(e.q)}"><span class="kbd">/</span></label>
+    <div id="exbody"></div>
+    <div class="tacts"><input type="file" id="fext" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-expick="1">Excelから取り込み</button><button class="btn pri" data-exedit="">＋ 部品を追加</button></div>`;
+  const q = $("#exq", box);
+  q.addEventListener("input", () => {
+    e.q = q.value;
+    e.group = "";
+    save();
+    renderExtBody();
+  });
+  q.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      q.value = e.q = "";
+      e.group = "";
+      renderExtBody();
+    }
+  });
+  $("#fext", box).addEventListener("change", (ev) => importExts(ev.target.files[0]).finally(() => (ev.target.value = "")));
+  box.addEventListener("click", (ev) => {
+    const hot = ev.target.closest("[data-g]");
+    if (hot && hot.dataset.g) {
+      e.group = hot.dataset.g;
+      e.q = q.value = "";
+      save();
+      return renderExtBody();
+    }
+    const b = ev.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+    if (d.expick !== undefined) $("#fext").click();
+    else if (d.exedit !== undefined) extForm(d.exedit || null, d.exgroup || "");
+    else if (d.exg !== undefined) {
+      e.group = d.exg;
+      save();
+      renderExtBody();
+      scrollTo({ top: 0 });
+    } else if (d.exback !== undefined) {
+      e.group = "";
+      save();
+      renderExtBody();
+    } else if (d.exaddph !== undefined) $("#fexph").click();
+    else if (d.exph) extPhotoView(d.exph);
+    else if (d.exphdel) extPhotoDelete(d.exphdel);
+  });
+  box.addEventListener("change", (ev) => {
+    if (ev.target.id === "fexph" && ev.target.files[0]) extPhotoAdd(ev.target.files[0]).finally(() => (ev.target.value = ""));
+  });
+  renderExtBody();
+}
+function extPickerHtml() {
+  // 車の正面の絵。押せる部位は、押すとその部位のページに行く
+  return `<div class="ex-pick" id="expick">${carFront("")}</div>`;
+}
+function wireExtPicker() {
+  const box = $("#expick");
+  if (!box) return;
+  const names = new Map();
+  for (const g of extGroupList()) for (const h of g.meta?.hot || []) names.set(h.replace("front:", ""), g.name);
+  $$("[data-r]", box).forEach((p) => {
+    const g = names.get(p.dataset.r);
+    if (!g) return;
+    p.dataset.g = g;
+    p.classList.add("pk");
+    p.style.pointerEvents = "all";
+    if (p.dataset.r === "coreSupport") {
+      // 奥にある骨組みは、点線で、押せる場所を示す
+      p.setAttribute("stroke", "#d9a400");
+      p.setAttribute("stroke-dasharray", "5 4");
+      p.setAttribute("stroke-width", "1.6");
+    }
+    p.insertAdjacentHTML("beforeend", `<title>${esc(g)}</title>`);
+  });
+}
+function renderExtBody() {
+  const body = $("#exbody");
+  if (!body) return;
+  const e = T.ext;
+  if (!extList().length) {
+    body.innerHTML = `<div class="panel"><h3>外装のデータがまだ入っていません</h3><p style="margin:0 0 10px;font-size:12.5px;color:var(--mu);line-height:1.7">下の「Excelから取り込み」で、部位・名称・図番の入ったExcelを選んでください（列：部位／名称／英語名／図番／右左／備考）。「＋ 部品を追加」で、1件ずつ入れることもできます。</p></div>`;
+    return;
+  }
+  if (e.group) return renderExtGroup(body, e.group);
+  const r = extSearch(e.q);
+  const hint = r.small
+    ? `<div class="ex-hint">クリップ・ボルト・ナットなどの小物は、一覧に載せていません。まず、その部位の絵（下のカード）で、場所を確認してください。</div>`
+    : "";
+  const cards = r.rows
+    .map(({ g, hits }) => {
+      const fig = g.meta ? groupFigs(g.meta)[0] : null;
+      return `<button class="ex-card" data-exg="${esc(g.name)}">
+        <span class="ex-fig">${fig ? fig.svg : ""}</span>
+        <span class="ex-ct"><b>${esc(g.name)}</b>${g.meta ? `<i class="ex-area">${esc(g.meta.area)}</i>` : ""}</span>
+        <span class="ex-one">${esc(g.meta?.one || "")}</span>
+        ${
+          hits.length
+            ? `<span class="ex-hits">${hits
+                .slice(0, 6)
+                .map((p) => `<span>${esc(p.nameJa)}${sideTag(p.side)} <code>${esc(p.code)}</code></span>`)
+                .join("")}</span>`
+            : ""
+        }
+        <small>部品 ${g.parts.length}点</small></button>`;
+    })
+    .join("");
+  body.innerHTML = `${hint}${
+    !r.toks.length ? `<div class="ex-picker"><h4>絵から探す（押してみてください）</h4>${extPickerHtml()}</div>` : ""
+  }<div class="ex-cards">${cards || '<p class="ex-none">見つかりませんでした。別の言い方（例：バンパー、フェンダー、グリル）も試してください。</p>'}</div>`;
+  wireExtPicker();
+}
+function renderExtGroup(body, name) {
+  const g = extGroupList().find((x) => x.name === name);
+  if (!g) {
+    T.ext.group = "";
+    return renderExtBody();
+  }
+  const figs = g.meta ? groupFigs(g.meta) : [];
+  const key = name;
+  const grp = (C.st.extGroups || {})[key] || {};
+  const phs = Object.entries(grp.photos || {}).sort((a, b) => a[1] - b[1]);
+  body.innerHTML = `<div class="ex-det">
+    <div class="ex-dh"><button class="btn" data-exback="1">← 一覧へ</button><div><h2>${esc(g.name)}</h2><div class="ex-en">${esc(g.meta?.en || "")}</div></div></div>
+    ${g.meta?.one ? `<p class="ex-one2">${esc(g.meta.one)}</p>` : ""}
+    ${
+      figs.length
+        ? `<h4>車のどこにある？（模式図）</h4><div class="ex-figs">${figs.map((f) => `<figure>${f.svg}<figcaption>${esc(f.cap)}</figcaption></figure>`).join("")}</div>`
+        : ""
+    }
+    <h4>主な部品（名称・図番）</h4>
+    <div class="ex-tw"><table class="ex-t"><thead><tr><th>名称</th><th>英語名</th><th>図番</th><th></th></tr></thead><tbody>${g.parts
+      .map(
+        (p) =>
+          `<tr data-exedit="${esc(p.id)}" tabindex="0"><td><b>${esc(p.nameJa)}</b>${sideTag(p.side)}${p.note ? `<small>${esc(p.note)}</small>` : ""}</td><td class="mu">${esc(p.nameEn || "")}</td><td class="mono"><b>${esc(p.code)}</b></td><td><button class="linkbtn" data-exedit="${esc(p.id)}">編集</button></td></tr>`,
+      )
+      .join("")}</tbody></table></div>
+    <p class="ex-small">※ クリップ・ボルト・ナットなどの小物は、載せていません。場所は、下の写真か、EPCの図で確認します。</p>
+    <h4>お店の写真（部品の図など）</h4>
+    <div class="ex-phs">${phs
+      .map(
+        ([pid]) =>
+          `<figure class="ex-ph"><button class="ex-pimg" data-exph="${esc(key)}|${esc(pid)}"><img data-exph-img="${esc(key)}|${esc(pid)}" alt=""></button><button class="x" data-exphdel="${esc(key)}|${esc(pid)}" title="この写真を消す" aria-label="この写真を消す">×</button></figure>`,
+      )
+      .join("")}<button class="ex-addph" data-exaddph="1">＋ 写真を追加</button><input type="file" id="fexph" accept="image/*" hidden></div>
+    <div class="tacts"><button class="btn" data-exedit="" data-exgroup="${esc(g.name)}">＋ この部位に部品を追加</button></div>
+  </div>`;
+  $$("img[data-exph-img]", body).forEach(async (img) => {
+    const [k, pid] = img.dataset.exphImg.split("|");
+    const u = await extPhotoGet(k, pid);
+    if (u) img.src = u;
+  });
+}
+// ---- 写真（部位ごと・何枚でも） ----
+const extPhCache = new Map();
+function extPhotoGet(key, pid) {
+  const id = `${key}__${pid}`;
+  if (!extPhCache.has(id)) extPhCache.set(id, C.store.get(`extPhoto/${id}`).catch(() => null));
+  return extPhCache.get(id);
+}
+async function extPhotoAdd(file) {
+  const key = T.ext.group;
+  if (!key) return;
+  try {
+    const url = await C.blobToPhoto(file);
+    const pid = Date.now().toString(36);
+    await C.store.set(`extPhoto/${key}__${pid}`, url);
+    await C.store.update("extGroups", { [`${key}/photos/${pid}`]: Date.now() });
+    C.toast("写真を追加しました");
+  } catch (e) {
+    C.toast("写真を追加できませんでした：" + e.message, true);
+  }
+}
+async function extPhotoView(ref) {
+  const [k, pid] = ref.split("|");
+  const u = await extPhotoGet(k, pid);
+  if (!u) return;
+  await C.modal(`<h3>${esc(k)}</h3><img src="${u}" alt="" style="width:100%;border-radius:8px;display:block"><div class="modal-foot"><button class="btn pri" data-m="cancel">閉じる</button></div>`);
+}
+async function extPhotoDelete(ref) {
+  const [k, pid] = ref.split("|");
+  if (!(await C.confirmBox("この写真を消しますか？", "消す", true))) return;
+  await C.store.remove(`extPhoto/${k}__${pid}`).catch(() => {});
+  await C.store.remove(`extGroups/${k}/photos/${pid}`).catch(() => {});
+  extPhCache.delete(`${k}__${pid}`);
+  C.toast("消しました");
+}
+// ---- 部品の追加・編集 ----
+async function extForm(id, group = "") {
+  const o = id ? C.st.exteriors[id] : null;
+  if (id && !o) return;
+  const b = o || { group: group || T.ext.group || "", nameJa: "", nameEn: "", code: "", side: "", note: "" };
+  const names = [...new Set([...EXT_GROUPS.map((g) => g.name), ...extGroupList().map((g) => g.name)])];
+  const f = (k, l, extra = "", cls = "") =>
+    `<div class="field"><label>${l}</label><input class="inp ${cls}" name="${k}" value="${esc(b[k])}" ${extra}></div>`;
+  const r = await C.modal(`<h3>${id ? "部品を編集" : "部品を追加"}</h3><form>
+    <div class="field"><label>部位</label><input class="inp" name="group" id="ex-g" value="${esc(b.group)}" required placeholder="下から選ぶか、新しい名前を入力" autocomplete="off">
+      <div class="chips" id="ex-gs" style="margin:6px 0 0">${names.map((n) => `<button type="button" class="chip ${n === b.group ? "on" : ""}" data-exgc="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>
+    ${f("nameJa", "名称（日本語）", "required autocomplete=off")}${f("nameEn", "英語名（任意）", "autocomplete=off")}
+    <div class="grid2">${f("code", "図番（図の中の番号）", "required autocomplete=off", "mono")}
+    <div class="field"><label>右・左</label><select class="inp" name="side">${["", "右", "左"].map((s) => `<option value="${s}" ${s === (b.side || "") ? "selected" : ""}>${s || "（なし）"}</option>`).join("")}</select></div></div>
+    ${f("note", "備考（任意）", "autocomplete=off")}</form>
+    <div class="modal-foot">${id ? '<button class="btn danger left" data-m="delete">削除</button>' : ""}<button class="btn" data-m="cancel">キャンセル</button><button class="btn pri" data-m="ok">保存</button></div>`, {
+    onOpen(bg) {
+      bg.addEventListener("click", (ev) => {
+        const c = ev.target.closest("[data-exgc]");
+        if (!c) return;
+        const inp = $("#ex-g", bg);
+        inp.value = c.dataset.exgc;
+        $$("#ex-gs .chip", bg).forEach((x) => x.classList.toggle("on", x.dataset.exgc === inp.value));
+      });
+    },
+  });
+  if (!r) return;
+  if (r.act === "delete") {
+    if (!(await C.confirmBox(`${b.nameJa}（${b.code}）を削除しますか？`, "削除", true))) return;
+    await C.store.remove(`exteriors/${id}`);
+    return C.toast("削除しました");
+  }
+  const rec = {
+    group: exN(r.data.group),
+    nameJa: exN(r.data.nameJa),
+    nameEn: exN(r.data.nameEn),
+    code: exN(r.data.code).toUpperCase(),
+    side: r.data.side || "",
+    note: exN(r.data.note),
+    no: o?.no ?? Date.now() % 100000,
+    updatedAt: Date.now(),
+  };
+  if (!rec.group || !rec.nameJa || !rec.code) {
+    C.toast("部位・名称・図番を入れてください", true);
+    return extForm(id, group);
+  }
+  await C.store.set(`exteriors/${id || `${rec.group}__${rec.code}${rec.side ? "_" + rec.side : ""}`.replace(/[.#$\[\]\/]/g, "-")}`, rec);
+  C.toast("保存しました");
+}
+const exN = (s) => String(s ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();
+// ---- Excel / CSV から取り込み（列：部位／名称／英語名／図番／右左／備考） ----
+const EX_HEAD = {
+  group: /^(部位|グループ|カテゴリ|区分|group)/i,
+  nameJa: /^(名称|日本語|名前|部品名|name\(?ja|ja)/i,
+  nameEn: /^(英語|english|en|name)/i,
+  code: /^(図番|コード|番号|code|図の番号)/i,
+  side: /^(右左|左右|rh\/lh|lr|side|右・左)/i,
+  note: /^(備考|メモ|note|remarks?)/i,
+};
+async function importExts(file) {
+  if (!file) return;
+  let rows;
+  try {
+    const X = await C.loadXlsx();
+    let wb;
+    if (/\.csv$/i.test(file.name)) {
+      const buf = await file.arrayBuffer();
+      let txt;
+      try {
+        txt = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+      } catch {
+        txt = new TextDecoder("shift_jis").decode(buf);
+      }
+      wb = X.read(txt, { type: "string" });
+    } else wb = X.read(await file.arrayBuffer(), { type: "array" });
+    rows = [];
+    for (const n of wb.SheetNames) {
+      const t = X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" });
+      const hi = t.findIndex((r) => r.some((c) => EX_HEAD.group.test(exN(c))) && r.some((c) => EX_HEAD.code.test(exN(c))));
+      if (hi < 0) continue;
+      const col = {};
+      t[hi].forEach((c, i) => {
+        const h = exN(c);
+        for (const k of Object.keys(EX_HEAD)) if (col[k] === undefined && EX_HEAD[k].test(h)) col[k] = i;
+      });
+      let no = 0;
+      for (const r of t.slice(hi + 1)) {
+        const g = exN(r[col.group]);
+        const nameJa = exN(r[col.nameJa]);
+        const code = exN(r[col.code]).toUpperCase();
+        if (!g || !nameJa || !code) continue;
+        rows.push({ group: g, nameJa, nameEn: exN(r[col.nameEn]), code, side: /^(右|RH|R)$/i.test(exN(r[col.side])) ? "右" : /^(左|LH|L)$/i.test(exN(r[col.side])) ? "左" : "", note: exN(r[col.note]), no: ++no });
+      }
+    }
+    if (!rows.length) throw new Error("「部位」「名称」「図番」の列が見つかりませんでした");
+  } catch (e) {
+    return C.toast("取り込めませんでした：" + e.message, true);
+  }
+  const have = new Set(Object.keys(C.st.exteriors || {}));
+  const keyOf = (r) => `${r.group}__${r.code}${r.side ? "_" + r.side : ""}`.replace(/[.#$\[\]\/]/g, "-");
+  const add = rows.filter((r) => !have.has(keyOf(r))).length;
+  const groups = [...new Set(rows.map((r) => r.group))];
+  const ok = await C.modal(`<h3>外装データを取り込む</h3>
+    <p style="margin:0 0 8px;line-height:1.7">${rows.length}件 を見つけました（新規 ${add}件／更新 ${rows.length - add}件）。<br>今ある部品は消えません。同じ部位・図番は上書きします。</p>
+    <div class="xlinfo"><div><span>部位</span><b>${esc(groups.join("、"))}</b></div></div>
+    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>取り込む</button></div>`);
+  if (!ok) return;
+  const w = {};
+  const now = Date.now();
+  rows.forEach((r) => (w[keyOf(r)] = { ...r, updatedAt: now }));
+  const keys = Object.keys(w);
+  try {
+    for (let i = 0; i < keys.length; i += 500) {
+      const part = {};
+      for (const k of keys.slice(i, i + 500)) part[k] = w[k];
+      await C.store.update("exteriors", part);
+    }
+    C.toast(`${rows.length}件 取り込みました`);
+  } catch (e) {
+    C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
   }
 }

@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261016u";
-import * as S from "./search.js?v=20261016u";
-import * as FID from "./faceid.js?v=20261016u";
-import * as IMG from "./imgtools.js?v=20261016u";
-import * as CAT from "./catalog.js?v=20261016u";
-import * as TOOLS from "./tools.js?v=20261016u";
+import { createStore, DEMO, localKey } from "./store.js?v=20261016v";
+import * as S from "./search.js?v=20261016v";
+import * as FID from "./faceid.js?v=20261016v";
+import * as IMG from "./imgtools.js?v=20261016v";
+import * as CAT from "./catalog.js?v=20261016v";
+import * as TOOLS from "./tools.js?v=20261016v";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -83,6 +83,8 @@ const st = {
   memos: {},
   oils: {},
   spheres: {},
+  exteriors: {},
+  extGroups: {},
   history: {},
   settings: {},
   stats: {},
@@ -359,6 +361,8 @@ function startData() {
   sub("memos", "memos");
   sub("oils", "oils");
   sub("spheres", "spheres");
+  sub("exteriors", "exteriors");
+  sub("extGroups", "extGroups");
   sub("history", "history");
   sub("settings", "settings", () => {
     st.syn = S.parseSynonyms(setting("synonyms", S.DEFAULT_SYNONYMS));
@@ -1672,13 +1676,15 @@ async function saveBackup() {
     kataPhotos = {},
     oilPhotos = {},
     bulbPhotos = {},
-    spherePhotos = {};
+    spherePhotos = {},
+    extPhotos = {};
   try {
     imageData = (await store.get("imageData")) || {};
     kataPhotos = (await store.get("kataPhoto")) || {};
     oilPhotos = (await store.get("oilPhoto")) || {};
     bulbPhotos = (await store.get("bulbPhoto")) || {};
     spherePhotos = (await store.get("spherePhoto")) || {};
+    extPhotos = (await store.get("extPhoto")) || {};
   } catch (e) {
     toast("画像本体を読めなかったので、画像は一覧だけ保存します", true);
   }
@@ -1701,6 +1707,9 @@ async function saveBackup() {
         bulbPhoto: bulbPhotos,
         spheres: st.spheres,
         spherePhoto: spherePhotos,
+        exteriors: st.exteriors,
+        extGroups: st.extGroups,
+        extPhoto: extPhotos,
         catalog: st.catalog,
       },
       null,
@@ -1748,6 +1757,7 @@ async function restoreBackup(file) {
       ...(j.oils ? { oils: j.oils, oilPhoto: j.oilPhoto || null } : {}),
       ...(j.bulbs ? { bulbs: j.bulbs, bulbPhoto: j.bulbPhoto || null } : {}),
       ...(j.spheres ? { spheres: j.spheres, spherePhoto: j.spherePhoto || null } : {}),
+      ...(j.exteriors ? { exteriors: j.exteriors, extGroups: j.extGroups || null, extPhoto: j.extPhoto || null } : {}),
       ...(j.catalog ? { catalog: j.catalog, catalogMeta: { version: Date.now() } } : {}),
     });
     toast("復元しました");
