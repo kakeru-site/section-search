@@ -3795,3 +3795,72 @@ img.blur {
   color: var(--mu);
   font-size: 12.5px;
 }
+.bg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+@media print {
+  body.print-bguide * {
+    visibility: hidden !important;
+  }
+  body.print-bguide #bguide,
+  body.print-bguide #bguide * {
+    visibility: visible !important;
+  }
+  body.print-bguide #bguide {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+    gap: 4mm;
+  }
+  body.print-bguide .bg-toc,
+  body.print-bguide [data-bprint] {
+    display: none !important;
+  }
+  body.print-bguide .bg-sec {
+    break-before: page;
+    background: #fff;
+    border-color: #999;
+    font-size: 11pt;
+  }
+  body.print-bguide .bg-sec:first-of-type {
+    break-before: auto;
+  }
+  body.print-bguide .bg-gh {
+    break-after: avoid;
+    background: #f2c230;
+    color: #000;
+  }
+  body.print-bguide .bg-sec h4,
+  body.print-bguide .bg-sec h3 {
+    color: #000;
+  }
+  body.print-bguide .bg-fig {
+    background: #fff;
+    border-color: #999;
+    color: #333;
+  }
+  body.print-bguide .bg-warn {
+    background: #fdecea;
+    border-color: #d93025;
+  }
+  body.print-bguide .bg-learn {
+    background: #fff8dc;
+    border-color: #d9a400;
+  }
+  body.print-bguide .bg-t th,
+  body.print-bguide .bg-t td {
+    border-color: #666;
+    background: #fff;
+    color: #000;
+  }
+  body.print-bguide .bguide ul,
+  body.print-bguide .bg-one {
+    font-size: 11pt;
+  }
+}

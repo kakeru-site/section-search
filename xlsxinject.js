@@ -206,6 +206,10 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
   let relsAdd = "",
     ctAdd = "",
     sheetsAdd = "";
+  const mediaMap = new Map(); // 絵のファイル：元の場所 → 差し込み先の名前
+  let drawN = 0;
+  let mediaN = 0;
+  const mediaExt = new Set();
   // 名前空間はこの要素の上で宣言する（元のファイルの書き方に左右されないように）
   const nsDecl = ` xmlns:r="${REL_NS}"`;
   for (const [name, src] of sheets) {
@@ -215,6 +219,43 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
     // 元のシートの「選択中」には触れない代わりに、こちらの「選択中」を外す（複数選択でまとめて編集されないように）
     const x = remapSheet(await text(A, src), merged.xfOff, strings, merged.dxfOff).replace(/\stabSelected="1"/g, "");
     put(path, x);
+    // 図（絵）があるシートは、図の部品（drawing・media）も、重ならない名前で一緒に差し込む
+    const sRelsPath = src.replace("worksheets/", "worksheets/_rels/") + ".rels";
+    const sRels = await text(A, sRelsPath);
+    if (sRels) {
+      let newRels = "";
+      for (const m of sRels.matchAll(/<Relationship\b[^>]*\/>/g)) {
+        const attr = (k) => (m[0].match(new RegExp(`\\b${k}="([^"]*)"`)) || [])[1];
+        const type = attr("Type") || "";
+        const target = attr("Target") || "";
+        if (!/\/drawing$/.test(type)) continue; // 図の関係だけを引き継ぐ
+        const dSrc = "xl/" + target.replace(/^\.\.\//, "");
+        const dNew = `xl/drawings/oilgdrawing${++drawN}.xml`;
+        put(dNew, await A.file(dSrc).async("uint8array"));
+        ctAdd += `<Override PartName="/${dNew}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`;
+        // 図の中の絵への関係
+        const dRelsSrc = dSrc.replace("drawings/", "drawings/_rels/") + ".rels";
+        const dRels = await text(A, dRelsSrc);
+        if (dRels) {
+          const fixed = [...dRels.matchAll(/<Relationship\b[^>]*\/>/g)]
+            .map((rm) => {
+              const t = (rm[0].match(/\bTarget="([^"]*)"/) || [])[1] || "";
+              const mSrc = "xl/" + t.replace(/^\.\.\//, "");
+              if (!mediaMap.has(mSrc)) {
+                const ext = (mSrc.match(/\.(\w+)$/) || [, "png"])[1].toLowerCase();
+                mediaExt.add(ext);
+                mediaMap.set(mSrc, `xl/media/oilgimg${++mediaN}.${ext}`);
+              }
+              return rm[0].replace(/\bTarget="[^"]*"/, `Target="../${mediaMap.get(mSrc).replace(/^xl\//, "")}"`);
+            })
+            .join("");
+          put(dNew.replace("drawings/", "drawings/_rels/") + ".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${fixed}</Relationships>`);
+        }
+        newRels += m[0].replace(/\bTarget="[^"]*"/, `Target="../drawings/oilgdrawing${drawN}.xml"`);
+      }
+      if (newRels)
+        put(`xl/worksheets/_rels/sheet${n}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${newRels}</Relationships>`);
+    }
     const rid = `rIdOil${n}`;
     relsAdd += `<Relationship Id="${rid}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${n}.xml"/>`;
     ctAdd += `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
@@ -240,6 +281,15 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
     }
   }
   rels = rels.replace("</Relationships>", relsAdd + "</Relationships>");
+  // 絵のファイルを書き、種類（png など）の登録が無ければ足す
+  for (const [from, to] of mediaMap) put(to, await A.file(from).async("uint8array"));
+  for (const ext of mediaExt)
+    if (!new RegExp(`<Default\\b[^>]*Extension="${ext}"`, "i").test(ct))
+      ctAdd += `<Default Extension="${ext}" ContentType="image/${ext === "jpg" ? "jpeg" : ext}"/>`;
+  // Default は Override より前に置く決まりなので、先頭側に入れる
+  const defaults = [...ctAdd.matchAll(/<Default\b[^>]*\/>/g)].map((m) => m[0]).join("");
+  ctAdd = ctAdd.replace(/<Default\b[^>]*\/>/g, "");
+  if (defaults) ct = ct.replace(/(<Types\b[^>]*>)/, `$1${defaults}`);
   ct = ct.replace("</Types>", ctAdd + "</Types>");
   wb = wb.replace("</sheets>", sheetsAdd + "</sheets>");
 

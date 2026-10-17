@@ -10,7 +10,7 @@ const GLASS = 'fill="#cfe8ff" fill-opacity=".38" stroke="#8fb4d9" stroke-width="
 const METAL = 'fill="#c9ccd1" stroke="#6b7078" stroke-width="2"';
 const FIL = 'fill="none" stroke="#f2c230" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"';
 const svg = (inner, w = 140, h = 150) =>
-  `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-hidden="true" class="bg-svg">${inner}</svg>`;
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-hidden="true" class="bg-svg">${inner}</svg>`;
 const coil = (x, y, w, n = 5) => {
   let d = `M${x} ${y}`;
   for (let i = 0; i < n; i++) d += ` l${w / (2 * n)} -7 l${w / (2 * n)} 7`;
@@ -514,7 +514,7 @@ export function bulbGuideHtml(list) {
         .join("")}</tbody></table></div></section>`
     : "";
   return `<div id="bguide" class="bguide">
-    <div class="bg-head"><div><h2>バルブ解説書</h2><div class="bg-sub">初心者でも、見ながらお客さんに説明できる／学習用（店のバルブデータとつながっています）</div></div></div>
+    <div class="bg-head"><div><h2>バルブ解説書</h2><div class="bg-sub">初心者でも、見ながらお客さんに説明できる／学習用（店のバルブデータとつながっています）</div></div><button class="btn" data-bprint="1">印刷する</button></div>
     <nav class="bg-toc">${GROUPS.map(([id, n]) => `<button class="chip" data-bgo="g-${id}">${esc(n.replace(/（.*$/, ""))}</button>`).join("")}<button class="chip" data-bgo="basic">選び方の基本</button><button class="chip" data-bgo="words">用語</button></nav>
     <section class="bg-sec" id="bg-basic"><h3>バルブ選びの基本（お客さんに聞くこと）</h3>
       ${BASICS.map(([q, a]) => `<div class="bg-qa"><b>${esc(q)}</b><span>${esc(a)}</span></div>`).join("")}
@@ -525,4 +525,61 @@ export function bulbGuideHtml(list) {
     <section class="bg-sec" id="bg-words"><h3>用語集</h3>${WORDS.map(([w, d]) => `<div class="bg-qa"><b>${esc(w)}</b><span>${esc(d)}</span></div>`).join("")}</section>
     <p class="bg-foot">※ 規格名や数字は一般的なものです。車ごとの適合は、必ず適合表と元のバルブの表記で確認してください。</p>
   </div>`;
+}
+
+// ---- Excel用：解説書を、文章・図・表の並び（モデル）にする ----
+const R = (t, b = false) => [{ t, b }];
+// 図（模式図）の一覧。Excelに絵として入れるため、キーとSVGと説明を返す
+export function guideFigs() {
+  const out = [];
+  for (const g of GUIDE) {
+    out.push({ key: `${g.id}-0`, svg: g.img(), cap: g.cap });
+    (g.imgAlt || []).forEach(([cap, f], i) => out.push({ key: `${g.id}-${i + 1}`, svg: f(), cap }));
+  }
+  return out;
+}
+export function bulbGuideModel(list) {
+  const sections = [];
+  sections.push({
+    title: "バルブ選びの基本（お客さんに聞くこと）",
+    blocks: [
+      { t: "qalist", items: BASICS.map(([q, a]) => ({ q: R(q), a: R(a) })) },
+      { t: "h4", runs: R("場所から探す") },
+      { t: "table", head: [R("場所"), R("形状")], rows: WHERE.map(([a, b]) => [R(a, true), R(b)]), pairRows: WHERE.map(([a, b]) => [R(a, true), R(b)]) },
+    ],
+  });
+  for (const [gid, gname] of GROUPS) {
+    for (const g of GUIDE.filter((x) => x.group === gid)) {
+      const keys = g.keys.map(shapeKey);
+      const rows = list.filter((b) => keys.includes(shapeKey(b.shape)));
+      const figs = [{ key: `${g.id}-0`, cap: g.cap }, ...(g.imgAlt || []).map(([cap], i) => ({ key: `${g.id}-${i + 1}`, cap }))];
+      const blocks = [
+        { t: "lead", runs: R(g.one, true) },
+        { t: "figs", figs },
+        { t: "h4", runs: R("どこに使う？") },
+        { t: "list", items: g.where.map((x) => R(x)) },
+        { t: "h4", runs: R("見分けるポイント") },
+        { t: "list", items: g.spot.map((x) => R(x)) },
+        { t: "h4", runs: R("接客のポイント") },
+        { t: "list", items: g.tips.map((x) => R(x)) },
+      ];
+      if (g.caution.length) blocks.push({ t: "box", warn: true, title: R("注意"), items: g.caution.map((x) => R(x)) });
+      if (g.trivia.length) blocks.push({ t: "box", warn: false, title: R("豆知識（学習用）"), items: g.trivia.map((x) => R(x)) });
+      blocks.push({ t: "h4", runs: R(`店のバルブ（${rows.length}件）`) });
+      if (rows.length) {
+        blocks.push({
+          t: "table",
+          head: ["品番", "規格", "用途", "入数"].map((x) => R(x)),
+          rows: rows.map((b) => [R(b.code, true), R(specText(b.spec)), R(`${b.use || ""}${b.note ? `【${b.note}】` : ""}`), R(String(b.unit ?? ""))]),
+          pairRows: rows.map((b) => [R(`${b.code}　${specText(b.spec)}`, true), R(`${b.use || ""}${b.note ? `【${b.note}】` : ""}　（入数 ${b.unit ?? ""}）`)]),
+        });
+      } else blocks.push({ t: "note", runs: R("この形状の商品は、まだ店のデータに入っていません。") });
+      sections.push({ title: g.title, blocks });
+    }
+  }
+  sections.push({
+    title: "用語集",
+    blocks: [{ t: "qalist", items: WORDS.map(([w, d]) => ({ q: R(w), a: R(d) })) }, { t: "note", runs: R("※ 規格名や数字は一般的なものです。車ごとの適合は、必ず適合表と元のバルブの表記で確認してください。") }],
+  });
+  return { title: "バルブ解説書", sub: "初心者でも、見ながらお客さんに説明できる／学習用（店のバルブデータとつながっています）", sections };
 }

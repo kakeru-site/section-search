@@ -98,6 +98,22 @@ function layout(model, cfg, o) {
   const units = []; // { rows:[{h, draw(ws,r)}], keep, sec }
   const unit = (rows, extra = {}) => units.push({ rows, ...extra });
   const spacer = (h = 8) => ({ h, draw() {} });
+  // 列の幅（1幅 ≒ 7px、列ごとに +5px）から、絵を置く位置を決める
+  const colPx = (c) => Math.round(W[c - 1] * 7 + 5);
+  const wPx = (c1, c2) => {
+    let s = 0;
+    for (let c = c1; c <= c2; c++) s += colPx(c);
+    return s;
+  };
+  const posOf = (x, row) => {
+    let c = 1;
+    let rest = x;
+    while (c < W.length && rest >= colPx(c)) {
+      rest -= colPx(c);
+      c++;
+    }
+    return { col: c - 1 + rest / colPx(c), row };
+  };
   const mergeTo = (ws, r, c1, c2) => c2 > c1 && ws.mergeCells(r, c1, r, c2);
   const paint = (ws, r, c1, c2, argb) => {
     for (let c = c1; c <= c2; c++) ws.getCell(r, c).fill = fill(argb);
@@ -206,6 +222,33 @@ function layout(model, cfg, o) {
   const cardTable = (b) => {
     const label = (h) => text(h).replace(/\n/g, " ");
     const shortCells = false; // 項目ごとに1行ずつ並べるほうが読みやすい
+    // 左（名前）と右（説明）の2つにまとめた行で並べる表（バルブの一覧など）
+    if (b.pairRows) {
+      const half = 3;
+      const rows = [];
+      for (const [l, rr] of b.pairRows) {
+        rows.push({
+          h: Math.max(heightOf(linesOf(l, wOf(first, half) - 1, size), size), heightOf(linesOf(rr, wOf(half + 1, last), size), size)),
+          draw(ws, r) {
+            mergeTo(ws, r, first, half);
+            const a = ws.getCell(r, first);
+            a.value = val(l, { ...font, bold: true });
+            a.font = { ...font, bold: true };
+            a.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+            mergeTo(ws, r, half + 1, last);
+            const c = ws.getCell(r, half + 1);
+            c.value = val(rr, font);
+            c.font = font;
+            c.alignment = { vertical: "middle", wrapText: true };
+            for (let k = first; k <= last; k++) ws.getCell(r, k).border = box;
+            paint(ws, r, first, half, "FFFFF8DC");
+          },
+        });
+      }
+      rows.push(spacer(10));
+      unit(rows);
+      return;
+    }
     // 3列だけで行が多い表（例：適合できない車の一覧）は、1行にまとめる
     if (b.head.length === 3 && b.rows.length >= 6) {
       const half = W.length >= 4 ? 3 : first + 1; // 左（形状・メーカー）／右（車）
@@ -411,7 +454,9 @@ function layout(model, cfg, o) {
         for (const it of b.items) rows.push(para(it, first + 1, { marker: "・", markerColor: tc, fill: bg, fillFrom: first }));
         rows.push(spacer(10));
         flush(rows);
-      } else if (b.t === "qa") {
+      } else if (b.t === "qa" || b.t === "qalist") {
+        const qaItems = b.t === "qalist" ? b.items : [b];
+        for (const b of qaItems) {
         const rows = [
           {
             h: heightOf(linesOf(b.q, wOf(first + 1, last), size + 1), size + 1),
@@ -446,6 +491,31 @@ function layout(model, cfg, o) {
           spacer(10),
         ];
         flush(rows);
+        }
+      } else if (b.t === "figs") {
+        // 図（模式図）。Excelの絵として、横に並べて入れる
+        const figs = b.figs.filter((f) => o.images && o.images[f.key] !== undefined);
+        if (figs.length) {
+          const px = cfg.kind === "print" ? 150 : 120;
+          const pxH = Math.round((px * 150) / 140);
+          flush([
+            {
+              h: Math.round(pxH * 0.75) + 10,
+              draw(ws, r) {
+                figs.forEach((f, i) => {
+                  const x = wPx(1, first) + 14 + i * (px + 18);
+                  ws.addImage(o.images[f.key], { tl: posOf(x, r - 1 + 0.04), ext: { width: px, height: pxH } });
+                });
+              },
+            },
+            para([{ t: `模式図：${figs.map((f) => f.cap).join("　／　")}（実物とは細部が違います）` }], first, {
+              size: Math.max(9, size - 4),
+              font: { color: { argb: "FF6B7078" } },
+              indent: 1,
+            }),
+            spacer(6),
+          ]);
+        }
       } else if (b.t === "table") {
         if (cfg.kind === "print") {
           const before = units.length;
@@ -531,17 +601,17 @@ function render(ws, model, cfg, o) {
 }
 
 // 画面で見る用：横長・12ptの表
-export function fillDocScreen(ws, model, { font, protect, name }) {
+export function fillDocScreen(ws, model, { font, protect, name, images }) {
   const widths = [2, 3, ...Array(12).fill(11)];
   ws.columns = widths.map((width) => ({ width }));
   ws.views = [{ showGridLines: false }];
-  render(ws, model, { widths, size: 12, kind: "screen" }, { font, name });
+  render(ws, model, { widths, size: 12, kind: "screen" }, { font, name, images });
   ws.pageSetup = { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true };
   if (protect) ws.sheetProtection = { sheet: true };
 }
 
 // 紙に印刷する用：A4たて・14pt・1つずつカード。章ごとに新しいページから
-export function fillDocPrint(ws, model, { font, protect, name, date, title }) {
+export function fillDocPrint(ws, model, { font, protect, name, date, title, images }) {
   const widths = [2, 4, 22, 66];
   ws.columns = widths.map((width) => ({ width }));
   ws.views = [{ showGridLines: false }];
@@ -553,6 +623,6 @@ export function fillDocPrint(ws, model, { font, protect, name, date, title }) {
     margins: { left: 0.4, right: 0.4, top: 0.55, bottom: 0.7, header: 0.25, footer: 0.3 },
   };
   ws.headerFooter = { oddFooter: `&L&11${title}（${date}）&R&12ページ &P / &N` };
-  render(ws, model, { widths, size: 14, kind: "print", cap: 725 }, { font, name });
+  render(ws, model, { widths, size: 14, kind: "print", cap: 725 }, { font, name, images });
   if (protect) ws.sheetProtection = { sheet: true };
 }

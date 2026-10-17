@@ -1,7 +1,7 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261016r";
-import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261016r";
-import { fillQuick } from "./sphquick.js?v=20261016r";
+import { yomiText } from "./yomi.js?v=20261016s";
+import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261016s";
+import { fillQuick } from "./sphquick.js?v=20261016s";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -508,8 +508,9 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const nameD = opt.names?.data || freeName(wb, `${K.title}データ`);
   const QD = quote(nameD);
   const nameQuick = opt.quick ? opt.names?.quick || freeName(wb, "品番早見表") : null;
-  const nameDoc = opt.docs ? opt.names?.doc || freeName(wb, "補足資料") : null;
-  const nameDocP = opt.docs ? opt.names?.docPrint || freeName(wb, "補足資料印刷用") : null;
+  const di = opt.docInfo || {};
+  const nameDoc = opt.docs ? opt.names?.doc || freeName(wb, di.screen || "補足資料") : null;
+  const nameDocP = opt.docs ? opt.names?.docPrint || freeName(wb, di.print || "補足資料印刷用") : null;
   const N = items.length;
   const LAST = N + 1 + SPARE; // データシートの最終行
   const font = { name: "Yu Gothic UI", size: 11 };
@@ -706,10 +707,10 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     gBlocks.splice(
       at,
       0,
-      ["h", "補足資料（お客さんに説明するとき）"],
-      ["step", "画面", `「${nameDoc}」シートを開くと、「30秒でこう説明する」「車検の話」「聞かれたときの答え方」などが、読みやすくまとまっています。一番上の「もくじ」を押すと、その場所に飛びます`],
-      ["step", "印刷", `「${nameDocP}」シートは、紙に印刷する用です。文字を大きく（14ポイント）して、A4たてで、章ごとに新しいページから始まります。そのまま印刷（Ctrl+P）してください`],
-      ["b", "数字や言葉は、カタログに載っているものだけです。数値は規格値で、保証値ではありません"],
+      ["h", di.heading || "補足資料（お客さんに説明するとき）"],
+      ["step", "画面", di.screenNote ? di.screenNote(nameDoc) : `「${nameDoc}」シートを開くと、「30秒でこう説明する」「車検の話」「聞かれたときの答え方」などが、読みやすくまとまっています。一番上の「もくじ」を押すと、その場所に飛びます`],
+      ["step", "印刷", `「${nameDocP}」シートは、紙に印刷する用です。文字を大きく（14ポイント）して、A4たてで、章ごとに（バルブは1つの形状ごとに）新しいページから始まります。そのまま印刷（Ctrl+P）してください`],
+      ["b", di.note || "数字や言葉は、カタログに載っているものだけです。数値は規格値で、保証値ではありません"],
     );
   }
   fillGuide(wg, { font, protect: !!opt.protect, K, nameP, blocks: gBlocks });
@@ -721,8 +722,11 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   }
   if (opt.docs) {
     const date = `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`;
-    fillDocScreen(wdoc, opt.docs, { font, protect: !!opt.protect, name: nameDoc });
-    fillDocPrint(wdocp, opt.docs, { font, protect: !!opt.protect, name: nameDocP, date, title: opt.docs.title });
+    // 図（模式図）は、ブックに登録して、各シートに絵として置く
+    const images = {};
+    for (const [key, im] of Object.entries(opt.docImages || {})) images[key] = wb.addImage({ base64: im.base64, extension: im.ext || "png" });
+    fillDocScreen(wdoc, opt.docs, { font, protect: !!opt.protect, name: nameDoc, images });
+    fillDocPrint(wdocp, opt.docs, { font, protect: !!opt.protect, name: nameDocP, date, title: opt.docs.title, images });
   }
   // 検索シートから使い方へ飛べるリンク
   ws.getCell("F1").value = { formula: `HYPERLINK("#"&"'${nameG.replace(/'/g, "''")}'!A1","使い方はこちら →")`, result: "使い方はこちら →" };
@@ -734,5 +738,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   }
   const idx = wb.worksheets.indexOf(ws);
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: idx, visibility: "visible" }];
-  return { wb, nameS, nameG, nameP, nameD, nameDoc, nameDocP, nameQuick };
+  // シートの並び（会社のExcelに差し込むときの順番）
+  const list = [nameS, nameG, nameP, ...(nameQuick ? [nameQuick] : []), ...(nameDoc ? [nameDoc, nameDocP] : []), nameD];
+  return { wb, nameS, nameG, nameP, nameD, nameDoc, nameDocP, nameQuick, list };
 }
