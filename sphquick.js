@@ -26,7 +26,7 @@ const SERIES = [
 const ORDER = ["ライジング3", "ライジングα Pro", "ライジングα", "純正HID用LED（一体型）", "純正HID用LED（別体）", "フォグ用LED", "パワーアップバルブ", "サンターン2（ウインカー用）", "補修用LEDバルブ"];
 
 const colorOf = (it) => {
-  const seg = String(it.cap || "").split("／").pop() || "";
+  const seg = String(it.cap || "").split(/[／/]/).pop() || "";
   const text = `${seg} ${it.name}`;
   if (/切替|デュアル/.test(text)) return "dual";
   const k = text.match(/(\d{4})\s*K/i);
@@ -64,7 +64,7 @@ export function quickModel(items) {
     const pi = SERIES.findIndex((s) => s[1] === series && (s[2] || "") === head);
     let g = groups.get(series);
     if (!g) groups.set(series, (g = { series, rows: new Map(), caps: new Set() }));
-    const bright = String(it.cap || "").split("／")[0].trim();
+    const bright = String(it.cap || "").split(/[／/]/)[0].trim();
     if (/lm/.test(bright)) g.caps.add(bright);
     let row = g.rows.get(shape);
     if (!row) g.rows.set(shape, (row = { shape, cells: {}, key: [pi < 0 ? 99 : pi, String(it.code || "")] }));
@@ -119,6 +119,7 @@ const thin = { style: "thin", color: { argb: "FF8A8F98" } };
 const med = { style: "medium", color: { argb: "FF17191C" } };
 const fill = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 
+const dispW = (s) => [...String(s)].reduce((a, ch) => a + (ch.codePointAt(0) > 0x7f ? 2 : 1), 0);
 export function fillQuick(ws, model, { font, protect, date, title }) {
   const W = [1.5, 24, 27, 15.5, 15.5, 15.5, 15.5, 15.5]; // A（余白）, シリーズ, 形状, 色×5
   ws.columns = W.map((width) => ({ width }));
@@ -154,7 +155,7 @@ export function fillQuick(ws, model, { font, protect, date, title }) {
     c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     c.border = { top: med, bottom: med, left: thin, right: thin };
   });
-  ws.getRow(hr).height = 42;
+  ws.getRow(hr).height = 48;
   // 本体
   let r = hr + 1;
   const rowH = 20;
@@ -183,7 +184,11 @@ export function fillQuick(ws, model, { font, protect, date, title }) {
       }
       r++;
     });
-    // シリーズ名（縦にまとめる）
+    // シリーズ名（縦にまとめる）。行が少ないシリーズは、名前と明るさが入る高さを確保する
+    const need = (g.bright ? 2 : 1) * 17 + 14 + (dispW(g.series) > 22 ? 17 : 0);
+    let have = 0;
+    for (let k = r0; k < r; k++) have += ws.getRow(k).height || 15;
+    if (have < need) ws.getRow(r - 1).height = (ws.getRow(r - 1).height || 15) + (need - have);
     const sc = ws.getCell(r0, 2);
     if (r - 1 > r0) ws.mergeCells(r0, 2, r - 1, 2);
     sc.value = {

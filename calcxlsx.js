@@ -253,9 +253,9 @@ function fillCost(ws, nm, cost, protect) {
     ["行数", `COUNT(${rng("E")})`, 0, '0"行"'],
     ["点数", `SUM(${rng("G")})`, 0, '0"点"'],
     ["合計（税抜き）", `SUM(${rng("E")})`, 0, YEN],
-    [incl ? "税込み計" : "参考：税込み（×1.1）", `IF($G$3=1,SUM(${rng("H")}),INT(SUM(${rng("E")})*11/10))`, 0, YEN],
+    [incl ? "税込み計" : "税込み（×1.1）", `IF($G$3=1,SUM(${rng("H")}),INT(SUM(${rng("E")})*11/10))`, 0, YEN],
   ]);
-  ws.getCell("E6").value = { formula: `IF($G$3=1,"税込み計","参考：税込み（×1.1）")`, result: incl ? "税込み計" : "参考：税込み（×1.1）" };
+  ws.getCell("E6").value = { formula: `IF($G$3=1,"税込み計","税込み（×1.1）")`, result: incl ? "税込み計" : "税込み（×1.1）" };
   // 消費税計（税込みで入れたときだけ）
   const hc = ws.getCell("F6");
   hc.value = { formula: `IF($G$3=1,"消費税計","")`, result: incl ? "消費税計" : "" };
@@ -291,7 +291,7 @@ function fillCost(ws, nm, cost, protect) {
 // ================= パッド・ローター =================
 function fillPad(ws, nm, pad, protect) {
   // 列：B車種メモ C〜F入力 ／ 普通車 G〜K ／ 軽 L〜P ／ 提案 Q〜S
-  ws.columns = [{ width: 2 }, { width: 18 }, ...Array(4).fill({ width: 13 }), ...Array(10).fill({ width: 12.5 }), ...Array(3).fill({ width: 13 }), { width: 16 }, { width: 15 }];
+  ws.columns = [{ width: 2 }, { width: 23 }, ...Array(4).fill({ width: 13 }), ...Array(10).fill({ width: 12.5 }), ...Array(3).fill({ width: 13 }), { width: 16 }, { width: 15 }];
   titleBand(ws, "パッド・ローター", 21, nm.guide);
   const s = pad;
   label(ws, "B3", "普通車のセット価格");
@@ -300,13 +300,13 @@ function fillPad(ws, nm, pad, protect) {
   inputCell(ws, "C4", s.kei, { fmt: YEN });
   label(ws, "E3", "原価割れのとき ローター利益（円）", { alignment: { horizontal: "left" } });
   inputCell(ws, "I3", s.margin, { fmt: "#,##0" });
-  label(ws, "E4", "値引きが必要なとき 提案①（パッド原価＋）", { alignment: { horizontal: "left" } });
+  label(ws, "E4", "値引き提案①（パッド原価＋）", { alignment: { horizontal: "left" } });
   inputCell(ws, "I4", s.plus1, { fmt: "#,##0" });
-  label(ws, "E5", "値引きが必要なとき 提案②（パッド原価＋）", { alignment: { horizontal: "left" } });
+  label(ws, "E5", "値引き提案②（パッド原価＋）", { alignment: { horizontal: "left" } });
   inputCell(ws, "I5", s.plus2, { fmt: "#,##0" });
-  label(ws, "E6", "値引きが必要なとき 提案③（ローター定価の何掛け）", { alignment: { horizontal: "left" } });
+  label(ws, "E6", "値引き提案③（ローター定価の何掛け）", { alignment: { horizontal: "left" } });
   inputCell(ws, "I6", s.kake ?? 45, { fmt: "0.##" });
-  note(ws, "B5", "※ ローター定価は、お得額を出したいときだけ（任意）");
+  note(ws, "B5", "※ ローター定価は任意（お得額用）");
   // 見出し（グループ）
   ws.getRow(7).height = 8;
   const grp = (c1, c2, text, argb) => {
@@ -335,6 +335,7 @@ function fillPad(ws, nm, pad, protect) {
   const head = ["車種・メモ（任意）", "パッド通常売価", "パッド原価", "ローター原価（1枚）", "ローター定価（任意）"];
   const grpHead = ["ローター 1枚", "パッド", "セット利益", "判定", "通常より お得"];
   header(ws, 9, [...head, ...grpHead, ...grpHead, "ローター 1枚", "パッド 提案①", "パッド 提案②", "ローター 提案③（定価の掛け）", "セット合計 提案③"]);
+  ws.getRow(9).height = 50;
   const fmts = {};
   for (const i of [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]) fmts[i] = i >= 7 ? YEN : "#,##0";
   fmts[3] = fmts[4] = fmts[5] = fmts[6] = "#,##0";

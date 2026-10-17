@@ -1,7 +1,7 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261016p";
-import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261016p";
-import { fillQuick } from "./sphquick.js?v=20261016p";
+import { yomiText } from "./yomi.js?v=20261016q";
+import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261016q";
+import { fillQuick } from "./sphquick.js?v=20261016q";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -110,7 +110,7 @@ export const cutUse = (t, limit) => {
   const x = String(t ?? "");
   return x.length > limit ? x.slice(0, limit) + USE_SUFFIX : x;
 };
-export function layoutFor(items) {
+export function layoutFor(items, heads = {}) {
   const val = (o, f) => o[f];
   const maxW = (f) => Math.max(0, ...items.map((o) => dispW(val(o, f))));
   const w = {
@@ -120,6 +120,8 @@ export function layoutFor(items) {
     use: clamp(Math.ceil(maxW("use") * 1.1) + 2, 24, 110),
     cat: clamp(Math.ceil(maxW("cat") * 1.15) + 2, 12, 26),
   };
+  // 見出しの文字（例：「明るさ・色温度」）も切れないように、列の幅の下限にする
+  for (const f of Object.keys(w)) if (heads[f]) w[f] = Math.max(w[f], Math.ceil(dispW(heads[f]) * 1.1) + 3);
   let lines = 1;
   for (const o of items)
     for (const f of Object.keys(w)) lines = Math.max(lines, Math.ceil((dispW(val(o, f)) * 1.1) / (w[f] - 1)));
@@ -393,7 +395,9 @@ function fillPrint(ws, items, { font, protect, K, date, QD }) {
   ws.getRow(r - 1).height = 12;
   const hdr = ws.getRow(r);
   hdr.height = 30;
-  [["分類", 1], ["件数", 2], ["ページ", 3]].forEach(([t, i]) => {
+  // 分類の名前が長くても切れないように、「分類（件数）」は A〜B をまとめて使う
+  ws.mergeCells(r, 1, r, 2);
+  [[`${K.catH}（件数）`, 1], ["ページ", 3]].forEach(([t, i]) => {
     const c = hdr.getCell(i);
     c.value = t;
     c.font = { name: font.name, size: 15, bold: true };
@@ -401,21 +405,30 @@ function fillPrint(ws, items, { font, protect, K, date, QD }) {
     c.border = { top: line("medium"), bottom: line("medium") };
     c.alignment = { vertical: "middle", horizontal: i === 1 ? "left" : "center", indent: i === 1 ? 1 : 0 };
   });
+  hdr.getCell(2).fill = grey;
+  hdr.getCell(2).alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  hdr.getCell(2).border = { top: line("medium"), bottom: line("medium") };
   r++;
   sections.forEach((sec, i) => {
     if (i === TOC_FIRST || (i > TOC_FIRST && (i - TOC_FIRST) % TOC_NEXT === 0)) ws.getRow(r - 1).addPageBreak();
     const row = ws.getRow(r);
-    row.height = 30;
     const [a, b] = start.get(sec.cat);
-    row.getCell(1).value = sec.cat;
-    row.getCell(2).value = `${sec.n}件`;
+    // 分類の名前と件数は A〜B（幅60）にまとめて入れる。長い名前は折り返して、行の高さを増やす
+    const label = `${sec.cat}　${sec.n}件`;
+    const lines = Math.max(1, Math.ceil((dispW(label) * 16 * 0.0952 * 1.1) / (PR.a + PR.b - 3)));
+    row.height = Math.max(30, lines * 24 + 8);
+    ws.mergeCells(r, 1, r, 2);
+    row.getCell(1).value = {
+      richText: [
+        { text: sec.cat, font: { name: font.name, size: 16, bold: true } },
+        { text: `　${sec.n}件`, font: { name: font.name, size: 14, color: { argb: "FF4A4F57" } } },
+      ],
+    };
     row.getCell(3).value = a === b ? `${a}` : `${a} 〜 ${b}`;
-    row.getCell(1).font = { name: font.name, size: 16, bold: true };
-    row.getCell(2).font = { name: font.name, size: 15 };
     row.getCell(3).font = { name: font.name, size: 16, bold: true };
     for (let k = 1; k <= 3; k++) {
       row.getCell(k).border = { bottom: { style: "thin", color: { argb: "FF808080" } } };
-      row.getCell(k).alignment = { vertical: "middle", horizontal: k === 1 ? "left" : "center", indent: k === 1 ? 1 : 0 };
+      row.getCell(k).alignment = { vertical: "middle", horizontal: k <= 2 ? "left" : "center", indent: k === 1 ? 1 : 0, wrapText: k === 1 };
     }
     r++;
   });
@@ -428,8 +441,11 @@ function fillPrint(ws, items, { font, protect, K, date, QD }) {
     sec.pages.forEach((blocks, pi) => {
       brk();
       const of = sec.pages.length;
-      merged(r++, `${sec.cat}　${of > 1 ? `（${pi + 1} / ${of}）` : ""}`, {
-        font: { name: font.name, size: 20, bold: true, color: { argb: "FFFFFFFF" } },
+      const barText = `${sec.cat}　${of > 1 ? `（${pi + 1} / ${of}）` : ""}`;
+      // 名前が長いときは、1行に収まる大きさまで文字を小さくする（行の高さを変えると、ページの区切りがずれるため）
+      const barSize = [20, 18, 16, 14, 12].find((sz) => dispW(barText) * sz * 0.0952 * 1.06 <= total / 5.25 - 4 - 3) || 12;
+      merged(r++, barText, {
+        font: { name: font.name, size: barSize, bold: true, color: { argb: "FFFFFFFF" } },
         fill: { type: "pattern", pattern: "solid", fgColor: { argb: DK } },
         height: 40,
         indent: 1,
@@ -497,7 +513,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const N = items.length;
   const LAST = N + 1 + SPARE; // データシートの最終行
   const font = { name: "Yu Gothic UI", size: 11 };
-  const L = layoutFor(items);
+  const L = layoutFor(items, { code: "品番", name: K.nameH, cap: K.capH, use: "用途", cat: K.catH });
   const AC = "FFF2C230";
   const DK = "FF17191C";
   const thin = { style: "thin", color: { argb: "FF8A8F98" } };
@@ -536,6 +552,8 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     if (i <= 6) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AC } };
   });
   const cats = [...new Set(items.map((o) => o.cat).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+  // 分類一覧の列は、いちばん長い名前が入る幅にする（切れて見えないように）
+  wd.getColumn(12).width = clamp(Math.max(14, ...cats.map((c) => Math.ceil(dispW(c) * 1.05) + 2)), 14, 46);
   wd.getCell("L2").value = "すべて";
   cats.forEach((c, i) => (wd.getCell(`L${i + 3}`).value = c));
   for (let r = 2; r <= LAST; r++) {
