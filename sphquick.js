@@ -163,7 +163,9 @@ export function fillQuick(ws, model, { font, protect, date, title }) {
     const tint = gi % 2 ? "FFEDEFF2" : "FFFFF3C4";
     g.rows.forEach((row, i) => {
       const ws_r = ws.getRow(r);
-      ws_r.height = rowH * Math.max(1, ...QCOLS.map((c) => (row.cells[c.id] || []).length));
+      // 形状の名前が長くて2行になるときも、切れないように高さを合わせる
+      const shapeLines = Math.ceil((row.shape.length * 1.9 * 1.1) / (W[2] - 2));
+      ws_r.height = rowH * Math.max(1, shapeLines, ...QCOLS.map((c) => (row.cells[c.id] || []).length));
       const f = ws.getCell(r, 3);
       f.value = row.shape;
       f.font = { ...font, size: 11, bold: true };

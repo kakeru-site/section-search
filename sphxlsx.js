@@ -287,7 +287,11 @@ function layout(model, cfg, o) {
       } else {
         row.slice(1).forEach((cell, j) => {
           rows.push({
-            h: Math.max(heightOf(linesOf(cell, wOf(lc + 1, last), size), size), heightOf(1, size)),
+            // 項目名（左）が長くて2行になるときも、切れないように高さを合わせる
+            h: Math.max(
+              heightOf(linesOf(cell, wOf(lc + 1, last), size), size),
+              heightOf(linesOf([{ t: label(b.head[j + 1]) }], wOf(first, lc) - 1, size), size),
+            ),
             draw(ws, r) {
               mergeTo(ws, r, first, lc);
               const a = ws.getCell(r, first);

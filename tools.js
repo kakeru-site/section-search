@@ -1,13 +1,13 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016n";
-import { yomiText } from "./yomi.js?v=20261016n";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016n";
-import { docModel } from "./sphxlsx.js?v=20261016n";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261016n";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016n";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016n";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016n";
+import * as S from "./search.js?v=20261016o";
+import { yomiText } from "./yomi.js?v=20261016o";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016o";
+import { docModel } from "./sphxlsx.js?v=20261016o";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261016o";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016o";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016o";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016o";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
