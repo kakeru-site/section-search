@@ -1,15 +1,15 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016z";
-import { yomiText } from "./yomi.js?v=20261016z";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016z";
-import { docModel } from "./sphxlsx.js?v=20261016z";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261016z";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016z";
-import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261016z";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016z";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016z";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016z";
+import * as S from "./search.js?v=20261017a";
+import { yomiText } from "./yomi.js?v=20261017a";
+import { sphDocsHtml } from "./sphdocs.js?v=20261017a";
+import { docModel } from "./sphxlsx.js?v=20261017a";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261017a";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261017a";
+import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261017a";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261017a";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261017a";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261017a";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2659,13 +2659,13 @@ function extGroupList() {
     by.get(o.group).push(o);
   }
   const names = [
-    ...EXT_GROUPS.map((g) => g.name).filter((n) => by.has(n)),
+    ...[...by.keys()].filter((n) => metaOf(n)).sort((a, b) => EXT_GROUPS.indexOf(metaOf(a)) - EXT_GROUPS.indexOf(metaOf(b))),
     ...[...by.keys()].filter((n) => !metaOf(n)).sort((a, b) => a.localeCompare(b, "ja")),
   ];
   return names.map((name) => {
     const meta = metaOf(name);
     const parts = by.get(name).sort(byNo);
-    const words = `${name} ${meta?.en || ""} ${(meta?.alias || []).join(" ")}`;
+    const words = `${name} ${meta?.en || ""} ${(meta?.alias || []).join(" ")}`.normalize("NFKC");
     return {
       name,
       meta,

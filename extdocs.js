@@ -52,6 +52,9 @@ export function carSide(hl = "") {
     ${R("roofS", "M140 46 L240 46 Q248 46 254 54 L250 57 L134 57 Q132 50 140 46 Z", `fill="none" stroke="none"`, HL)}
     ${R("windshieldS", "M98 86 L130 52 L138 57 L116 85 Z", `fill="none" stroke="none"`, HL)}
     ${R("roofTrimS", "M138 57 L242 57 L252 63 L132 63 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("sideF", "M100 84 L134 50 L168 56 L168 118 L114 118 Z", `fill="none" stroke="none"`, HL)}
+    ${R("sideR", "M226 58 L254 54 L290 90 L326 98 L326 120 L226 120 Z", `fill="none" stroke="none"`, HL)}
+    ${R("mould", "M118 106 L270 106 L270 112 L118 112 Z", `fill="none" stroke="none"`, HL)}
     ${R("floorF", "M106 118 L190 118 L190 133 L106 133 Z", `fill="none" stroke="none"`, HLD)}
     ${R("floorR", "M190 118 L246 118 L246 133 L190 133 Z", `fill="none" stroke="none"`, HLD)}
     ${R("floorA", "M106 118 L246 118 L246 133 L106 133 Z", `fill="none" stroke="none"`, HLD)}
@@ -229,6 +232,51 @@ EXT_GROUPS.push(
     one: "床の下や上に付く、遮熱材・制振材（防音シート）・アンダーカバーなどの付属部品です。",
     alias: ["アンダーカバー", "遮熱", "ヒートインシュレーター", "制振", "防音", "けん引フック", "牽引", "トーイングフック", "シートブラケット", "スペアタイヤ", "床下", "インシュレーター"],
   },
+  {
+    name: "フロアトリム",
+    en: "FLOOR TRIMMING",
+    area: "床",
+    figs: [["side", "floorA", "横から（車の下側・床まわり）"]],
+    hot: [],
+    one: "車内の床に敷くカーペットと、その下のスペーサーなどです。",
+    alias: ["カーペット", "かーぺっと", "フロアカーペット", "マット", "絨毯", "スペーサー", "トリム"],
+  },
+  {
+    name: "メンバー",
+    en: "MEMBER & FITTING",
+    area: "床",
+    figs: [["side", "floorA", "横から（車の下側・骨格）"]],
+    hot: [],
+    one: "床の下にある、車の骨組み（骨格）です。前後・左右に走るメンバーが、ボディの強さを支えます。",
+    alias: ["フロントサイドメンバー", "リアサイドメンバー", "クロスメンバー", "骨格", "骨組み", "フレーム", "サイドメンバー", "けん引フック", "牽引", "トーイングフック", "マフラーブラケット", "サスペンション取付"],
+  },
+  {
+    name: "ボディサイドパネル（前側）",
+    en: "BODY SIDE PANEL; FRONT",
+    area: "サイド",
+    figs: [["side", "sideF", "横から（前のピラー）"]],
+    hot: [],
+    one: "ドアまわりの前側のボディです。ドアの前の柱（フロントピラー）、真ん中の柱（センターピラー）、ドアの下の骨組み（サイドシル）が含まれます。",
+    alias: ["ピラー", "ぴらー", "フロントピラー", "センターピラー", "Aピラー", "Bピラー", "サイドシル", "シル", "ボディサイド", "サイドパネル", "側面", "ヒンジ", "ブレース"],
+  },
+  {
+    name: "ボディサイドパネル（後側）",
+    en: "BODY SIDE PANEL; REAR",
+    area: "リア",
+    figs: [["side", "sideR", "横から（後ろのピラー・クォーター）"]],
+    hot: [],
+    one: "車の後ろ側のボディです。後ろのタイヤのまわり（ホイールハウス）や、後ろの柱（リアピラー）が含まれます。",
+    alias: ["クォーターパネル", "リアフェンダー", "後ろフェンダー", "ホイールハウス", "リアピラー", "Cピラー", "Dピラー", "バックピラー", "ジャッキ", "後ろ側面"],
+  },
+  {
+    name: "ボディサイドモール",
+    en: "BODY SIDE MOULDING",
+    area: "サイド",
+    figs: [["side", "mould", "横から（ドアの下の飾り）"]],
+    hot: [],
+    one: "ドアの下に付く、細長い飾り（ガード）です。ドアの擦り傷を防ぎます。",
+    alias: ["サイドモール", "ドアモール", "ドアプロテクター", "モール", "ドアの飾り", "ドアガード", "サイドガード"],
+  },
 );
 export const AREAS = ["フロント", "室内", "ルーフ・ガラス", "床", "サイド", "リア"];
 
@@ -244,5 +292,5 @@ export function pickerSvg() {
   const svg = carFront("");
   return svg;
 }
-export const metaOf = (name) => EXT_GROUPS.find((g) => g.name === name);
+export const metaOf = (name) => EXT_GROUPS.find((g) => g.name.normalize("NFKC") === String(name).normalize("NFKC"));
 export { esc };
