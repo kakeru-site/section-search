@@ -3471,3 +3471,169 @@ img.blur {
   color: var(--mu);
   font-weight: 400;
 }
+
+/* ---- スフィアライト 品番早見表（画面）と、A4たて1枚の印刷 ---- */
+.quick {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+.q-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.q-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.q-sub {
+  color: var(--mu);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+.q-tw {
+  overflow-x: auto;
+}
+.q-t {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 720px;
+  font-size: 13px;
+}
+.q-t th,
+.q-t td {
+  border: 1px solid var(--ln2);
+  padding: 5px 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+.q-t thead th {
+  background: var(--ac);
+  color: #17191c;
+  line-height: 1.25;
+}
+.q-t thead th small {
+  display: block;
+  font-weight: 400;
+  font-size: 10.5px;
+}
+.q-t th.q-s {
+  text-align: left;
+  background: var(--card);
+  min-width: 130px;
+}
+.q-t th.q-s small {
+  display: block;
+  font-weight: 400;
+  color: var(--mu);
+  font-size: 11px;
+}
+.q-t th.q-f {
+  text-align: left;
+  font-weight: 600;
+}
+.q-t tr.gtop th,
+.q-t tr.gtop td {
+  border-top: 2px solid var(--mu);
+}
+.q-t code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.q-n {
+  color: var(--mu);
+  opacity: 0.5;
+}
+.q-note {
+  margin: 0;
+  color: var(--mu);
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media print {
+  body.print-quick * {
+    visibility: hidden !important;
+  }
+  body.print-quick #quick,
+  body.print-quick #quick * {
+    visibility: visible !important;
+  }
+  body.print-quick #quick {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+    gap: 2mm;
+    padding: 0;
+  }
+  body.print-quick [data-qprint] {
+    display: none !important;
+  }
+  body.print-quick .q-head h2 {
+    font-size: 16pt;
+    background: #f2c230;
+    padding: 1.2mm 3mm;
+    color: #000;
+  }
+  body.print-quick .q-sub {
+    color: #333;
+    font-size: 9pt;
+  }
+  body.print-quick .q-tw {
+    overflow: visible;
+  }
+  body.print-quick .q-t {
+    min-width: 0;
+    width: 100%;
+    font-size: 9.5pt;
+    table-layout: fixed;
+  }
+  body.print-quick .q-t th,
+  body.print-quick .q-t td {
+    border: 0.25mm solid #666;
+    color: #000;
+    background: #fff;
+    padding: 0.55mm 1mm;
+    line-height: 1.15;
+  }
+  body.print-quick .q-t thead th {
+    background: #f2c230;
+    font-size: 9.5pt;
+  }
+  body.print-quick .q-t thead th small {
+    font-size: 7pt;
+  }
+  body.print-quick .q-t th.q-s {
+    width: 28mm;
+    background: #fff3c4;
+    min-width: 0;
+  }
+  body.print-quick .q-t tr.alt th.q-s {
+    background: #edeff2;
+  }
+  body.print-quick .q-t th.q-s small {
+    color: #333;
+    font-size: 7.5pt;
+  }
+  body.print-quick .q-t th.q-f {
+    width: 34mm;
+    font-size: 9pt;
+  }
+  body.print-quick .q-t code {
+    font-size: 9pt;
+  }
+  body.print-quick .q-t tr {
+    break-inside: avoid;
+  }
+  body.print-quick .q-note {
+    color: #333;
+    font-size: 7.5pt;
+    line-height: 1.4;
+  }
+}

@@ -1,12 +1,13 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016l";
-import { yomiText } from "./yomi.js?v=20261016l";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016l";
-import { docModel } from "./sphxlsx.js?v=20261016l";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016l";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016l";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016l";
+import * as S from "./search.js?v=20261016n";
+import { yomiText } from "./yomi.js?v=20261016n";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016n";
+import { docModel } from "./sphxlsx.js?v=20261016n";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261016n";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016n";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016n";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016n";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -1852,6 +1853,7 @@ function renderSph() {
   }
   const tog = `<div class="chips sviews">${[
     ["list", "検索"],
+    ["quick", "品番早見表"],
     ["docs", "補足資料"],
   ]
     .map(
@@ -1859,6 +1861,29 @@ function renderSph() {
         `<button class="chip ${(T.sph.view || "list") === k ? "on" : ""}" data-sview="${k}">${l}</button>`,
     )
     .join("")}</div>`;
+  if (T.sph.view === "quick") {
+    const d = new Date();
+    box.innerHTML = tog + quickHtml(quickModel(sphExportItems()), `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`);
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.sview) {
+        T.sph.view = b.dataset.sview;
+        save();
+        renderSph();
+      } else if (b.dataset.qprint) {
+        // A4たて1枚で印刷する（印刷の間だけ、用紙の設定を入れる）
+        const st = document.createElement("style");
+        st.textContent = "@page { size: A4 portrait; margin: 8mm; }";
+        document.head.appendChild(st);
+        document.body.classList.add("print-quick");
+        const off = () => (document.body.classList.remove("print-quick"), st.remove(), removeEventListener("afterprint", off));
+        addEventListener("afterprint", off);
+        print();
+      }
+    });
+    return;
+  }
   if (T.sph.view === "docs") {
     box.innerHTML = tog + sphDocsHtml();
     box.addEventListener("click", (e) => {
@@ -2428,6 +2453,7 @@ async function exportXlsx(kind) {
       protect: x.opt().protect !== false,
       kind,
       docs: kind === "sph" ? docModel(sphDocsHtml()) : undefined, // 補足資料（スフィアライトだけ）
+      quick: kind === "sph" ? quickModel(items) : undefined, // 品番早見表（スフィアライトだけ）
     });
     downloadXlsx(await wb.xlsx.writeBuffer(), `${title}検索.xlsx`);
     C.toast(`${items.length}件 をExcelにしました`);
@@ -2460,6 +2486,7 @@ async function exportIntoBase(file, kind = "oil") {
   const nameD = uniqueName(base.names, `${title}データ`);
   const nameDoc = kind === "sph" ? uniqueName(base.names, "補足資料") : null;
   const nameDocP = kind === "sph" ? uniqueName(base.names, "補足資料印刷用") : null;
+  const nameQuick = kind === "sph" ? uniqueName(base.names, "品番早見表") : null;
   const r = await C.modal(`<h3>Excelに検索機能を追加</h3>
     <div class="xlinfo">
       <div><span>ファイル</span><b>${esc(file.name)}</b></div>
@@ -2467,7 +2494,7 @@ async function exportIntoBase(file, kind = "oil") {
       <div><span>最終更新者</span><b>${esc(base.lastModifiedBy || "（記録なし）")}</b></div>
       ${base.company ? `<div><span>会社名</span><b>${esc(base.company)}</b></div>` : ""}
       <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
-      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameG)}・${esc(nameP)}（紙に印刷する用）${nameDoc ? `・${esc(nameDoc)}・${esc(nameDocP)}（紙に印刷する用）` : ""}・${esc(nameD)}（${items.length}件）</b></div>
+      <div><span>追加するシート</span><b>${esc(nameS)}（検索画面）・${esc(nameG)}・${esc(nameP)}（紙に印刷する用）${nameDoc ? `・${esc(nameQuick)}（A4たて1枚）・${esc(nameDoc)}・${esc(nameDocP)}（紙に印刷する用）` : ""}・${esc(nameD)}（${items.length}件）</b></div>
       <div><span>シート保護</span><b>${x.opt().protect !== false ? "あり（検索・使い方・印刷用のシート。パスワードなし）" : "なし"}</b></div>
     </div>
     <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容（シート・グラフ・表・書式など）には手を触れず、検索のシートだけを後ろに足します。<br>・作成者などの情報は、このファイルのままです。<br>・元のファイルは変えず、別のファイルとして保存します。</p>
@@ -2477,12 +2504,13 @@ async function exportIntoBase(file, kind = "oil") {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
     const { wb } = buildOilWorkbook(X, items, x.groups(), {
-      names: { search: nameS, guide: nameG, print: nameP, data: nameD, doc: nameDoc, docPrint: nameDocP },
+      names: { search: nameS, guide: nameG, print: nameP, data: nameD, doc: nameDoc, docPrint: nameDocP, quick: nameQuick },
       protect: x.opt().protect !== false,
       kind,
       docs: kind === "sph" ? docModel(sphDocsHtml()) : undefined,
+      quick: kind === "sph" ? quickModel(items) : undefined,
     });
-    const list = nameDoc ? [nameS, nameG, nameP, nameDoc, nameDocP, nameD] : undefined;
+    const list = nameDoc ? [nameS, nameG, nameP, nameQuick, nameDoc, nameDocP, nameD] : undefined;
     const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { nameS, nameG, nameP, nameD, list });
     downloadXlsx(out, `${title}検索.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");

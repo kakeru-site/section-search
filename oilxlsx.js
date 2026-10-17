@@ -1,6 +1,7 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261016l";
-import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261016l";
+import { yomiText } from "./yomi.js?v=20261016n";
+import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261016n";
+import { fillQuick } from "./sphquick.js?v=20261016n";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -490,6 +491,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   const nameP = opt.names?.print || freeName(wb, `${K.title}印刷用`);
   const nameD = opt.names?.data || freeName(wb, `${K.title}データ`);
   const QD = quote(nameD);
+  const nameQuick = opt.quick ? opt.names?.quick || freeName(wb, "品番早見表") : null;
   const nameDoc = opt.docs ? opt.names?.doc || freeName(wb, "補足資料") : null;
   const nameDocP = opt.docs ? opt.names?.docPrint || freeName(wb, "補足資料印刷用") : null;
   const N = items.length;
@@ -508,6 +510,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   });
   const wg = wb.addWorksheet(nameG, { views: [{ showGridLines: false }] });
   const wp = wb.addWorksheet(nameP);
+  const wquick = opt.quick ? wb.addWorksheet(nameQuick) : null;
   const wdoc = opt.docs ? wb.addWorksheet(nameDoc, { views: [{ showGridLines: false }] }) : null;
   const wdocp = opt.docs ? wb.addWorksheet(nameDocP) : null;
   const wd = wb.addWorksheet(nameD, { views: [{ state: "frozen", ySplit: 1 }] });
@@ -669,6 +672,16 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.getColumn(12).hidden = true;
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   const gBlocks = guideBlocks(!!opt.protect, K, nameP);
+  if (opt.quick) {
+    const at = gBlocks.findIndex((b) => b[0] === "h" && b[1] === "困ったときは");
+    gBlocks.splice(
+      at,
+      0,
+      ["h", "品番早見表（紙に印刷して使う）"],
+      ["step", "早見表", `「${nameQuick}」シートは、シリーズ・形状・色から品番をさがす表です。A4たて1枚に収まるようにしてあるので、そのまま印刷（Ctrl+P）できます`],
+      ["b", "書き出した時点の商品が載っています。あとから足した商品は、もう一度書き出すと載ります"],
+    );
+  }
   if (opt.docs) {
     // 「困ったときは」の前に、補足資料の説明を入れる
     const at = gBlocks.findIndex((b) => b[0] === "h" && b[1] === "困ったときは");
@@ -684,6 +697,10 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   fillGuide(wg, { font, protect: !!opt.protect, K, nameP, blocks: gBlocks });
   const dt = new Date();
   fillPrint(wp, items, { font, protect: !!opt.protect, K, date: `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`, QD });
+  if (opt.quick) {
+    const d0 = new Date();
+    fillQuick(wquick, opt.quick, { font, protect: !!opt.protect, date: `${d0.getFullYear()}年${d0.getMonth() + 1}月${d0.getDate()}日`, title: K.title });
+  }
   if (opt.docs) {
     const date = `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`;
     fillDocScreen(wdoc, opt.docs, { font, protect: !!opt.protect, name: nameDoc });
@@ -699,5 +716,5 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   }
   const idx = wb.worksheets.indexOf(ws);
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: idx, visibility: "visible" }];
-  return { wb, nameS, nameG, nameP, nameD, nameDoc, nameDocP };
+  return { wb, nameS, nameG, nameP, nameD, nameDoc, nameDocP, nameQuick };
 }
