@@ -15,7 +15,7 @@ const part = (hl, name, d, normal, high = HL) => `<path data-r="${name}" d="${d}
 
 // 正面から。hl は、色をつける部位の名前
 export function carFront(hl = "", click = false) {
-  const on = (n) => (hl === n || (hl === "fenders" && /^fender/.test(n)) ? n : "");
+  const on = (n) => (hl === n || (hl === "fenders" && /^fender/.test(n)) || (hl === "hoodLedges" && /^hoodLedge/.test(n)) ? n : "");
   const R = (n, d, normal, high) => part(on(n) || (hl === n ? n : ""), n, d, normal, high);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 196" class="ex-svg" role="img" aria-label="車を正面から見た模式図">
     <rect x="32" y="146" width="26" height="42" rx="7" ${TIRE}/><rect x="262" y="146" width="26" height="42" rx="7" ${TIRE}/>
@@ -23,6 +23,10 @@ export function carFront(hl = "", click = false) {
     <path d="M92 52 L228 52 L246 88 L74 88 Z" ${GLS}/>
     ${R("hood", "M74 88 L246 88 L262 114 L58 114 Z", `fill="#8a8f98" fill-opacity=".1" stroke="#8a8f98" stroke-width="1.6" stroke-linejoin="round"`)}
     ${R("coreSupport", "M68 112 L252 112 L252 156 L68 156 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("hoodLedgeL", "M64 90 L86 88 L92 114 L66 116 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("hoodLedgeR", "M256 90 L234 88 L228 114 L254 116 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("hoodLock", "M146 104 L174 104 L174 118 L146 118 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("dash", "M88 90 L232 90 L238 108 L82 108 Z", `fill="none" stroke="none"`, HLD)}
     ${R("headL", "M60 116 L114 116 L110 134 L56 130 Z", DARK)}
     ${R("headR", "M260 116 L206 116 L210 134 L264 130 Z", DARK)}
     ${R("grille", "M120 116 L200 116 L196 140 L124 140 Z", DARK, HL)}
@@ -43,6 +47,9 @@ export function carSide(hl = "") {
     <path d="M136 56 L232 56 L262 84 L114 84 Z" ${GLS}/>
     <path d="M168 56 L168 134 M226 58 L226 134" fill="none" stroke="#8a8f98" stroke-width="1.4"/>
     ${R("fender", "M26 100 L114 86 L116 134 L102 134 A32 32 0 0 0 38 134 L26 134 Z", `fill="#8a8f98" fill-opacity=".1" stroke="#8a8f98" stroke-width="1.4" stroke-linejoin="round"`)}
+    ${R("hood", "M24 98 L98 83 L116 83 L114 88 L26 104 Z", `fill="none" stroke="none"`, HL)}
+    ${R("hoodLedgeS", "M44 98 L108 88 L108 100 L46 110 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("dashS", "M104 82 L126 82 L126 134 L104 134 Z", `fill="none" stroke="none"`, HLD)}
     ${R("bumperF", "M12 112 L28 108 L28 134 L22 134 Q12 134 12 124 Z", `fill="#8a8f98" fill-opacity=".25" stroke="#8a8f98" stroke-width="1.6" stroke-linejoin="round"`)}
     ${R("coreSupportS", "M30 104 L52 102 L52 130 L30 130 Z", `fill="none" stroke="none"`, HLD)}
     <circle cx="70" cy="134" r="33" fill="none" stroke="#8a8f98" stroke-width="1.6"/>
@@ -93,6 +100,53 @@ export const EXT_GROUPS = [
     alias: ["フェンダー", "ふぇんだー", "前フェンダー", "ウイング", "プロテクター", "ライナー", "インナーフェンダー", "フェンダーライナー", "ボンネットシール"],
   },
 ];
+EXT_GROUPS.push(
+  {
+    name: "ボンネット",
+    en: "HOOD PANEL, HINGE & FITTING",
+    area: "フロント",
+    figs: [["front", "hood", "正面から"], ["side", "hood", "横から"]],
+    hot: ["front:hood"],
+    one: "エンジンルームを上から覆うフタです。ヒンジ（開閉の軸）と、支え棒（ステー）で支え、ゴムのシールやバンパー（ゴムの当たり）が付きます。",
+    alias: ["フード", "ふーど", "ボンネットヒンジ", "ヒンジ", "ステー", "支え棒", "ロッド", "インシュレーター", "防音", "シール", "ゴム", "バンパーゴム"],
+  },
+  {
+    name: "ボンネットロック",
+    en: "HOOD LOCK CONTROL",
+    area: "フロント",
+    figs: [["front", "hoodLock", "正面から（奥にあるロック）"]],
+    hot: ["front:hoodLock"],
+    one: "ボンネットを閉めたまま固定する部分です。車内のハンドルを引くと、ケーブルでロックが外れます。",
+    alias: ["フードロック", "ロック", "ボンネットオープナー", "オープナー", "ケーブル", "ハンドル", "ベルクランク", "開閉"],
+  },
+  {
+    name: "フードレッジ",
+    en: "HOOD LEDGE & FITTING; MAIN PARTS",
+    area: "フロント",
+    figs: [["front", "hoodLedges", "正面から（左右の奥の骨組み）"], ["side", "hoodLedgeS", "横から（奥の骨組み）"]],
+    hot: ["front:hoodLedgeL", "front:hoodLedgeR"],
+    one: "ボンネットの下、エンジンルームの左右の壁にあたる骨組みです。ボンネットとフェンダーなどを支えます。外からは見えません。",
+    alias: ["フードリッジ", "ふーどれっじ", "エプロン", "フロントエプロン", "ストラット", "ストラットハウジング", "サスペンションハウジング", "補強", "レインフォース", "骨組み", "スプラッシュカバー"],
+  },
+  {
+    name: "ダッシュパネル",
+    en: "DASH PANEL & FITTING",
+    area: "フロント",
+    figs: [["front", "dash", "正面から（奥にある壁）"], ["side", "dashS", "横から（奥にある壁）"]],
+    hot: [],
+    one: "エンジンルームと車内の間にある、仕切りの壁です。外からは見えません。",
+    alias: ["ダッシュ", "だっしゅ", "隔壁", "防火壁", "カウル", "カウルトップ", "ダッシュサイド", "インシュレーター", "防音"],
+  },
+  {
+    name: "ダッシュトリム",
+    en: "DASH TRIMMING & FITTING",
+    area: "フロント",
+    figs: [["side", "dashS", "横から（車内側の壁）"]],
+    hot: [],
+    one: "ダッシュパネル（仕切りの壁）の、車内側につく防音材と、足元まわりの飾り板です。",
+    alias: ["ダッシュ", "だっしゅ", "インシュレーター", "防音", "フィニッシャー", "サイドフィニッシャー", "足元"],
+  },
+);
 export const AREAS = ["フロント", "サイド", "リア"];
 
 // 一覧に載せない小物（探すときの言葉）。入力されたら、部位のページへ案内する
