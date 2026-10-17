@@ -22,6 +22,7 @@ export function carFront(hl = "", click = false) {
     <path d="M44 150 L40 120 Q42 102 60 92 L78 54 Q82 40 98 38 L222 38 Q238 40 242 54 L260 92 Q278 102 280 120 L276 150 Z" ${BODY}/>
     ${R("windshield", "M92 52 L228 52 L246 88 L74 88 Z", GLS)}
     ${R("roof", "M98 38 L222 38 Q234 40 238 50 L82 50 Q86 40 98 38 Z", `fill="none" stroke="none"`, HL)}
+    ${R("roofTrim", "M98 50 L222 50 L228 58 L92 58 Z", `fill="none" stroke="none"`, HLD)}
     ${R("ip", "M86 66 L234 66 L242 88 L78 88 Z", `fill="none" stroke="none"`, HLD)}
     ${R("vent", "M100 70 L124 70 L124 82 L100 82 Z M148 70 L172 70 L172 82 L148 82 Z M196 70 L220 70 L220 82 L196 82 Z", `fill="none" stroke="none"`, HL)}
     ${R("hood", "M74 88 L246 88 L262 114 L58 114 Z", `fill="#8a8f98" fill-opacity=".1" stroke="#8a8f98" stroke-width="1.6" stroke-linejoin="round"`)}
@@ -50,6 +51,10 @@ export function carSide(hl = "") {
     <path d="M136 56 L232 56 L262 84 L114 84 Z" ${GLS}/>
     ${R("roofS", "M140 46 L240 46 Q248 46 254 54 L250 57 L134 57 Q132 50 140 46 Z", `fill="none" stroke="none"`, HL)}
     ${R("windshieldS", "M98 86 L130 52 L138 57 L116 85 Z", `fill="none" stroke="none"`, HL)}
+    ${R("roofTrimS", "M138 57 L242 57 L252 63 L132 63 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("floorF", "M106 118 L190 118 L190 133 L106 133 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("floorR", "M190 118 L246 118 L246 133 L190 133 Z", `fill="none" stroke="none"`, HLD)}
+    ${R("floorA", "M106 118 L246 118 L246 133 L106 133 Z", `fill="none" stroke="none"`, HLD)}
     ${R("ipS", "M104 70 L132 66 L132 86 L106 88 Z", `fill="none" stroke="none"`, HLD)}
     <path d="M168 56 L168 134 M226 58 L226 134" fill="none" stroke="#8a8f98" stroke-width="1.4"/>
     ${R("fender", "M26 100 L114 86 L116 134 L102 134 A32 32 0 0 0 38 134 L26 134 Z", `fill="#8a8f98" fill-opacity=".1" stroke="#8a8f98" stroke-width="1.4" stroke-linejoin="round"`)}
@@ -188,8 +193,44 @@ EXT_GROUPS.push(
     one: "車の屋根です。内側に、骨組み（ボウ）が、前から後ろへ並びます。",
     alias: ["屋根", "やね", "ルーフパネル", "ボウ", "ルーフボウ", "ルーフレール", "インシュレーター", "プロテクター"],
   },
+  {
+    name: "ルーフトリム",
+    en: "ROOF TRIMMING",
+    area: "室内",
+    figs: [["front", "roofTrim", "正面から（屋根の内側）"], ["side", "roofTrimS", "横から（屋根の内側）"]],
+    hot: [],
+    one: "屋根の内側（車内の天井）の内張りと、アシストグリップ（つかまる取っ手）です。",
+    alias: ["天井", "てんじょう", "ヘッドライニング", "内張り", "ルーフライニング", "アシストグリップ", "取っ手", "つかまり", "グリップ"],
+  },
+  {
+    name: "フロアパネル",
+    en: "FLOOR PANEL",
+    area: "床",
+    figs: [["side", "floorF", "横から（車の下側・前の床）"]],
+    hot: [],
+    one: "車内の前側の床の板です。左右の端に、サイドシル（ドアの下の骨組み）の内側が付きます。",
+    alias: ["床", "ゆか", "フロア", "フロントフロア", "サイドシル", "シル", "シルインナー", "フロアセンター"],
+  },
+  {
+    name: "リアフロアパネル",
+    en: "FLOOR PANEL (REAR)",
+    area: "床",
+    figs: [["side", "floorR", "横から（車の下側・後ろの床）"]],
+    hot: [],
+    one: "荷室（ラゲッジ）の床と、後ろの床まわりの骨組みです。スペアタイヤの置き場も、ここにあります。",
+    alias: ["リアフロア", "荷室の床", "ラゲッジ", "トランク", "スペアタイヤ", "エクステンション", "サイドアセンブリ", "床"],
+  },
+  {
+    name: "フロア付属部品",
+    en: "FLOOR FITTING",
+    area: "床",
+    figs: [["side", "floorA", "横から（車の下側・床まわり）"]],
+    hot: [],
+    one: "床の下や上に付く、遮熱材・制振材（防音シート）・アンダーカバーなどの付属部品です。",
+    alias: ["アンダーカバー", "遮熱", "ヒートインシュレーター", "制振", "防音", "けん引フック", "牽引", "トーイングフック", "シートブラケット", "スペアタイヤ", "床下", "インシュレーター"],
+  },
 );
-export const AREAS = ["フロント", "室内", "ルーフ・ガラス", "サイド", "リア"];
+export const AREAS = ["フロント", "室内", "ルーフ・ガラス", "床", "サイド", "リア"];
 
 // 一覧に載せない小物（探すときの言葉）。入力されたら、部位のページへ案内する
 export const SMALL_RE = /クリップ|くりっぷ|ボルト|ぼると|ナット|なっと|ネジ|ねじ|ビス|ぴす|スクリュー|グロメット|プラグ|とめる|止める|留める|止め|留め|固定/g;
