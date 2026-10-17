@@ -530,7 +530,7 @@ function render(ws, model, cfg, o) {
 export function fillDocScreen(ws, model, { font, protect, name }) {
   const widths = [2, 3, ...Array(12).fill(11)];
   ws.columns = widths.map((width) => ({ width }));
-  ws.views = [{ showGridLines: false, state: "frozen", ySplit: 0 }];
+  ws.views = [{ showGridLines: false }];
   render(ws, model, { widths, size: 12, kind: "screen" }, { font, name });
   ws.pageSetup = { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true };
   if (protect) ws.sheetProtection = { sheet: true };
