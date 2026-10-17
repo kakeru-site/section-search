@@ -1,14 +1,14 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261016s";
-import { yomiText } from "./yomi.js?v=20261016s";
-import { sphDocsHtml } from "./sphdocs.js?v=20261016s";
-import { docModel } from "./sphxlsx.js?v=20261016s";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261016s";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016s";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016s";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016s";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016s";
+import * as S from "./search.js?v=20261016t";
+import { yomiText } from "./yomi.js?v=20261016t";
+import { sphDocsHtml } from "./sphdocs.js?v=20261016t";
+import { docModel } from "./sphxlsx.js?v=20261016t";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261016t";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261016t";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261016t";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261016t";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261016t";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -771,7 +771,18 @@ function bulbList() {
   }));
   return bulbIdx;
 }
-// S25・G18は、差し込んで回すバヨネット式。「ウェッジ」と書かれた古いデータを、一度だけ直す
+// ピットワークのバルブ早見表（カタログ）と照らし合わせて見つかった、古いデータの直し
+// 今の値が「直す前」と同じときだけ直す（自分で書き換えたものは、そのまま残す）
+const BULB_FIXES = [
+  ["AY080-00091", "use", "メーター・ポジション・表示灯(T11ウェッジ球)", "メーター・ポジション・表示灯(T10ウェッジ球/一般用)"],
+  ["AY080-00090", "use", "メーター・ポジション・表示灯(T10ウェッジ球)", "メーター・ポジション・表示灯(T10ウェッジ球/ECE認証取得品)"],
+  ["AY080-00085", "use", "制動灯・尾灯・方向指示灯(S25バヨネット球/BA15s系)", "制動灯・尾灯・方向指示灯(S25バヨネット球/BAY15d・ダブル球)"],
+  ["AY080-0Y016", "use", "方向指示灯・制動灯・尾灯(S25バヨネット球/BA15s系)", "方向指示灯・制動灯・尾灯(S25バヨネット球/BAU15s・ピン角150°・ECE認証取得品PY21W)"],
+  ["AY080-10037", "cat", "シングル球", "ヘッドランプ用"],
+  ["AY080-00035", "use", "ウインカー、ナンバー灯(ライセンスランプ)、バックランプ", "ライセンス・パーキング用(耐振)"],
+  ["AY080-0Y008", "use", "方向指示灯・後尾灯・表示灯(T20ウェッジ球/WY21W・アンバー", "方向指示灯・後尾灯・表示灯(T20ウェッジ球/WY21W・アンバー)"],
+];
+// S25・G18は、差し込んで回すバヨネット式。「ウェッジ」と書かれた古いデータも、一度だけ直す
 let bulbFixed = false;
 function fixBulbData() {
   if (bulbFixed) return;
@@ -780,9 +791,14 @@ function fixBulbData() {
   bulbFixed = true;
   const upd = {};
   for (const [id, b] of Object.entries(raw)) {
-    if (!/^(S25|G18)$/i.test(String(b.shape || "").replace(/\s/g, ""))) continue;
-    if (b.cat === "ウェッジ") upd[`${id}/cat`] = /\d\s*\/\s*\d/.test(String(b.spec || "")) ? "ダブル球" : "シングル球";
-    if (/ウェッジ球/.test(b.use || "")) upd[`${id}/use`] = b.use.replace(/ウェッジ球/g, "バヨネット球");
+    const cur = { cat: b.cat || "", use: b.use || "" };
+    if (/^(S25|G18)$/i.test(String(b.shape || "").replace(/\s/g, ""))) {
+      if (cur.cat === "ウェッジ") cur.cat = /\d\s*\/\s*\d/.test(String(b.spec || "")) ? "ダブル球" : "シングル球";
+      cur.use = cur.use.replace(/ウェッジ球/g, "バヨネット球");
+    }
+    for (const [code, f, from, to] of BULB_FIXES) if (String(b.code).toUpperCase() === code && cur[f] === from) cur[f] = to;
+    if (cur.cat !== (b.cat || "")) upd[`${id}/cat`] = cur.cat;
+    if (cur.use !== (b.use || "")) upd[`${id}/use`] = cur.use;
   }
   if (Object.keys(upd).length) C.store.update("bulbs", upd).catch(() => {});
 }
