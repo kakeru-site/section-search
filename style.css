@@ -4119,3 +4119,50 @@ img.blur {
 .ex-dh .btn:last-child {
   margin-left: auto;
 }
+.ex-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.ex-cats button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ln);
+  background: var(--card);
+  color: var(--tx);
+  cursor: pointer;
+}
+.ex-cats button small {
+  color: var(--mu);
+  margin-left: 2px;
+}
+.ex-cats button.on {
+  background: var(--ac);
+  border-color: var(--ac);
+  color: #111;
+  font-weight: 700;
+}
+.ex-cats button.on small {
+  color: #111;
+}
+.ex-sec {
+  margin: 0 0 18px;
+}
+.ex-sec h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 6px 0 8px;
+  font-size: 16px;
+  padding-left: 8px;
+  border-left: 4px solid var(--ac);
+}
+.ex-sec h4 small {
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--mu);
+}

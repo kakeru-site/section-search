@@ -1,16 +1,16 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261018i";
-import { yomiText } from "./yomi.js?v=20261018i";
-import { sphDocsHtml } from "./sphdocs.js?v=20261018i";
-import { docModel } from "./sphxlsx.js?v=20261018i";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261018i";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261018i";
-import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261018i";
-import { INN_GROUPS, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261018i";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261018i";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261018i";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261018i";
+import * as S from "./search.js?v=20261018k";
+import { yomiText } from "./yomi.js?v=20261018k";
+import { sphDocsHtml } from "./sphdocs.js?v=20261018k";
+import { docModel } from "./sphxlsx.js?v=20261018k";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261018k";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261018k";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261018k";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261018k";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261018k";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261018k";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261018k";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -132,8 +132,8 @@ const T = Object.assign(
     bulb: { q: "", shape: "", volt: "", cat: "", protect: true },
     oil: { q: "", cat: "", protect: true },
     sph: { q: "", cat: "", k: "", view: "list", protect: true },
-    ext: { q: "", group: "" },
-    inn: { q: "", group: "" },
+    ext: { q: "", group: "", cat: "" },
+    inn: { q: "", group: "", cat: "" },
   },
   load() || {},
 );
@@ -2732,7 +2732,11 @@ function renderExt() {
     const d = b.dataset;
     if (d.expick !== undefined) $("#fext").click();
     else if (d.exedit !== undefined) extForm(d.exedit || null, d.exgroup || "");
-    else if (d.exg !== undefined) {
+    else if (d.excat !== undefined) {
+      e.cat = d.excat;
+      save();
+      renderExtBody();
+    } else if (d.exg !== undefined) {
       e.group = d.exg;
       save();
       renderExtBody();
@@ -2787,8 +2791,7 @@ function renderExtBody() {
   const hint = r.small
     ? `<div class="ex-hint">クリップ・ボルト・ナットなどの小物は、一覧に載せていません。まず、その部位の絵（下のカード）で、場所を確認してください。</div>`
     : "";
-  const cards = r.rows
-    .map(({ g, hits }) => {
+  const card = ({ g, hits }) => {
       const fig = g.meta ? groupFigs(g.meta)[0] : null;
       return `<button class="ex-card" data-exg="${esc(g.name)}">
         <span class="ex-fig">${fig ? fig.svg : ""}</span>
@@ -2803,11 +2806,15 @@ function renderExtBody() {
             : ""
         }
         <small>部品 ${g.parts.length}点</small></button>`;
-    })
-    .join("");
+  };
+  const none = '<p class="ex-none">見つかりませんでした。別の言い方（例：バンパー、フェンダー、グリル）も試してください。</p>';
   body.innerHTML = `${hint}${
     !r.toks.length ? `<div class="ex-picker"><h4>絵から探す（押してみてください）</h4>${extPickerHtml()}</div>` : ""
-  }<div class="ex-cards">${cards || '<p class="ex-none">見つかりませんでした。別の言い方（例：バンパー、フェンダー、グリル）も試してください。</p>'}</div>`;
+  }${
+    r.toks.length
+      ? `<div class="ex-cards">${r.rows.map(card).join("") || none}</div>`
+      : catView(r.rows, (g) => g.meta?.area || "その他", [...AREAS, "その他"], (c) => AREA_HINTS[c] || "", e.cat, card)
+  }`;
   wireExtPicker();
 }
 function renderExtGroup(body, name) {
@@ -3024,6 +3031,28 @@ function innList() {
   return innIdx;
 }
 // 部位ごとにまとめる（決まった並び → データだけにある部位）
+// 分類（カテゴリ）つきの一覧。上に分類のボタン、下に分類ごとの見出しとカード
+function catView(rows, catOf, order, hintOf, cur, cardFn) {
+  const by = new Map();
+  for (const r of rows) {
+    const c = catOf(r.g);
+    if (!by.has(c)) by.set(c, []);
+    by.get(c).push(r);
+  }
+  const present = order.filter((c) => by.has(c));
+  const now = present.includes(cur) ? cur : "";
+  const chips = `<div class="ex-cats"><button class="${now ? "" : "on"}" data-excat="">すべて <small>${rows.length}</small></button>${present
+    .map((c) => `<button class="${now === c ? "on" : ""}" data-excat="${esc(c)}">${esc(c)} <small>${by.get(c).length}</small></button>`)
+    .join("")}</div>`;
+  const secs = present
+    .filter((c) => !now || c === now)
+    .map((c) => `<section class="ex-sec"><h4>${esc(c)}<small>${esc(hintOf(c))}</small></h4><div class="ex-cards">${by.get(c).map(cardFn).join("")}</div></section>`)
+    .join("");
+  return chips + secs;
+}
+const INN_OTHER = ["外装・車体の部品", "その他"];
+const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
+const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
 function innGroupList() {
   const by = new Map();
   for (const o of innList()) {
@@ -3031,11 +3060,13 @@ function innGroupList() {
     by.get(o.group).push(o);
   }
   const names = [
-    ...[...by.keys()].filter((n) => metaOfInn(n)).sort((a, b) => INN_GROUPS.indexOf(metaOfInn(a)) - INN_GROUPS.indexOf(metaOfInn(b))),
-    ...[...by.keys()].filter((n) => !metaOfInn(n)).sort((a, b) => a.localeCompare(b, "ja")),
+    ...[...by.keys()].filter((n) => metaOfInn(n)).sort((a, b) => catIndexInn(a) - catIndexInn(b) || INN_GROUPS.indexOf(metaOfInn(a)) - INN_GROUPS.indexOf(metaOfInn(b))),
+    ...[...by.keys()].filter((n) => !metaOfInn(n) && metaOf(n)).sort((a, b) => EXT_GROUPS.indexOf(metaOf(a)) - EXT_GROUPS.indexOf(metaOf(b))),
+    ...[...by.keys()].filter((n) => !metaOfInn(n) && !metaOf(n)).sort((a, b) => a.localeCompare(b, "ja")),
   ];
   return names.map((name) => {
-    const meta = metaOfInn(name);
+    const meta = metaOfInn(name) || metaOf(name);
+    const extMeta = !metaOfInn(name) && !!metaOf(name);
     const parts = by.get(name).sort(byNo);
     const words = `${name} ${meta?.en || ""} ${(meta?.alias || []).join(" ")}`.normalize("NFKC");
     return {
@@ -3097,7 +3128,11 @@ function renderInn() {
     const d = b.dataset;
     if (d.expick !== undefined) $("#fext").click();
     else if (d.exedit !== undefined) innForm(d.exedit || null, d.exgroup || "");
-    else if (d.exg !== undefined) {
+    else if (d.excat !== undefined) {
+      e.cat = d.excat;
+      save();
+      renderInnBody();
+    } else if (d.exg !== undefined) {
       e.group = d.exg;
       save();
       renderInnBody();
@@ -3152,12 +3187,11 @@ function renderInnBody() {
   const hint = r.small
     ? `<div class="ex-hint">クリップ・ボルト・ナットなどの小物は、一覧に載せていません。まず、その部位の絵（下のカード）で、場所を確認してください。</div>`
     : "";
-  const cards = r.rows
-    .map(({ g, hits }) => {
-      const fig = g.meta ? groupFigsInn(g.meta)[0] : null;
+  const card = ({ g, hits }) => {
+      const fig = innFigs(g)[0];
       return `<button class="ex-card" data-exg="${esc(g.name)}">
         <span class="ex-fig">${fig ? fig.svg : ""}</span>
-        <span class="ex-ct"><b>${esc(g.name)}</b>${g.meta ? `<i class="ex-area">${esc(g.meta.area)}</i>` : ""}</span>
+        <span class="ex-ct"><b>${esc(g.name)}</b>${g.meta ? `<i class="ex-area">${esc(g.meta.area)}</i>` : `<i class="ex-area">${esc(innCatOf(g.name))}</i>`}</span>
         <span class="ex-one">${esc(g.meta?.one || "")}</span>
         ${
           hits.length
@@ -3168,11 +3202,14 @@ function renderInnBody() {
             : ""
         }
         <small>部品 ${g.parts.length}点</small></button>`;
-    })
-    .join("");
+  };
+  const none = '<p class="ex-none">見つかりませんでした。別の言い方（例：バンパー、フェンダー、グリル）も試してください。</p>';
+  const hintOf = (c) => INN_CATS.find((x) => x.name === c)?.hint || (c === INN_OTHER[0] ? "外装検索の部位（参考表示）" : "");
   body.innerHTML = `${hint}${
-    ""
-  }<div class="ex-cards">${cards || '<p class="ex-none">見つかりませんでした。別の言い方（例：バンパー、フェンダー、グリル）も試してください。</p>'}</div>`;
+    r.toks.length
+      ? `<div class="ex-cards">${r.rows.map(card).join("") || none}</div>`
+      : catView(r.rows, (g) => innCatOf(g.name), [...INN_CATS.map((c) => c.name), ...INN_OTHER], hintOf, e.cat, card)
+  }`;
   wireInnPicker();
 }
 function renderInnGroup(body, name) {
@@ -3181,7 +3218,7 @@ function renderInnGroup(body, name) {
     T.inn.group = "";
     return renderInnBody();
   }
-  const figs = g.meta ? groupFigsInn(g.meta) : [];
+  const figs = innFigs(g);
   const key = name;
   const grp = (C.st.innGroups || {})[key] || {};
   const phs = Object.entries(grp.photos || {}).sort((a, b) => a[1] - b[1]);
@@ -3382,7 +3419,7 @@ export function innMainBlock(q) {
   const cards = rows
     .slice(0, 6)
     .map(({ g, hits }) => {
-      const fig = g.meta ? groupFigsInn(g.meta)[0] : null;
+      const fig = innFigs(g)[0];
       return `<button class="ex-card" data-inng="${esc(g.name)}" title="部品検索（内装・機関）で開く">
         <span class="ex-fig">${fig ? fig.svg : ""}</span>
         <span class="ex-ct"><b>${esc(g.name)}</b>${g.meta ? `<i class="ex-area">${esc(g.meta.area)}</i>` : ""}</span>
