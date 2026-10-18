@@ -1,16 +1,17 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261019c";
-import { yomiText } from "./yomi.js?v=20261019c";
-import { sphDocsHtml } from "./sphdocs.js?v=20261019c";
-import { docModel } from "./sphxlsx.js?v=20261019c";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261019c";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261019c";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261019c";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261019c";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261019c";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261019c";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261019c";
+import * as S from "./search.js?v=20261019e";
+import { yomiText } from "./yomi.js?v=20261019e";
+import { sphDocsHtml } from "./sphdocs.js?v=20261019e";
+import { docModel } from "./sphxlsx.js?v=20261019e";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261019e";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261019e";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261019e";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261019e";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261019e";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261019e";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261019e";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261019e";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2519,6 +2520,118 @@ async function exportCalcIntoBase(file) {
     C.toast("Excelを作れませんでした：" + e.message, true);
   }
 }
+// ---- 外装検索・部品検索 → 1つのExcel（絵つきの部位カタログ＋探せる一覧） ----
+function partGroupsModel() {
+  const out = [];
+  const pack = (kind, list, catOf, catHint, figOf, catOrder) => {
+    const rows = list.map((g) => ({
+      kind,
+      cat: catOf(g),
+      catHint: catHint(catOf(g)),
+      name: g.name,
+      en: g.meta?.en || "",
+      one: g.meta?.one || "",
+      alias: g.meta?.alias || [],
+      parts: g.parts.map((p) => ({ nameJa: p.nameJa || "", nameEn: p.nameEn || "", code: p.code || "", side: p.side || "", note: p.note || "" })),
+      key: `${kind}:${g.name}`,
+      fig: figOf(g),
+    }));
+    rows.sort((a, b) => catOrder(a.cat) - catOrder(b.cat));
+    out.push(...rows);
+  };
+  const extCat = (g) => g.meta?.area || "その他";
+  const extOrd = [...AREAS, "その他"];
+  pack("外装", extGroupList(), extCat, (c) => AREA_HINTS[c] || "", (g) => (g.meta ? groupFigs(g.meta)[0]?.svg : ""), (c) => extOrd.indexOf(c));
+  const innOrd = [...INN_CATS.map((c) => c.name), ...INN_OTHER];
+  pack(
+    "部品",
+    innGroupList(),
+    (g) => innCatOf(g.name),
+    (c) => INN_CATS.find((x) => x.name === c)?.hint || "",
+    (g) => innFigs(g)[0]?.svg || "",
+    (c) => innOrd.indexOf(c),
+  );
+  return out;
+}
+const partOpts = async (names) => {
+  const groups = partGroupsModel();
+  const images = {};
+  for (const g of groups) if (g.fig) images[g.key] = { base64: await svgToPng(g.fig, 2), ext: "png" };
+  return { protect: T.xparts?.protect !== false, groups: groups.map(({ fig, ...x }) => x), images, names };
+};
+function addPartsXlsx(box) {
+  const prot = T.xparts?.protect !== false;
+  const bar = document.createElement("div");
+  bar.className = "tacts";
+  bar.innerHTML = `<input type="file" id="fpartsbase" accept=".xlsx,.xlsm" hidden><button class="btn" data-px="x" title="外装・部品の全部位を、絵つきのカタログと探せる一覧にして、1つのExcelにする">Excelに書き出し（外装＋部品）</button><button class="chip ${prot ? "on" : ""}" data-px="prot" title="書き出すExcelのシートに保護をかける（パスワードなし）">シート保護 ${prot ? "ON" : "OFF"}</button><button class="btn" data-px="base" title="会社のExcelに外装・部品のシートを足す">会社のExcelに追加</button>`;
+  box.appendChild(bar);
+  bar.addEventListener("click", (e) => {
+    const k = e.target.closest("button")?.dataset.px;
+    if (k === "x") exportPartsXlsx();
+    else if (k === "base") $("#fpartsbase", bar).click();
+    else if (k === "prot") {
+      const on = T.xparts?.protect === false;
+      T.xparts = { ...(T.xparts || {}), protect: on };
+      save();
+      const b = e.target.closest("button");
+      b.classList.toggle("on", on);
+      b.textContent = `シート保護 ${on ? "ON" : "OFF"}`;
+    }
+  });
+  $("#fpartsbase", bar).addEventListener("change", (e) => exportPartsIntoBase(e.target.files[0]).finally(() => (e.target.value = "")));
+}
+async function exportPartsXlsx() {
+  if (!extList().length && !innList().length) return C.toast("外装・部品のデータが、まだ入っていません", true);
+  try {
+    C.toast("絵とExcelを作っています…（少し時間がかかります）");
+    const X = await loadExcelJs();
+    const { wb, rows } = buildPartWorkbook(X, await partOpts());
+    downloadXlsx(await wb.xlsx.writeBuffer(), "外装・部品検索.xlsx");
+    C.toast(`Excelにしました（${rows}件）`);
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
+async function exportPartsIntoBase(file) {
+  if (!file) return;
+  const ext = (file.name.match(/\.(xlsx|xlsm)$/i) || [])[1];
+  if (!ext) return C.toast("対応しているのは .xlsx（.xlsm）です。古い .xls は、Excelで「.xlsx」として保存し直してください", true);
+  let JSZip, base;
+  try {
+    C.toast("Excelを読んでいます…");
+    JSZip = await loadJsZip();
+    base = await readBase(JSZip, await file.arrayBuffer());
+  } catch (e) {
+    return C.toast("このExcelを開けませんでした：" + e.message, true);
+  }
+  const names = {
+    data: uniqueName(base.names, "外装・部品検索"),
+    cat: uniqueName(base.names, "部位カタログ"),
+    guide: uniqueName(base.names, "外装・部品の使い方"),
+  };
+  const protect = T.xparts?.protect !== false;
+  const r = await C.modal(`<h3>Excelに外装・部品のシートを追加</h3>
+    <div class="xlinfo">
+      <div><span>ファイル</span><b>${esc(file.name)}</b></div>
+      <div><span>作成者</span><b>${esc(base.creator || "（記録なし）")}</b></div>
+      <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
+      <div><span>追加するシート</span><b>${esc(names.data)}・${esc(names.cat)}・${esc(names.guide)}</b></div>
+      <div><span>シート保護</span><b>${protect ? "あり（パスワードなし）" : "なし"}</b></div>
+    </div>
+    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容には手を触れず、シートだけを後ろに足します。元のファイルは変えず、別のファイルとして保存します。</p>
+    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
+  if (!r) return;
+  try {
+    C.toast("絵とExcelを作っています…（少し時間がかかります）");
+    const X = await loadExcelJs();
+    const { wb, list } = buildPartWorkbook(X, await partOpts(names));
+    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
+    downloadXlsx(out, `外装・部品検索.${ext.toLowerCase()}`);
+    C.toast("保存しました。開いたら「編集を有効にする」を押してください");
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
 // 解説の図（SVG）を、Excelに入れられるPNGにする
 async function svgToPng(svg, scale = 3) {
   const img = new Image();
@@ -2704,6 +2817,7 @@ function renderExt() {
   box.innerHTML = `<label class="search">${C.IC.search}<input id="exq" type="search" autocomplete="off" placeholder="部位・部品名・図番（例：フェンダー、バンパー、62050）" value="${esc(e.q)}"><span class="kbd">/</span></label>
     <div id="exbody"></div>
     <div class="tacts"><input type="file" id="fext" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-expick="1">Excelから取り込み</button><button class="btn pri" data-exedit="">＋ 部品を追加</button></div>`;
+  addPartsXlsx(box);
   const q = $("#exq", box);
   q.addEventListener("input", () => {
     e.q = q.value;
@@ -3050,7 +3164,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261019c";
+const APP_VER = "20261019e";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
@@ -3102,6 +3216,7 @@ function renderInn() {
   box.innerHTML = `<label class="search">${C.IC.search}<input id="exq" type="search" autocomplete="off" placeholder="部位・部品名・図番（例：ヘッドガスケット、ロッカーカバー、11044）" value="${esc(e.q)}"><span class="kbd">/</span></label>
     <div id="exbody"></div>
     <div class="tacts"><input type="file" id="fext" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-expick="1">Excelから取り込み</button><button class="btn pri" data-exedit="">＋ 部品を追加</button></div><p class="ex-ver">画面の版：${APP_VER}（${INN_GROUPS.length}部位の絵・説明つき）。この数字が古い時は、再読み込み（Ctrl+Shift+R）してください</p>`;
+  addPartsXlsx(box);
   const q = $("#exq", box);
   q.addEventListener("input", () => {
     e.q = q.value;
