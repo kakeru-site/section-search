@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261017e";
-import * as S from "./search.js?v=20261017e";
-import * as FID from "./faceid.js?v=20261017e";
-import * as IMG from "./imgtools.js?v=20261017e";
-import * as CAT from "./catalog.js?v=20261017e";
-import * as TOOLS from "./tools.js?v=20261017e";
+import { createStore, DEMO, localKey } from "./store.js?v=20261017f";
+import * as S from "./search.js?v=20261017f";
+import * as FID from "./faceid.js?v=20261017f";
+import * as IMG from "./imgtools.js?v=20261017f";
+import * as CAT from "./catalog.js?v=20261017f";
+import * as TOOLS from "./tools.js?v=20261017f";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -85,6 +85,8 @@ const st = {
   spheres: {},
   exteriors: {},
   extGroups: {},
+  inners: {},
+  innGroups: {},
   history: {},
   settings: {},
   stats: {},
@@ -363,6 +365,8 @@ function startData() {
   sub("spheres", "spheres");
   sub("exteriors", "exteriors");
   sub("extGroups", "extGroups");
+  sub("inners", "inners");
+  sub("innGroups", "innGroups");
   sub("history", "history");
   sub("settings", "settings", () => {
     st.syn = S.parseSynonyms(setting("synonyms", S.DEFAULT_SYNONYMS));
@@ -387,7 +391,7 @@ function onData(key) {
   renderNav();
   renderRight();
   const v = st.view;
-  if (v === "sec" && ["parts", "memos", "settings", "stats", "history", "exteriors"].includes(key)) renderResults();
+  if (v === "sec" && ["parts", "memos", "settings", "stats", "history", "exteriors", "inners"].includes(key)) renderResults();
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
@@ -638,7 +642,9 @@ function renderResults() {
     ? S.searchParts(st.partList, st.q, st.syn, { group: st.group, sec: st.sec })
     : [];
   const catOn = !!q && st.group === "all" && !st.sec;
-  const ext = q && st.group === "all" && !st.sec ? TOOLS.extMainBlock(q) : { html: "", n: 0 };
+  const ext0 = q && st.group === "all" && !st.sec ? TOOLS.extMainBlock(q) : { html: "", n: 0 };
+  const inn = q && st.group === "all" && !st.sec ? TOOLS.innMainBlock(q) : { html: "", n: 0 };
+  const ext = { html: ext0.html + inn.html, n: ext0.n + inn.n };
   st.catResults = catOn && st.catList.length ? CAT.searchCatalog(st.catList, q, st.syn, { memo: true }) : [];
   const n = st.results.length;
   const m = st.catResults.length;
@@ -1678,7 +1684,8 @@ async function saveBackup() {
     oilPhotos = {},
     bulbPhotos = {},
     spherePhotos = {},
-    extPhotos = {};
+    extPhotos = {},
+    innPhotos = {};
   try {
     imageData = (await store.get("imageData")) || {};
     kataPhotos = (await store.get("kataPhoto")) || {};
@@ -1686,6 +1693,7 @@ async function saveBackup() {
     bulbPhotos = (await store.get("bulbPhoto")) || {};
     spherePhotos = (await store.get("spherePhoto")) || {};
     extPhotos = (await store.get("extPhoto")) || {};
+    innPhotos = (await store.get("innPhoto")) || {};
   } catch (e) {
     toast("画像本体を読めなかったので、画像は一覧だけ保存します", true);
   }
@@ -1711,6 +1719,9 @@ async function saveBackup() {
         exteriors: st.exteriors,
         extGroups: st.extGroups,
         extPhoto: extPhotos,
+        inners: st.inners,
+        innGroups: st.innGroups,
+        innPhoto: innPhotos,
         catalog: st.catalog,
       },
       null,
@@ -1759,6 +1770,7 @@ async function restoreBackup(file) {
       ...(j.bulbs ? { bulbs: j.bulbs, bulbPhoto: j.bulbPhoto || null } : {}),
       ...(j.spheres ? { spheres: j.spheres, spherePhoto: j.spherePhoto || null } : {}),
       ...(j.exteriors ? { exteriors: j.exteriors, extGroups: j.extGroups || null, extPhoto: j.extPhoto || null } : {}),
+      ...(j.inners ? { inners: j.inners, innGroups: j.innGroups || null, innPhoto: j.innPhoto || null } : {}),
       ...(j.catalog ? { catalog: j.catalog, catalogMeta: { version: Date.now() } } : {}),
     });
     toast("復元しました");
@@ -2902,6 +2914,10 @@ document.addEventListener("click", async (e) => {
   if (d.more) {
     st.limit += 100;
     return renderResults();
+  }
+  if (d.inng) {
+    TOOLS.openInn(d.inng);
+    return go("tool");
   }
   if (d.extg) {
     TOOLS.openExt(d.extg);
