@@ -1,16 +1,16 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261018b";
-import { yomiText } from "./yomi.js?v=20261018b";
-import { sphDocsHtml } from "./sphdocs.js?v=20261018b";
-import { docModel } from "./sphxlsx.js?v=20261018b";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261018b";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261018b";
-import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261018b";
-import { INN_GROUPS, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261018b";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261018b";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261018b";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261018b";
+import * as S from "./search.js?v=20261018c";
+import { yomiText } from "./yomi.js?v=20261018c";
+import { sphDocsHtml } from "./sphdocs.js?v=20261018c";
+import { docModel } from "./sphxlsx.js?v=20261018c";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261018c";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261018c";
+import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261018c";
+import { INN_GROUPS, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261018c";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261018c";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261018c";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261018c";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
