@@ -1448,7 +1448,8 @@ export function groupFigsInn(meta) {
     for (const ch of nm) h = (h * 31 + ch.charCodeAt(0)) % 360;
     const side = /^フロント|\(フロント/.test(nm) ? "前" : /^リア|\(リア/.test(nm) ? "後" : "";
     const badge = side ? `<circle cx="34" cy="34" r="20" fill="#f2c230" stroke="#b08400" stroke-width="2"/><text x="34" y="42" text-anchor="middle" font-size="24" font-weight="700" fill="#111">${side}</text>` : "";
-    const cap = `<text x="160" y="190" text-anchor="middle" font-size="15" font-weight="700" fill="#8a8f98">${nm.replace(/[（(].*$/, "").slice(0, 12)}</text>`;
+    const sub = (nm.match(/[（(](.*)[）)]/) || [])[1] || "";
+    const cap = `<text x="160" y="${sub ? 178 : 190}" text-anchor="middle" font-size="15" font-weight="700" fill="#8a8f98">${nm.replace(/[（(].*$/, "").slice(0, 12)}</text>${sub ? `<text x="160" y="194" text-anchor="middle" font-size="12" fill="#8a8f98">${sub.slice(0, 16)}</text>` : ""}`;
     const svg = wrap(ICON[k]() + badge + cap, meta.name + "の形のイメージ").replace("<svg ", `<svg style="filter:hue-rotate(${h % 120 - 20}deg)" `);
     out.push({ svg, cap: "形のイメージ（実物とは細部が違います）" });
   }
