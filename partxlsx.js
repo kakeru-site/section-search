@@ -23,20 +23,22 @@ const guideBlocks = (protect, nm) => [
   ["sub", "外装の部位・部品（図番つき）と、エンジンや足回りなどの部品（図番つき）を、1冊にまとめたブックです。絵つきのカタログと、キーワードで探せる一覧が入っています。"],
   ["h", "まずはこれだけ"],
   ["step", "①", `「${nm.data}」シートの上の黄色い欄に、探したい言葉（例：ヘッドライト、ドラシャ、ワイパーゴム）を入れます`],
-  ["step", "②", "言葉が入った行が、黄色く光ります。ヒットした件数は、すぐ横に出ます"],
+  ["step", "②", "当てはまる部品だけが、下に並びます（ほかは消えます）。見つかった件数は、すぐ横に出ます。言葉を消すと、全部が出ます"],
   ["step", "③", `部位の絵や解説を見たいときは、「${nm.cat}」シートを開きます（分類ごとに並んでいます）`],
   ["h", `「${nm.data}」シート`],
-  ["b", "キーワードは3つまで入れられます。3つとも当てはまる行だけが光ります（1つだけでもOK）"],
+  ["b", "言葉は3つまで入れられます。3つとも当てはまる部品だけが並びます（1つだけでもOK）"],
   ["b", "検索の対象は、部位名・部品名・英語名・図番・右左・備考（お客さんの呼び方・場所）と、部位の呼ばれ方です"],
   ["b", "半角・全角は区別されます。うまく出ないときは、短い言葉（例：「ミラー」）で試してください。英数字は半角、カタカナは全角で入れます"],
-  ["b", "表の見出しの▼を押すと、区分・分類・部位・右左で絞り込めます（フィルター）"],
+  ["b", `全部の一覧は「${nm.raw}」シートに入っています。見出しの▼で、区分・分類・部位・右左を絞り込めます（フィルター）`],
   ["b", "備考には、お客さんがよく言う呼び方と、部品がある場所を入れてあります。「要確認」と書いてあるものは、位置を図から推測したものです"],
   ["h", `「${nm.cat}」シート`],
   ["b", "部位ごとに、形のイメージの絵・やさしい説明・お客さんの呼ばれ方・部品の一覧（図番つき）をまとめています"],
   ["b", "絵は、場所と形をつかむための簡単なイメージです。実物とは細部が違います"],
   ["b", "A4よこで印刷できます（部位ごとに途中で切れないように区切っています）"],
   ["h", "困ったとき"],
-  ["b", "何も光らない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
+  ["b", "何も出ない・並ばない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
+  ["b", "言葉を入れてから、少し待つと、並び直します（数が多いので、1〜2秒かかることがあります）"],
+  ["b", "備考が長くて途中で切れるときは、そのセルをクリックすると、全文が上に出ます"],
   ["b", "図番や名称が足りない → 店で使っているサイトの「外装検索」「部品検索」で追加してから、もう一度書き出してください"],
   ["h", "これだけは守ってください"],
   ["b", "図番は、車種・年式・仕様で変わることがあります。注文の前に、車台番号などで確認してください"],
@@ -49,12 +51,53 @@ const guideBlocks = (protect, nm) => [
     : []),
 ];
 
-// ---- ① 探せる一覧 ----
-function fillData(ws, nm, rows, protect) {
+// ---- ① 探せる一覧：言葉を入れると、当てはまる部品だけが並ぶ（数式。マクロなし） ----
+const RAW_COLS = [11, 14, 30, 38, 34, 12, 7, 62];
+function fillRaw(ws, nm, rows, protect) {
+  const sq = quote(nm.data);
+  const kw = (c) => `IF(${sq}!$${c}$3="","?",${sq}!$${c}$3)`;
+  ws.columns = [{ width: 2 }, ...RAW_COLS.map((width) => ({ width })), { width: 10 }, { width: 8 }];
+  ["区分", "分類", "部位", "名称", "英語名", "図番", "右左", "備考（お客さんの呼び方・場所）"].forEach((h, i) => {
+    const c = ws.getCell(1, i + 2);
+    c.value = h;
+    c.font = { ...font, bold: true, color: { argb: DK } };
+    c.fill = solid(AC);
+    c.border = box;
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  });
+  ws.getCell(1, 10).value = "検索用";
+  ws.getRow(1).height = 28;
+  rows.forEach((o, k) => {
+    const r = 2 + k;
+    const v = [o.kind, o.cat, o.group, o.nameJa, o.nameEn, o.code, o.side, o.note];
+    v.forEach((x, i) => {
+      const c = ws.getCell(r, i + 2);
+      c.value = x || "";
+      c.font = i === 5 ? { name: "Consolas", size: 11, bold: true } : font;
+      c.border = hair;
+      c.alignment = { vertical: "middle", wrapText: true, horizontal: i === 6 || i === 0 ? "center" : "left" };
+    });
+    ws.getCell(r, 10).value = norm(o.hay);
+    // 隠しの列K：ここまでに、言葉に当てはまった部品が何件あったか（上から数えた通し番号）
+    const hit = ["C", "F", "I"].map((c) => `ISNUMBER(SEARCH(${kw(c)},$J${r}))`).join(",");
+    ws.getCell(r, 11).value = { formula: `IF(AND(${hit}),1,0)+N(K${r - 1})`, result: k + 1 };
+    ws.getRow(r).height = Math.max(20, Math.max(...v.map((x, i) => linesOf(x, RAW_COLS[i]))) * 16 + 5);
+  });
+  ws.getColumn(10).hidden = true;
+  ws.getColumn(11).hidden = true;
+  ws.autoFilter = { from: { row: 1, column: 2 }, to: { row: rows.length + 1, column: 9 } };
+  ws.views = [{ state: "frozen", ySplit: 1, showGridLines: false }];
+  ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:1" };
+  if (protect) ws.sheetProtection = { sheet: true, autoFilter: false, sort: false, formatColumns: true, formatRows: true };
+}
+function fillSearch(ws, nm, rows, protect) {
+  const N = rows.length;
   const W = { b: 11, c: 14, d: 30, e: 38, f: 34, g: 12, h: 7, i: 62 };
   ws.columns = [
-    { width: 2 }, { width: W.b }, { width: W.c }, { width: W.d }, { width: W.e }, { width: W.f }, { width: W.g }, { width: W.h }, { width: W.i }, { width: 10 },
+    { width: 2 }, { width: W.b }, { width: W.c }, { width: W.d }, { width: W.e }, { width: W.f }, { width: W.g }, { width: W.h }, { width: W.i }, { width: 10 }, { width: 8 },
   ];
+  const raw = quote(nm.raw);
+  const rg = (col) => `${raw}!$${col}$2:$${col}$${N + 1}`;
   ws.mergeCells("B1:H1");
   const t = ws.getCell("B1");
   t.value = "外装・部品検索";
@@ -66,62 +109,47 @@ function fillData(ws, nm, rows, protect) {
   ws.getCell("I1").alignment = { vertical: "middle", horizontal: "right" };
   ws.getRow(1).height = 36;
   ws.getRow(2).height = 8;
-  const FIRST = 7;
-  const LAST = FIRST + rows.length - 1;
-  const hid = `$J$${FIRST}:$J$${LAST}`;
-  // キーワード3つ
-  const kw = [
-    ["B3", "C3", "キーワード1"],
-    ["E3", "F3", "キーワード2"],
-    ["G3", "H3", "キーワード3"],
-  ];
-  const label = (addr, text) => {
+  const label = (addr, text, o = {}) => {
     const c = ws.getCell(addr);
     c.value = text;
     c.font = { ...font, bold: true };
-    c.alignment = { vertical: "middle" };
+    c.alignment = { vertical: "middle", shrinkToFit: true, ...o };
   };
-  ws.mergeCells("B3:B3");
-  label("B3", "探す言葉");
-  ws.getCell("B3").alignment = { vertical: "middle", shrinkToFit: true };
-  ws.mergeCells("C3:D3");
-  const mk = (addr, merge) => {
-    if (merge) ws.mergeCells(merge);
+  const mk = (addr) => {
     const c = ws.getCell(addr);
     c.fill = solid(IN);
     c.border = box;
     c.font = { ...font, size: 13, bold: true };
     c.alignment = { vertical: "middle", horizontal: "left" };
     c.protection = { locked: false };
-    return c;
   };
+  label("B3", "探す言葉");
+  ws.mergeCells("C3:D3");
   mk("C3");
   ws.getCell("D3").border = box;
   ws.getCell("D3").fill = solid(IN);
-  label("E3", "＋ もう1つ");
-  ws.getCell("E3").alignment = { vertical: "middle", horizontal: "right" };
+  label("E3", "＋ もう1つ", { horizontal: "right" });
   mk("F3");
-  label("G3", "＋ もう1つ");
   ws.mergeCells("G3:H3");
-  ws.getCell("G3").alignment = { vertical: "middle", horizontal: "right" };
+  label("G3", "＋ もう1つ", { horizontal: "right" });
   mk("I3");
   ws.getRow(3).height = 28;
-  const m = (c) => `ISNUMBER(SEARCH(${c},${hid}))`;
-  const cnt = `SUMPRODUCT(${m("$C$3")}*${m("$F$3")}*${m("$I$3")})`;
-  ws.getCell("B4").value = "ヒット";
-  ws.getCell("B4").font = { ...font, bold: true };
-  ws.getCell("B4").alignment = { vertical: "middle", shrinkToFit: true };
+  // 空の欄は「何でも1文字」の記号（?）にして、全部に当てはまるようにする（ExcelでもLibreOfficeでも同じ結果）
+  const idle = `AND($C$3="",$F$3="",$I$3="")`;
+  label("B4", "ヒット");
   ws.mergeCells("C4:D4");
-  ws.getCell("C4").value = { formula: `IF(AND($C$3="",$F$3="",$I$3=""),"言葉を入れると、光ります（全${rows.length}件）",${cnt}&"件が光っています")`, result: `言葉を入れると、光ります（全${rows.length}件）` };
+  ws.getCell("C4").value = {
+    formula: `IF(${idle},"全${N}件を出しています",MAX(${rg("K")})&"件が見つかりました")`,
+    result: `全${N}件を出しています`,
+  };
   ws.getCell("C4").font = { ...font, size: 12, bold: true, color: { argb: "FFB06A00" } };
   ws.getCell("C4").alignment = { vertical: "middle" };
-  ws.getCell("E4").value = "← 3つ入れたときは、3つとも当てはまる行だけ光ります";
+  ws.getCell("E4").value = "← 当てはまる部品だけが、下に並びます。3つ入れたときは、3つとも当てはまるものだけ";
   ws.getCell("E4").font = { ...font, size: 9, color: { argb: "FF7A7F87" } };
   ws.getCell("E4").alignment = { vertical: "middle" };
   ws.getRow(4).height = 22;
   ws.getRow(5).height = 8;
-  const heads = ["区分", "分類", "部位", "名称", "英語名", "図番", "右左", "備考（お客さんの呼び方・場所）"];
-  heads.forEach((h, i) => {
+  ["区分", "分類", "部位", "名称", "英語名", "図番", "右左", "備考（お客さんの呼び方・場所）"].forEach((h, i) => {
     const c = ws.getCell(6, i + 2);
     c.value = h;
     c.font = { ...font, bold: true, color: { argb: DK } };
@@ -130,31 +158,34 @@ function fillData(ws, nm, rows, protect) {
     c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   });
   ws.getRow(6).height = 30;
-  const cols = [W.b, W.c, W.d, W.e, W.f, W.g, W.h, W.i];
-  rows.forEach((o, k) => {
+  const FIRST = 7;
+  const src = ["B", "C", "D", "E", "F", "G", "H", "I"];
+  const vals = (o) => [o.kind, o.cat, o.group, o.nameJa, o.nameEn, o.code, o.side, o.note];
+  for (let k = 0; k < N; k++) {
     const r = FIRST + k;
-    const v = [o.kind, o.cat, o.group, o.nameJa, o.nameEn, o.code, o.side, o.note];
-    v.forEach((x, i) => {
+    // 隠しの列K：k番目に見つかった行の番号（なければ空）
+    ws.getCell(r, 11).value = {
+      formula: `IFERROR(MATCH(${k + 1},${rg("K")},0),"")`,
+      result: k + 1,
+    };
+    const v = vals(rows[k]);
+    src.forEach((col, i) => {
       const c = ws.getCell(r, i + 2);
-      c.value = x || "";
-      c.font = i === 5 ? { name: "Consolas", size: 11, bold: true } : font;
-      c.border = hair;
+      c.value = { formula: `IF($K${r}="","",INDEX(${rg(col)},$K${r})&"")`, result: v[i] || "" };
+      c.font = i === 5 ? { name: "Consolas", size: 11, bold: true } : { ...font, size: 10.5 };
       c.alignment = { vertical: "middle", wrapText: true, horizontal: i === 6 || i === 0 ? "center" : "left" };
     });
-    ws.getCell(r, 10).value = norm(o.hay);
-    ws.getRow(r).height = Math.max(20, Math.max(...v.map((x, i) => linesOf(x, cols[i]))) * 16 + 5);
-  });
-  ws.getColumn(10).hidden = true;
-  const any = `OR($C$3<>"",$F$3<>"",$I$3<>"")`;
-  const hit = `AND(${any},ISNUMBER(SEARCH($C$3,$J${FIRST})),ISNUMBER(SEARCH($F$3,$J${FIRST})),ISNUMBER(SEARCH($I$3,$J${FIRST})))`;
+    ws.getRow(r).height = 33;
+  }
+  const LAST = FIRST + N - 1;
+  ws.getColumn(11).hidden = true;
   ws.addConditionalFormatting({
     ref: `B${FIRST}:I${LAST}`,
-    rules: [{ type: "expression", formulae: [hit], style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFE680" } }, font: { bold: true } } }],
+    rules: [{ type: "expression", formulae: [`$K${FIRST}<>""`], style: { border: { bottom: { style: "hair", color: { argb: "FFB0B4BA" } } } } }],
   });
-  ws.autoFilter = { from: { row: 6, column: 2 }, to: { row: LAST, column: 9 } };
   ws.views = [{ state: "frozen", ySplit: 6, showGridLines: false }];
   ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "6:6" };
-  if (protect) ws.sheetProtection = { sheet: true, autoFilter: false, sort: false, formatColumns: true, formatRows: true };
+  if (protect) ws.sheetProtection = { sheet: true };
 }
 
 // ---- ② 部位カタログ（絵つき） ----
@@ -304,10 +335,12 @@ export function buildPartWorkbook(ExcelJS, opt = {}) {
   const nm = {
     data: opt.names?.data || "外装・部品検索",
     cat: opt.names?.cat || "部位カタログ",
+    raw: opt.names?.raw || "外装・部品データ",
     guide: opt.names?.guide || "外装・部品の使い方",
   };
   const wsD = wb.addWorksheet(nm.data, { views: [{ showGridLines: false, tabSelected: true }] });
   const wsC = wb.addWorksheet(nm.cat, { views: [{ showGridLines: false }] });
+  const wsR = wb.addWorksheet(nm.raw, { views: [{ showGridLines: false }] });
   const wsG = wb.addWorksheet(nm.guide, { views: [{ showGridLines: false }] });
   const protect = !!opt.protect;
   const groups = opt.groups || [];
@@ -327,9 +360,10 @@ export function buildPartWorkbook(ExcelJS, opt = {}) {
         note: p.note,
         hay: `${g.kind} ${g.cat} ${g.name} ${g.en || ""} ${(g.alias || []).join(" ")} ${p.nameJa} ${p.nameEn || ""} ${p.code} ${p.side || ""} ${p.note || ""}`,
       });
-  fillData(wsD, nm, rows, protect);
+  fillSearch(wsD, nm, rows, protect);
+  fillRaw(wsR, nm, rows, protect);
   fillCatalog(wb, wsC, nm, groups, images, protect);
   fillGuide(wsG, { font, protect, K: {}, nameP: "", blocks: guideBlocks(protect, nm) });
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
-  return { wb, list: [nm.data, nm.cat, nm.guide], names: nm, rows: rows.length };
+  return { wb, list: [nm.data, nm.cat, nm.raw, nm.guide], names: nm, rows: rows.length };
 }

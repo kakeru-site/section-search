@@ -1,17 +1,17 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261019e";
-import { yomiText } from "./yomi.js?v=20261019e";
-import { sphDocsHtml } from "./sphdocs.js?v=20261019e";
-import { docModel } from "./sphxlsx.js?v=20261019e";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261019e";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261019e";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261019e";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261019e";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261019e";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261019e";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261019e";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261019e";
+import * as S from "./search.js?v=20261019h";
+import { yomiText } from "./yomi.js?v=20261019h";
+import { sphDocsHtml } from "./sphdocs.js?v=20261019h";
+import { docModel } from "./sphxlsx.js?v=20261019h";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261019h";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261019h";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261019h";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261019h";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261019h";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261019h";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261019h";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261019h";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2607,6 +2607,7 @@ async function exportPartsIntoBase(file) {
   const names = {
     data: uniqueName(base.names, "外装・部品検索"),
     cat: uniqueName(base.names, "部位カタログ"),
+    raw: uniqueName(base.names, "外装・部品データ"),
     guide: uniqueName(base.names, "外装・部品の使い方"),
   };
   const protect = T.xparts?.protect !== false;
@@ -2615,7 +2616,7 @@ async function exportPartsIntoBase(file) {
       <div><span>ファイル</span><b>${esc(file.name)}</b></div>
       <div><span>作成者</span><b>${esc(base.creator || "（記録なし）")}</b></div>
       <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
-      <div><span>追加するシート</span><b>${esc(names.data)}・${esc(names.cat)}・${esc(names.guide)}</b></div>
+      <div><span>追加するシート</span><b>${esc(names.data)}・${esc(names.cat)}・${esc(names.raw)}・${esc(names.guide)}</b></div>
       <div><span>シート保護</span><b>${protect ? "あり（パスワードなし）" : "なし"}</b></div>
     </div>
     <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容には手を触れず、シートだけを後ろに足します。元のファイルは変えず、別のファイルとして保存します。</p>
@@ -3164,7 +3165,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261019e";
+const APP_VER = "20261019h";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
