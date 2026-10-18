@@ -188,7 +188,10 @@ function fillSearch(ws, nm, rows, protect) {
   if (protect) ws.sheetProtection = { sheet: true };
 }
 
-// ---- ② 部位カタログ（絵つき） ----
+// ---- ② 部位カタログ（絵つき）：A4よこ・倍率90%で、部位が途中で切れないように、ページを区切る ----
+const CAT_SCALE = 90;
+const CAP = 540; // 1ページに積める高さ（pt）。A4よこ（上下の余白と、くり返す見出しを引いたもの）÷ 倍率より、少し小さめ
+const HEAD_H = 44; // くり返す見出し（1〜2行目）の高さ
 function fillCatalog(wb, ws, nm, groups, images, protect) {
   const W = { img: 30, name: 38, code: 14, side: 7, note: 62 };
   ws.columns = [{ width: 2 }, { width: W.img }, { width: W.name }, { width: W.code }, { width: W.side }, { width: W.note }];
@@ -205,24 +208,50 @@ function fillCatalog(wb, ws, nm, groups, images, protect) {
   ws.getRow(2).height = 8;
   const imgPxW = Math.round(W.img * 7.2);
   const imgPxH = Math.round(imgPxW * 0.61);
+  const imgPt = imgPxH * 0.75 + 4;
+  const wholeW = W.name + W.code + W.side + W.note;
   let r = 3;
+  let y = HEAD_H; // 今のページに積んだ高さ
   const breaks = [];
+  const breakBefore = (row) => {
+    breaks.push(row - 1);
+    y = HEAD_H;
+  };
   let lastKind = "";
   let lastCat = "";
   for (const g of groups) {
-    // 区分・分類の見出し
-    if (g.kind !== lastKind || g.cat !== lastCat) {
-      if (g.kind !== lastKind) {
-        ws.mergeCells(r, 2, r, 6);
-        const kc = ws.getCell(r, 2);
-        kc.value = `【${g.kind}】`;
-        kc.font = { ...font, size: 15, bold: true, color: { argb: "FFFFFFFF" } };
-        for (let i = 2; i <= 6; i++) ws.getCell(r, i).fill = solid(DK);
-        kc.alignment = { vertical: "middle", indent: 1 };
-        ws.getRow(r).height = 30;
-        if (r > 3) breaks.push(r - 1);
-        r++;
-      }
+    const newKind = g.kind !== lastKind;
+    const newCat = newKind || g.cat !== lastCat;
+    const rows = g.parts;
+    const desc = [g.one, g.alias?.length ? `お客さんの呼ばれ方：${g.alias.slice(0, 14).join("、")}` : ""].filter(Boolean).join("\n");
+    const descRowH = Math.max(34, linesOf(desc || "（説明は準備中です）", wholeW) * 17 + 8);
+    const hs = rows.map((o) =>
+      Math.max(20, (linesOf(o.nameJa, W.name) + (o.nameEn ? linesOf(o.nameEn, W.name) * 0.85 : 0)) * 16 + 5, linesOf(o.note, W.note) * 15 + 5),
+    );
+    let have = descRowH + 20 + hs.reduce((a, b) => a + b, 0);
+    let fill = 0;
+    while (have < imgPt) {
+      have += 18;
+      fill++;
+    }
+    const bars = (newKind ? 30 : 0) + (newCat ? 24 : 0);
+    const total = bars + 28 + have + 10;
+    const first = bars + 28 + descRowH + 20 + (hs[0] || 20);
+    const startRow = r;
+    // ページの区切り：区分（外装／部品）が変わるときは新しいページ。そうでなければ、収まらないときだけ
+    if (r > 3 && (newKind || (y + total > CAP && (total <= CAP - HEAD_H || y + first > CAP)))) breakBefore(r);
+    if (newKind) {
+      ws.mergeCells(r, 2, r, 6);
+      const kc = ws.getCell(r, 2);
+      kc.value = `【${g.kind}】`;
+      kc.font = { ...font, size: 15, bold: true, color: { argb: "FFFFFFFF" } };
+      for (let i = 2; i <= 6; i++) ws.getCell(r, i).fill = solid(DK);
+      kc.alignment = { vertical: "middle", indent: 1 };
+      ws.getRow(r).height = 30;
+      y += 30;
+      r++;
+    }
+    if (newCat) {
       ws.mergeCells(r, 2, r, 6);
       const cc = ws.getCell(r, 2);
       cc.value = `${g.cat}${g.catHint ? "　" + g.catHint : ""}`;
@@ -230,11 +259,11 @@ function fillCatalog(wb, ws, nm, groups, images, protect) {
       for (let i = 2; i <= 6; i++) ws.getCell(r, i).fill = solid("FFFFF3C4");
       cc.alignment = { vertical: "middle", indent: 1 };
       ws.getRow(r).height = 24;
+      y += 24;
       r++;
-      lastKind = g.kind;
-      lastCat = g.cat;
     }
-    const start = r;
+    lastKind = g.kind;
+    lastCat = g.cat;
     // 部位名
     ws.mergeCells(r, 2, r, 6);
     const hc = ws.getCell(r, 2);
@@ -246,10 +275,9 @@ function fillCatalog(wb, ws, nm, groups, images, protect) {
       ws.getCell(r, i).border = box;
     }
     ws.getRow(r).height = 28;
+    y += 28;
     r++;
     // 説明
-    const desc = [g.one, g.alias?.length ? `お客さんの呼ばれ方：${g.alias.slice(0, 14).join("、")}` : ""].filter(Boolean).join("\n");
-    const descRowH = Math.max(34, linesOf(desc, W.name + W.code + W.side + W.note) * 17 + 8);
     ws.mergeCells(r, 3, r, 6);
     const dc = ws.getCell(r, 3);
     dc.value = desc || "（説明は準備中です）";
@@ -257,6 +285,7 @@ function fillCatalog(wb, ws, nm, groups, images, protect) {
     dc.alignment = { vertical: "middle", wrapText: true, indent: 1 };
     for (let i = 3; i <= 6; i++) ws.getCell(r, i).border = box;
     ws.getRow(r).height = descRowH;
+    y += descRowH;
     const imgTop = r;
     r++;
     // 部品の見出し
@@ -269,12 +298,13 @@ function fillCatalog(wb, ws, nm, groups, images, protect) {
       c.alignment = { horizontal: "center", vertical: "middle" };
     });
     ws.getRow(r).height = 20;
+    y += 20;
     r++;
     const body0 = r;
-    const rows = g.parts;
-    const used = [];
-    rows.forEach((o) => {
+    rows.forEach((o, k) => {
       const v = [o.nameJa + (o.nameEn ? `\n${o.nameEn}` : ""), o.code, o.side, o.note];
+      // 長い部位は、行の切れ目でページを区切る
+      if (y + hs[k] > CAP) breakBefore(r);
       v.forEach((x, i) => {
         const c = ws.getCell(r, i + 3);
         c.value = x || "";
@@ -282,48 +312,34 @@ function fillCatalog(wb, ws, nm, groups, images, protect) {
         c.border = hair;
         c.alignment = { vertical: "middle", wrapText: true, horizontal: i === 1 || i === 2 ? "center" : "left" };
       });
-      // 名称の2行目（英語名）は小さく見せるため、1行ぶん多めに
-      const h = Math.max(
-        20,
-        (linesOf(o.nameJa, W.name) + (o.nameEn ? linesOf(o.nameEn, W.name) * 0.85 : 0)) * 16 + 5,
-        linesOf(o.note, W.note) * 15 + 5,
-      );
-      ws.getRow(r).height = h;
-      used.push(h);
+      ws.getRow(r).height = hs[k];
+      y += hs[k];
       r++;
     });
-    // 絵の高さぶん、行が足りなければ空き行を足す
-    const need = imgPxH * 0.75 + 4; // px → pt
-    let have = descRowH + 20 + used.reduce((a, b) => a + b, 0);
-    while (have < need) {
-      for (let i = 3; i <= 6; i++) ws.getCell(r, i).border = hair;
+    for (let i = 0; i < fill; i++) {
+      for (let c = 3; c <= 6; c++) ws.getCell(r, c).border = hair;
       ws.getRow(r).height = 18;
-      have += 18;
+      y += 18;
       r++;
     }
-    // 左の絵の欄
-    ws.mergeCells(imgTop, 2, r - 1, 2);
-    const ic = ws.getCell(imgTop, 2);
-    ic.border = box;
-    ic.fill = solid("FFF7F8FA");
-    for (let rr = imgTop; rr < r; rr++) ws.getCell(rr, 2).border = box;
-    const id = images?.[g.key];
-    if (id !== undefined) ws.addImage(id, { tl: { col: 1.04, row: imgTop - 1 + 0.06 }, ext: { width: imgPxW - 12, height: imgPxH - 8 } });
-    // 部品が無いとき
     if (!rows.length) {
       ws.getCell(body0, 3).value = "（部品は、まだ入っていません）";
       ws.getCell(body0, 3).font = { ...font, color: { argb: "FF9AA0A8" } };
     }
-    // 部位は途中で切れないよう、前に改ページを入れる（長い部位だけ）
+    // 左の絵の欄
+    ws.mergeCells(imgTop, 2, r - 1, 2);
+    ws.getCell(imgTop, 2).fill = solid("FFF7F8FA");
+    for (let rr = imgTop; rr < r; rr++) ws.getCell(rr, 2).border = box;
+    const id = images?.[g.key];
+    if (id !== undefined) ws.addImage(id, { tl: { col: 1.04, row: imgTop - 1 + 0.06 }, ext: { width: imgPxW - 12, height: imgPxH - 8 } });
     ws.getRow(r).height = 10;
+    y += 10;
     r++;
-    if ((r - start) > 0 && (r % 1) === 0) {
-      /* ページ区切りは、まとまりごと（分類）の前に入れる */
-    }
   }
   ws.views = [{ state: "frozen", ySplit: 2, showGridLines: false }];
-  ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:1" };
-  for (const b of breaks) ws.getRow(b).addPageBreak?.();
+  ws.pageSetup = { paperSize: 9, orientation: "landscape", scale: CAT_SCALE, fitToPage: false, horizontalCentered: true, printTitlesRow: "1:2", margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.55, header: 0.25, footer: 0.25 } };
+  ws.headerFooter = { oddFooter: "&C&9&P ページ" };
+  for (const b of breaks) ws.getRow(b).addPageBreak();
   if (protect) ws.sheetProtection = { sheet: true };
 }
 
