@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261017f";
-import * as S from "./search.js?v=20261017f";
-import * as FID from "./faceid.js?v=20261017f";
-import * as IMG from "./imgtools.js?v=20261017f";
-import * as CAT from "./catalog.js?v=20261017f";
-import * as TOOLS from "./tools.js?v=20261017f";
+import { createStore, DEMO, localKey } from "./store.js?v=20261017g";
+import * as S from "./search.js?v=20261017g";
+import * as FID from "./faceid.js?v=20261017g";
+import * as IMG from "./imgtools.js?v=20261017g";
+import * as CAT from "./catalog.js?v=20261017g";
+import * as TOOLS from "./tools.js?v=20261017g";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -648,7 +648,7 @@ function renderResults() {
   st.catResults = catOn && st.catList.length ? CAT.searchCatalog(st.catList, q, st.syn, { memo: true }) : [];
   const n = st.results.length;
   const m = st.catResults.length;
-  cnt.textContent = n || m || ext.n ? `セクション${n}件・品番${m}件${ext.n ? `・外装${ext.n}部位` : ""}` : "見つかりません";
+  cnt.textContent = n || m || ext.n ? `セクション${n}件・品番${m}件${ext.n ? `・外装/部品${ext.n}部位` : ""}` : "見つかりません";
   cnt.className = "cnt " + (n || m || ext.n ? "" : "ng");
   if (!n && !m && !ext.n) {
     const gq = `${setting("googlePrefix", "")} ${q}`.trim();
