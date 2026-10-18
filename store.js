@@ -1,5 +1,5 @@
 // DBとログインまわり（Firebase / デモ 共通のI/F）
-import { FIREBASE, ROOT_PATH, SDK_VERSION } from "./config.js?v=20261018d";
+import { FIREBASE, ROOT_PATH, SDK_VERSION } from "./config.js?v=20261018e";
 
 export const DEMO = !FIREBASE.apiKey;
 
