@@ -1,17 +1,17 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261019j";
-import { yomiText } from "./yomi.js?v=20261019j";
-import { sphDocsHtml } from "./sphdocs.js?v=20261019j";
-import { docModel } from "./sphxlsx.js?v=20261019j";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261019j";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261019j";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261019j";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261019j";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261019j";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261019j";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261019j";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261019j";
+import * as S from "./search.js?v=20261019k";
+import { yomiText } from "./yomi.js?v=20261019k";
+import { sphDocsHtml } from "./sphdocs.js?v=20261019k";
+import { docModel } from "./sphxlsx.js?v=20261019k";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261019k";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261019k";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261019k";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261019k";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261019k";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261019k";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261019k";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261019k";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -3105,29 +3105,21 @@ async function importExts(file) {
   } catch (e) {
     return C.toast("取り込めませんでした：" + e.message, true);
   }
-  const have = new Set(Object.keys(C.st.exteriors || {}));
-  const keyOf = (r) => `${r.group}__${r.code}${r.side ? "_" + r.side : ""}`.replace(/[.#$\[\]\/]/g, "-");
-  const add = rows.filter((r) => !have.has(keyOf(r))).length;
-  const groups = [...new Set(rows.map((r) => r.group))];
-  const ok = await C.modal(`<h3>外装データを取り込む</h3>
-    <p style="margin:0 0 8px;line-height:1.7">${rows.length}件 を見つけました（新規 ${add}件／更新 ${rows.length - add}件）。<br>今ある部品は消えません。同じ部位・図番は上書きします。</p>
-    <div class="xlinfo"><div><span>部位</span><b>${esc(groups.join("、"))}</b></div></div>
-    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>取り込む</button></div>`);
-  if (!ok) return;
-  const w = {};
-  const now = Date.now();
-  rows.forEach((r) => (w[keyOf(r)] = { ...r, updatedAt: now }));
-  const keys = Object.keys(w);
+  const plan = await planImport("外装データ", rows, C.st.exteriors);
+  if (!plan) return;
+  const keys = Object.keys(plan.w);
+  if (!keys.length) return C.toast("新しい部品はありませんでした（すべて、すでに入っています）");
   try {
     for (let i = 0; i < keys.length; i += 500) {
       const part = {};
-      for (const k of keys.slice(i, i + 500)) part[k] = w[k];
+      for (const k of keys.slice(i, i + 500)) part[k] = plan.w[k];
       await C.store.update("exteriors", part);
     }
-    C.toast(`${rows.length}件 取り込みました`);
+    C.toast(`${plan.count}件 取り込みました${plan.skipped ? `（同じ図番の ${plan.skipped}件は飛ばしました）` : ""}`);
   } catch (e) {
     C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
   }
+
 }
 
 // ================= 部品検索（内装・機関） =================
@@ -3165,7 +3157,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261019j";
+const APP_VER = "20261019k";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
@@ -3463,6 +3455,47 @@ const IN_HEAD = {
   side: /^(右左|左右|rh\/lh|lr|side|右・左)/i,
   note: /^(備考|メモ|note|remarks?)/i,
 };
+// 取り込む前の確認：すでに同じ図番（右左も同じ）が入っている部品を、飛ばすか、置き換えるかを選ぶ
+const impKey = (r) => `${r.group}__${r.code}${r.side ? "_" + r.side : ""}`.replace(/[.#$\[\]\/]/g, "-");
+async function planImport(title, rows, existing) {
+  const codeKey = (r) => `${r.code}|${r.side || ""}`;
+  const byCode = new Map();
+  for (const [k, o] of Object.entries(existing || {})) {
+    const ck = `${String(o.code || "").toUpperCase()}|${o.side || ""}`;
+    if (!byCode.has(ck)) byCode.set(ck, []);
+    byCode.get(ck).push(k);
+  }
+  const dup = rows.filter((r) => byCode.has(codeKey(r)));
+  const fresh = rows.filter((r) => !byCode.has(codeKey(r)));
+  const groups = [...new Set(rows.map((r) => r.group))];
+  const info = `<div class="xlinfo"><div><span>部位</span><b>${esc(groups.join("、"))}</b></div></div>`;
+  const note = (dup.length ? "" : "") + "";
+  let mode = "all";
+  if (!dup.length) {
+    const ok = await C.modal(`<h3>${title}を取り込む</h3>
+      <p style="margin:0 0 8px;line-height:1.7">${rows.length}件 を見つけました（すべて新しい部品です）。<br>今ある部品は消えません。</p>${info}
+      <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>取り込む</button></div>`);
+    if (!ok) return null;
+  } else {
+    const r = await C.modal(`<h3>${title}を取り込む</h3>
+      <div class="xlinfo">
+        <div><span>見つけた部品</span><b>${rows.length}件</b></div>
+        <div><span>新しい部品</span><b>${fresh.length}件</b></div>
+        <div><span>同じ図番がすでにある</span><b>${dup.length}件</b></div>
+      </div>
+      <p style="margin:10px 0 0;font-size:12.5px;line-height:1.8">・<b>飛ばして取り込む（おすすめ）</b>：新しい部品だけを足します。すでにある部品は、そのまま残ります。<br>・<b>置き換えて取り込む</b>：同じ図番は、新しい内容で置き換えます（別の部位に入っていた同じ図番は消えます）。備考を更新したいときに使います。</p>${info}
+      <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn" data-m="replace">置き換えて取り込む</button><button class="btn pri" data-m="ok" autofocus>飛ばして取り込む（${fresh.length}件）</button></div>`);
+    if (!r) return null;
+    mode = r.act === "replace" ? "replace" : "skip";
+  }
+  const w = {};
+  const now = Date.now();
+  const use = mode === "skip" ? fresh : rows;
+  use.forEach((r) => (w[impKey(r)] = { ...r, updatedAt: now }));
+  if (mode === "replace")
+    for (const r of dup) for (const k of byCode.get(codeKey(r))) if (!(k in w)) w[k] = null; // 古い重複は消す
+  return { w, count: use.length, skipped: mode === "skip" ? dup.length : 0 };
+}
 async function importInns(file) {
   if (!file) return;
   let rows;
@@ -3502,29 +3535,21 @@ async function importInns(file) {
   } catch (e) {
     return C.toast("取り込めませんでした：" + e.message, true);
   }
-  const have = new Set(Object.keys(C.st.inners || {}));
-  const keyOf = (r) => `${r.group}__${r.code}${r.side ? "_" + r.side : ""}`.replace(/[.#$\[\]\/]/g, "-");
-  const add = rows.filter((r) => !have.has(keyOf(r))).length;
-  const groups = [...new Set(rows.map((r) => r.group))];
-  const ok = await C.modal(`<h3>部品データを取り込む</h3>
-    <p style="margin:0 0 8px;line-height:1.7">${rows.length}件 を見つけました（新規 ${add}件／更新 ${rows.length - add}件）。<br>今ある部品は消えません。同じ部位・図番は上書きします。</p>
-    <div class="xlinfo"><div><span>部位</span><b>${esc(groups.join("、"))}</b></div></div>
-    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>取り込む</button></div>`);
-  if (!ok) return;
-  const w = {};
-  const now = Date.now();
-  rows.forEach((r) => (w[keyOf(r)] = { ...r, updatedAt: now }));
-  const keys = Object.keys(w);
+  const plan = await planImport("部品データ", rows, C.st.inners);
+  if (!plan) return;
+  const keys = Object.keys(plan.w);
+  if (!keys.length) return C.toast("新しい部品はありませんでした（すべて、すでに入っています）");
   try {
     for (let i = 0; i < keys.length; i += 500) {
       const part = {};
-      for (const k of keys.slice(i, i + 500)) part[k] = w[k];
+      for (const k of keys.slice(i, i + 500)) part[k] = plan.w[k];
       await C.store.update("inners", part);
     }
-    C.toast(`${rows.length}件 取り込みました`);
+    C.toast(`${plan.count}件 取り込みました${plan.skipped ? `（同じ図番の ${plan.skipped}件は飛ばしました）` : ""}`);
   } catch (e) {
     C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
   }
+
 }
 
 // ---- セクション検索から使う：外装の該当部位を、カード（解説・図つき）で出す ----
