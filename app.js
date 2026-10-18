@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261020g";
-import * as S from "./search.js?v=20261020g";
-import * as FID from "./faceid.js?v=20261020g";
-import * as IMG from "./imgtools.js?v=20261020g";
-import * as CAT from "./catalog.js?v=20261020g";
-import * as TOOLS from "./tools.js?v=20261020g";
+import { createStore, DEMO, localKey } from "./store.js?v=20261020h";
+import * as S from "./search.js?v=20261020h";
+import * as FID from "./faceid.js?v=20261020h";
+import * as IMG from "./imgtools.js?v=20261020h";
+import * as CAT from "./catalog.js?v=20261020h";
+import * as TOOLS from "./tools.js?v=20261020h";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -3153,3 +3153,52 @@ TOOLS.setup({
   openMemoForSph,
 });
 boot();
+// ---- 検索バーの「ワンタップで全部消す」ボタン（すべての検索バーに、自動で付く） ----
+(function setupSearchClear() {
+  const sync = (lab) => {
+    const i = lab.querySelector("input");
+    if (i) lab.classList.toggle("has", !!i.value);
+  };
+  const attach = (lab) => {
+    if (lab.querySelector(".sx") || !lab.querySelector("input")) return sync(lab);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sx";
+    b.title = "ぜんぶ消す";
+    b.setAttribute("aria-label", "検索の文字をぜんぶ消す");
+    b.innerHTML = "×";
+    const kbd = lab.querySelector(".kbd");
+    if (kbd) lab.insertBefore(b, kbd);
+    else lab.appendChild(b);
+    sync(lab);
+  };
+  const scan = (root) => {
+    if (root.matches?.("label.search")) attach(root);
+    root.querySelectorAll?.("label.search").forEach(attach);
+  };
+  new MutationObserver((ms) => {
+    for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener("input", (e) => {
+    const lab = e.target.closest?.("label.search");
+    if (lab) sync(lab);
+  });
+  // 押した瞬間に消す（スマホでキーボードが閉じないよう、フォーカスを保つ）
+  const clear = (e) => {
+    const b = e.target.closest?.(".sx");
+    if (!b) return;
+    e.preventDefault();
+    const lab = b.closest("label.search");
+    const i = lab.querySelector("input");
+    if (!i.value) return i.focus();
+    i.value = "";
+    i.dispatchEvent(new Event("input", { bubbles: true }));
+    sync(lab);
+    i.focus();
+  };
+  document.addEventListener("pointerdown", (e) => {
+    if (e.target.closest?.(".sx")) e.preventDefault(); // フォーカスが外れないように
+  });
+  document.addEventListener("click", clear);
+  scan(document);
+})();

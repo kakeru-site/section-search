@@ -4171,3 +4171,40 @@ img.blur {
   font-size: 11px;
   color: var(--mu);
 }
+/* 検索バーの「ぜんぶ消す」ボタン */
+.search .sx {
+  display: none;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin: 0 -6px 0 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ln);
+  color: var(--tx);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+.search.has .sx {
+  display: inline-flex;
+}
+.search .sx:hover,
+.search .sx:active {
+  background: var(--ac);
+  color: #111;
+}
+.search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+@media (max-width: 720px) {
+  .search .sx {
+    width: 44px;
+    height: 44px;
+    font-size: 26px;
+  }
+}
