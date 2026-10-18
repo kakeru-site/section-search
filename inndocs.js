@@ -240,6 +240,18 @@ const ICON_OF = {
   "プロペラシャフト": "propshaft",
   "リアデフ（リアファイナルドライブ）": "diff",
 };
+// 部位名の言葉から、近い絵を選ぶ（登録のない部位でも、汎用の絵にならないように）
+const WORD_ICON = [
+  ["ミラー", "mirror"], ["スポイラー", "spoiler"], ["バイザー", "visor"], ["シートベルト", "seatbelt"], ["シート", "seat"], ["ワイパー", "wiper"], ["ウォッシャー", "washer"],
+  ["ヘッドランプ", "headlamp"], ["フォグ", "foglamp"], ["ルームランプ", "roomlamp"], ["コンビネーションランプ", "taillamp"], ["ナンバー灯", "plate"], ["ハイマウント", "highmount"],
+  ["ハーネス", "wire"], ["ヒューズ", "fusebox"], ["リレー", "relay"], ["バッテリー", "battery"], ["メーター", "meter"], ["スイッチ", "switchb"],
+  ["アンテナ", "antenna"], ["カメラ", "camera"], ["スピーカー", "speaker"], ["マイク", "speaker"], ["ナビ", "audio"], ["オーディオ", "audio"],
+  ["コンプレッサー", "compressor"], ["コンデンサー", "condenser"], ["ヒーター", "heater"], ["ブロワー", "ac"], ["クーリング", "ac"], ["ダクト", "duct"], ["ノズル", "duct"],
+  ["コンソール", "console"], ["エンブレム", "emblem"], ["ラベル", "label"], ["ジャッキ", "tools"], ["工具", "tools"], ["キー", "key"],
+  ["ブレーキ", "brake"], ["ステアリング", "steer"], ["サスペンション", "strut"], ["アクスル", "hub"], ["ホイール", "wheel"], ["ドライブシャフト", "driveshaft"], ["デフ", "diff"],
+  ["ミッション", "trans"], ["ギヤ", "gear"], ["エンジン", "piston"], ["ラジエーター", "radiator"], ["ホース", "hose"], ["センサー", "sensor"],
+];
+const iconByWord = (name) => WORD_ICON.find(([w]) => String(name).normalize("NFKC").includes(w))?.[1];
 // 部位の名前（全角・半角のどちらでも）から、絵を探す
 const iconKey = (name) => {
   const n = String(name).normalize("NFKC");
@@ -1428,8 +1440,18 @@ export const catIndexInn = (name) => {
 export const metaOfInn = (name) => INN_GROUPS.find((g) => g.name.normalize("NFKC") === String(name).normalize("NFKC"));
 export function groupFigsInn(meta) {
   const out = [];
-  const k = iconKey(meta?.name || "") || "generic";
-  if (k) out.push({ svg: wrap(ICON[k](), meta.name + "の形のイメージ"), cap: "形のイメージ（実物とは細部が違います）" });
+  const k = [iconKey(meta?.name || ""), iconByWord(meta?.name || "")].find((x) => x && ICON[x]) || "generic";
+  if (k) {
+    // 同じ形の絵を使う部位でも見分けられるよう、色合いを部位ごとに変え、前・後ろの印と、短い名前を入れる
+    const nm = String(meta.name).normalize("NFKC");
+    let h = 0;
+    for (const ch of nm) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    const side = /^フロント|\(フロント/.test(nm) ? "前" : /^リア|\(リア/.test(nm) ? "後" : "";
+    const badge = side ? `<circle cx="34" cy="34" r="20" fill="#f2c230" stroke="#b08400" stroke-width="2"/><text x="34" y="42" text-anchor="middle" font-size="24" font-weight="700" fill="#111">${side}</text>` : "";
+    const cap = `<text x="160" y="190" text-anchor="middle" font-size="15" font-weight="700" fill="#8a8f98">${nm.replace(/[（(].*$/, "").slice(0, 12)}</text>`;
+    const svg = wrap(ICON[k]() + badge + cap, meta.name + "の形のイメージ").replace("<svg ", `<svg style="filter:hue-rotate(${h % 120 - 20}deg)" `);
+    out.push({ svg, cap: "形のイメージ（実物とは細部が違います）" });
+  }
   for (const [view, hl, cap] of meta?.figs || []) out.push({ svg: engineSide(Array.isArray(hl) ? hl : [hl]), cap });
   return out;
 }
