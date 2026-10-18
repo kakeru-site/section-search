@@ -1,7 +1,7 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261017l";
-import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261017l";
-import { fillQuick } from "./sphquick.js?v=20261017l";
+import { yomiText } from "./yomi.js?v=20261017m";
+import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261017m";
+import { fillQuick } from "./sphquick.js?v=20261017m";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
