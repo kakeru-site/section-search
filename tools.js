@@ -1,15 +1,15 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261017c";
-import { yomiText } from "./yomi.js?v=20261017c";
-import { sphDocsHtml } from "./sphdocs.js?v=20261017c";
-import { docModel } from "./sphxlsx.js?v=20261017c";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261017c";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261017c";
-import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261017c";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261017c";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261017c";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261017c";
+import * as S from "./search.js?v=20261017d";
+import { yomiText } from "./yomi.js?v=20261017d";
+import { sphDocsHtml } from "./sphdocs.js?v=20261017d";
+import { docModel } from "./sphxlsx.js?v=20261017d";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261017d";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261017d";
+import { EXT_GROUPS, SMALL_RE, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261017d";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261017d";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261017d";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261017d";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2640,6 +2640,8 @@ async function exportIntoBase(file, kind = "oil") {
 let extIdx = null,
   extSrc = null;
 const byNo = (a, b) => (a.no ?? 9999) - (b.no ?? 9999) || String(a.code).localeCompare(String(b.code));
+// Google検索の言葉（設定の「前に付ける言葉」＋名前）
+const gq = (t) => `${C.setting("googlePrefix", "")} ${t}`.trim();
 function extList() {
   const raw = C.st.exteriors || {};
   if (raw === extSrc && extIdx) return extIdx;
@@ -2815,7 +2817,7 @@ function renderExtGroup(body, name) {
   const grp = (C.st.extGroups || {})[key] || {};
   const phs = Object.entries(grp.photos || {}).sort((a, b) => a[1] - b[1]);
   body.innerHTML = `<div class="ex-det">
-    <div class="ex-dh"><button class="btn" data-exback="1">← 一覧へ</button><div><h2>${esc(g.name)}</h2><div class="ex-en">${esc(g.meta?.en || "")}</div></div></div>
+    <div class="ex-dh"><button class="btn" data-exback="1">← 一覧へ</button><div><h2>${esc(g.name)}</h2><div class="ex-en">${esc(g.meta?.en || "")}</div></div><button class="btn" data-google="${esc(gq(g.name))}" title="Googleで「${esc(g.name)}」を検索">${C.IC.search}Googleで調べる</button></div>
     ${g.meta?.one ? `<p class="ex-one2">${esc(g.meta.one)}</p>` : ""}
     ${
       figs.length
@@ -2826,7 +2828,7 @@ function renderExtGroup(body, name) {
     <div class="ex-tw"><table class="ex-t"><thead><tr><th>名称</th><th>英語名</th><th>図番</th><th></th></tr></thead><tbody>${g.parts
       .map(
         (p) =>
-          `<tr data-exedit="${esc(p.id)}" tabindex="0"><td><b>${esc(p.nameJa)}</b>${sideTag(p.side)}${p.note ? `<small>${esc(p.note)}</small>` : ""}</td><td class="mu">${esc(p.nameEn || "")}</td><td class="mono"><b>${esc(p.code)}</b></td><td><button class="linkbtn" data-exedit="${esc(p.id)}">編集</button></td></tr>`,
+          `<tr data-exedit="${esc(p.id)}" tabindex="0"><td><b>${esc(p.nameJa)}</b>${sideTag(p.side)}${p.note ? `<small>${esc(p.note)}</small>` : ""}</td><td class="mu">${esc(p.nameEn || "")}</td><td class="mono"><b>${esc(p.code)}</b></td><td class="ex-acts"><button class="btn sm" data-google="${esc(gq(p.nameJa))}" title="Googleで「${esc(p.nameJa)}」を検索">${C.IC.search}Google</button> <button class="linkbtn" data-exedit="${esc(p.id)}">編集</button></td></tr>`,
       )
       .join("")}</tbody></table></div>
     <p class="ex-small">※ クリップ・ボルト・ナットなどの小物は、載せていません。場所は、下の写真か、EPCの図で確認します。</p>
@@ -3000,4 +3002,38 @@ async function importExts(file) {
   } catch (e) {
     C.toast("途中で失敗しました：" + e.message + "（もう一度取り込むと続きから入ります）", true);
   }
+}
+
+// ---- セクション検索から使う：外装の該当部位を、カード（解説・図つき）で出す ----
+export function extMainBlock(q) {
+  if (!extList().length) return { html: "", n: 0 };
+  const r = extSearch(q);
+  if (!r.toks.length && !r.small) return { html: "", n: 0 };
+  const rows = r.toks.length ? r.rows : [];
+  if (!rows.length) return { html: "", n: 0 };
+  const cards = rows
+    .slice(0, 6)
+    .map(({ g, hits }) => {
+      const fig = g.meta ? groupFigs(g.meta)[0] : null;
+      return `<button class="ex-card" data-extg="${esc(g.name)}" title="外装検索で開く">
+        <span class="ex-fig">${fig ? fig.svg : ""}</span>
+        <span class="ex-ct"><b>${esc(g.name)}</b>${g.meta ? `<i class="ex-area">${esc(g.meta.area)}</i>` : ""}</span>
+        <span class="ex-one">${esc(g.meta?.one || "")}</span>
+        ${
+          hits.length
+            ? `<span class="ex-hits">${hits
+                .slice(0, 5)
+                .map((p) => `<span>${esc(p.nameJa)}${sideTag(p.side)} <code>${esc(p.code)}</code></span>`)
+                .join("")}</span>`
+            : ""
+        }
+        <small>部品 ${g.parts.length}点 ／ 押すと、図と部品の一覧</small></button>`;
+    })
+    .join("");
+  return { html: `<div class="blk-head">外装<small>${rows.length}部位 ／ 絵と解説つき</small></div><div class="ex-cards ex-main">${cards}</div>`, n: rows.length };
+}
+export function openExt(name) {
+  T.tab = "ext";
+  T.ext = { ...(T.ext || {}), q: "", group: name };
+  save();
 }

@@ -4110,3 +4110,12 @@ img.blur {
   border-color: var(--ac);
   color: var(--ac);
 }
+.ex-main {
+  margin-bottom: 14px;
+}
+.ex-acts {
+  white-space: nowrap;
+}
+.ex-dh .btn:last-child {
+  margin-left: auto;
+}

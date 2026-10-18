@@ -1,10 +1,10 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261017c";
-import * as S from "./search.js?v=20261017c";
-import * as FID from "./faceid.js?v=20261017c";
-import * as IMG from "./imgtools.js?v=20261017c";
-import * as CAT from "./catalog.js?v=20261017c";
-import * as TOOLS from "./tools.js?v=20261017c";
+import { createStore, DEMO, localKey } from "./store.js?v=20261017d";
+import * as S from "./search.js?v=20261017d";
+import * as FID from "./faceid.js?v=20261017d";
+import * as IMG from "./imgtools.js?v=20261017d";
+import * as CAT from "./catalog.js?v=20261017d";
+import * as TOOLS from "./tools.js?v=20261017d";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -387,7 +387,7 @@ function onData(key) {
   renderNav();
   renderRight();
   const v = st.view;
-  if (v === "sec" && ["parts", "memos", "settings", "stats", "history"].includes(key)) renderResults();
+  if (v === "sec" && ["parts", "memos", "settings", "stats", "history", "exteriors"].includes(key)) renderResults();
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
@@ -638,19 +638,20 @@ function renderResults() {
     ? S.searchParts(st.partList, st.q, st.syn, { group: st.group, sec: st.sec })
     : [];
   const catOn = !!q && st.group === "all" && !st.sec;
+  const ext = q && st.group === "all" && !st.sec ? TOOLS.extMainBlock(q) : { html: "", n: 0 };
   st.catResults = catOn && st.catList.length ? CAT.searchCatalog(st.catList, q, st.syn, { memo: true }) : [];
   const n = st.results.length;
   const m = st.catResults.length;
-  cnt.textContent = n || m ? `セクション${n}件・品番${m}件` : "見つかりません";
-  cnt.className = "cnt " + (n || m ? "" : "ng");
-  if (!n && !m) {
+  cnt.textContent = n || m || ext.n ? `セクション${n}件・品番${m}件${ext.n ? `・外装${ext.n}部位` : ""}` : "見つかりません";
+  cnt.className = "cnt " + (n || m || ext.n ? "" : "ng");
+  if (!n && !m && !ext.n) {
     const gq = `${setting("googlePrefix", "")} ${q}`.trim();
     box.innerHTML = `<div class="panel"><h3>「${esc(q)}」は見つかりませんでした</h3>
       <p style="margin:0 0 12px;font-size:12.5px;color:var(--mu);line-height:1.7">言い方を変える（例：フィルター → エレメント）か、短くしてみてください。よく使う言い換えは「データ編集 → 設定 → 言い換えリスト」に登録できます。</p>
       <div class="flex-wrap"><button class="btn" data-google="${esc(gq)}">${IC.search} Googleで「${esc(gq)}」</button><button class="btn" data-addpart="${esc(q)}">＋ 部品データに追加</button></div></div>${catalogBlock(catOn)}`;
     return;
   }
-  let html = "";
+  let html = ext.html;
   if (n) {
     if (st.sel >= Math.min(n, st.limit)) st.sel = 0;
     const rows = st.results
@@ -2901,6 +2902,10 @@ document.addEventListener("click", async (e) => {
   if (d.more) {
     st.limit += 100;
     return renderResults();
+  }
+  if (d.extg) {
+    TOOLS.openExt(d.extg);
+    return go("tool");
   }
   if (d.google) {
     googleOpen(d.google);
