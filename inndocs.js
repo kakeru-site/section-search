@@ -18,6 +18,88 @@ export function engineSide(hl = []) {
   </svg>`;
 }
 
+// ---- 部位ごとの絵（形のイメージ。実物とは細部が違います） ----
+const ST = 'fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"';
+const GR = 'fill="#8a8f98" fill-opacity=".16" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round"';
+const DK = 'fill="#17191c" fill-opacity=".55" stroke="#8a8f98" stroke-width="1.6" stroke-linejoin="round"';
+const Y = 'fill="#f2c230" fill-opacity=".9" stroke="#b08400" stroke-width="2.2" stroke-linejoin="round"';
+const YS = 'fill="none" stroke="#f2c230" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"';
+const wrap = (inner, label) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 196" class="ex-svg" role="img" aria-label="${label}">${inner}</svg>`;
+const circ = (x, y, r, st = GR) => `<circle cx="${x}" cy="${y}" r="${r}" ${st}/>`;
+const rect = (x, y, w, h, st = GR, rx = 6) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" ${st}/>`;
+const ICON = {
+  mount: () => `${rect(80, 30, 160, 70, GR, 10)}${rect(96, 100, 128, 14, DK, 4)}${rect(118, 114, 84, 40, Y, 8)}${rect(70, 154, 180, 14, GR, 4)}<path d="M130 126 h60 M130 138 h60" ${ST}/>`,
+  belt: () => `${circ(80, 60, 30)}${circ(240, 60, 22)}${circ(240, 140, 26)}${circ(120, 150, 34)}${circ(160, 96, 12, Y)}<path d="M80 30 L240 38 M110 66 L150 90 M240 82 L240 114 M148 160 L214 150 M80 90 L100 120 M255 118 L250 82" ${YS}/>`,
+  blowby: () => `${rect(70, 100, 180, 70, GR, 10)}${rect(86, 84, 148, 18, DK, 4)}<path d="M110 84 C110 40 160 30 200 44 C230 54 240 40 262 30" ${YS}/>${rect(246, 22, 36, 22, GR, 4)}`,
+  piston: () => `${rect(40, 20, 64, 58, Y, 8)}<path d="M52 36 h40 M52 46 h40 M52 56 h40" ${ST}/><path d="M72 78 L72 126" ${YS}/>${circ(72, 140, 20, GR)}<path d="M120 140 H280" ${ST}/>${circ(160, 140, 24, GR)}${circ(230, 140, 24, GR)}${circ(300, 100, 0, GR)}${circ(160, 140, 8, DK)}${circ(230, 140, 8, DK)}`,
+  cam: () => `<path d="M30 70 H290" ${YS}/>${[60, 110, 160, 210, 260].map((x) => `<ellipse cx="${x}" cy="70" rx="12" ry="22" ${GR}/>`).join("")}<path d="M30 140 H290" ${ST}/>${[60, 110, 160, 210, 260].map((x) => `${rect(x - 8, 122, 16, 36, DK, 3)}`).join("")}`,
+  vtc: () => `${rect(40, 30, 150, 130, GR, 14)}${circ(115, 95, 34, DK)}${[210, 245, 280].map((x) => rect(x - 11, 50 + (x - 210) / 5, 22, 70, Y, 8)).join("")}`,
+  frontcover: () => `${rect(60, 20, 140, 160, GR, 18)}${circ(130, 110, 28, DK)}${circ(130, 110, 12, GR)}${rect(220, 40, 56, 90, Y, 12)}<path d="M230 60 h36 M230 80 h36 M230 100 h36" ${ST}/>`,
+  intake: () => `${rect(30, 40, 150, 50, GR, 22)}${[60, 100, 140, 175].map((x) => `<path d="M${x} 90 v50" ${YS}/>`).join("")}${rect(190, 50, 40, 34, Y, 8)}<path d="M40 150 H220" ${ST}/>`,
+  exhaust: () => `${[70, 120, 170, 220].map((x) => `<path d="M${x} 40 V84 Q${x} 104 ${x < 140 ? x + 30 : x - 30} 112" ${YS}/>`).join("")}${rect(120, 112, 80, 60, GR, 14)}<path d="M160 172 H280" ${ST}/>`,
+  lube: () => `${rect(40, 40, 70, 100, Y, 14)}<path d="M50 70 h50 M50 90 h50 M50 110 h50" ${ST}/><path d="M150 50 V110" ${ST}/>${rect(130, 110, 100, 26, GR, 6)}<path d="M172 136 V176 H240" ${YS}/>`,
+  throttle: () => `${circ(160, 98, 66)}${circ(160, 98, 50, DK)}<path d="M110 118 L210 78" ${YS}/>${rect(150, 24, 20, 20, GR, 4)}`,
+  fuel: () => `${rect(40, 40, 200, 18, GR, 6)}${[70, 120, 170, 220].map((x) => `${rect(x - 8, 58, 16, 60, Y, 6)}`).join("")}<path d="M240 49 C270 49 290 70 290 100" ${YS}/>`,
+  aircleaner: () => `${rect(40, 40, 240, 120, GR, 14)}${rect(70, 56, 180, 88, DK, 6)}${Array.from({ length: 9 }, (_, i) => `<path d="M${84 + i * 18} 62 V138" ${ST}/>`).join("")}${rect(250, 80, 50, 36, Y, 8)}`,
+  duct: () => `<path d="M30 140 C80 140 90 60 150 60 C210 60 220 120 280 110" fill="none" stroke="#f2c230" stroke-width="22" stroke-linecap="round"/><path d="M30 140 C80 140 90 60 150 60 C210 60 220 120 280 110" fill="none" stroke="#8a8f98" stroke-width="2"/>${rect(22, 118, 26, 44, GR, 4)}${circ(240, 150, 16, GR)}`,
+  tank: () => `<path d="M40 70 Q40 50 70 50 H250 Q290 50 290 90 V130 Q290 160 250 160 H70 Q40 160 40 130 Z" ${GR}/>${rect(120, 70, 80, 60, Y, 10)}<path d="M280 40 L250 60" ${YS}/>${circ(285, 36, 10, DK)}`,
+  fuelpipe: () => `<path d="M30 150 H120 Q140 150 140 130 V70 Q140 50 160 50 H290" ${YS}/>${[60, 200, 250].map((x) => circ(x, x === 60 ? 150 : 50, 6, DK)).join("")}${rect(220, 90, 60, 34, GR, 6)}`,
+  pedal: () => `<path d="M120 20 L200 20 L210 60 L130 60 Z" ${GR}/><path d="M165 60 L190 150" ${YS}/>${rect(170, 150, 80, 28, Y, 8)}`,
+  muffler: () => `<path d="M30 60 H120 Q150 60 150 90 V120 H200" ${ST}/>${rect(190, 96, 100, 54, GR, 22)}${rect(100, 80, 60, 30, Y, 10)}<path d="M290 123 H306" ${YS}/>`,
+  waterpump: () => `${circ(120, 100, 56)}${circ(120, 100, 32, DK)}${[0, 60, 120, 180, 240, 300].map((a) => `<path d="M120 100 L${120 + 30 * Math.cos((a * Math.PI) / 180)} ${100 + 30 * Math.sin((a * Math.PI) / 180)}" ${ST}/>`).join("")}${rect(210, 60, 70, 80, Y, 14)}<path d="M240 100 a14 14 0 1 0 0.1 0" ${ST}/>`,
+  hose: () => `<path d="M30 60 C100 30 130 150 200 120 C240 100 250 60 290 70" fill="none" stroke="#f2c230" stroke-width="20" stroke-linecap="round"/><path d="M30 60 C100 30 130 150 200 120 C240 100 250 60 290 70" fill="none" stroke="#8a8f98" stroke-width="2"/>${rect(20, 40, 14, 40, GR, 3)}${rect(282, 50, 14, 40, GR, 3)}`,
+  oilcooler: () => `${rect(80, 30, 160, 130, GR, 8)}${Array.from({ length: 6 }, (_, i) => rect(92, 42 + i * 20, 136, 12, i % 2 ? DK : Y, 3)).join("")}<path d="M40 60 H80 M240 120 H290" ${YS}/>`,
+  radiator: () => `${rect(30, 30, 160, 130, GR, 8)}${Array.from({ length: 8 }, (_, i) => `<path d="M42 ${48 + i * 14} H178" ${ST}/>`).join("")}${circ(250, 96, 50, DK)}${[0, 72, 144, 216, 288].map((a) => `<path d="M250 96 L${250 + 44 * Math.cos((a * Math.PI) / 180)} ${96 + 44 * Math.sin((a * Math.PI) / 180)}" ${YS}/>`).join("")}`,
+  radfit: () => `${rect(30, 56, 150, 110, GR, 8)}${Array.from({ length: 6 }, (_, i) => `<path d="M42 ${74 + i * 14} H168" ${ST}/>`).join("")}${rect(220, 20, 70, 60, Y, 12)}<path d="M180 70 C200 40 210 40 220 44 M110 56 C120 30 150 30 170 38" ${YS}/>`,
+  atcooler: () => `${rect(110, 60, 100, 70, GR, 6)}${Array.from({ length: 5 }, (_, i) => `<path d="M120 ${72 + i * 12} H200" ${ST}/>`).join("")}<path d="M110 80 C60 80 50 150 30 160 M210 110 C260 110 270 40 296 36" ${YS}/>`,
+  ignition: () => `${rect(120, 20, 40, 60, Y, 10)}<path d="M140 80 V130" ${YS}/>${rect(130, 130, 20, 40, GR, 3)}<path d="M135 170 L145 170 M140 176 V184" ${ST}/>${rect(60, 150, 200, 14, GR, 4)}`,
+  sensor: () => `${rect(110, 20, 90, 50, Y, 10)}<path d="M155 70 V120" ${YS}/>${circ(155, 140, 24, GR)}${circ(155, 140, 8, DK)}<path d="M200 44 H290" ${ST}/>`,
+  evap: () => `${rect(110, 40, 100, 120, GR, 18)}${rect(130, 60, 60, 80, Y, 8)}<path d="M160 40 V20 H280 M160 160 V184 H60" ${ST}/>`,
+  ecm: () => `${rect(60, 40, 200, 110, GR, 8)}${rect(80, 60, 70, 70, Y, 4)}${Array.from({ length: 8 }, (_, i) => `<path d="M${164 + i * 12} 56 V84 M${164 + i * 12} 110 V134" ${ST}/>`).join("")}`,
+  altbracket: () => `${rect(70, 100, 140, 50, GR, 8)}<path d="M100 100 L120 50 H200 L210 100" ${YS}/>${circ(120, 125, 10, DK)}${circ(190, 125, 10, DK)}`,
+  alternator: () => `${circ(120, 100, 70)}${circ(120, 100, 36, DK)}${circ(120, 100, 14, Y)}${rect(190, 60, 90, 80, Y, 14)}<path d="M200 80 h70 M200 100 h70 M200 120 h70" ${ST}/>`,
+  starter: () => `${rect(40, 60, 150, 76, GR, 30)}${rect(190, 76, 40, 44, DK, 6)}${circ(250, 98, 26, Y)}<path d="M244 98 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0" ${ST}/>${rect(70, 24, 70, 34, Y, 8)}`,
+};
+const ICON_OF = {
+  "エンジン・ミッションマウント": "mount",
+  "ベルト・テンショナー": "belt",
+  "ブローバイ（クランクケース換気）": "blowby",
+  "ピストン・クランクシャフト・フライホイール": "piston",
+  "カムシャフト・バルブ機構": "cam",
+  "VTCソレノイド・カバー": "vtc",
+  "フロントカバー": "frontcover",
+  "インテークマニホールド": "intake",
+  "エキゾーストマニホールド": "exhaust",
+  "潤滑（オイルフィルター・ストレーナー）": "lube",
+  "スロットルチャンバー": "throttle",
+  "燃料（インジェクター・燃料ホース）": "fuel",
+  "エアクリーナー": "aircleaner",
+  "エアダクト・エアフロセンサー": "duct",
+  "燃料タンク": "tank",
+  "燃料配管": "fuelpipe",
+  "アクセル": "pedal",
+  "排気管・マフラー": "muffler",
+  "ウォーターポンプ・サーモスタット": "waterpump",
+  "冷却水ホース・配管": "hose",
+  "オイルクーラー": "oilcooler",
+  "ラジエーター・ファン": "radiator",
+  "ラジエーター取付・ホース・リザーバータンク": "radfit",
+  "ATオイルクーラー": "atcooler",
+  "点火系（イグニッションコイル・プラグ）": "ignition",
+  "クランク角・カム角センサー": "sensor",
+  "エバポ・真空配管": "evap",
+  "エンジンコントロールモジュール・センサー": "ecm",
+  "オルタネーター取付": "altbracket",
+  "オルタネーター": "alternator",
+  "スターターモーター": "starter",
+};
+// 部位の名前（全角・半角のどちらでも）から、絵を探す
+const iconKey = (name) => {
+  const n = String(name).normalize("NFKC");
+  for (const [k, v] of Object.entries(ICON_OF)) if (k.normalize("NFKC") === n) return v;
+  return "";
+};
+
 // name は、データの「部位」の名前とそろえる
 export const INN_GROUPS = [
   {
@@ -339,5 +421,9 @@ export const INN_AREAS = ["エンジン", "冷却", "ミッション", "足回�
 
 export const metaOfInn = (name) => INN_GROUPS.find((g) => g.name.normalize("NFKC") === String(name).normalize("NFKC"));
 export function groupFigsInn(meta) {
-  return (meta?.figs || []).map(([view, hl, cap]) => ({ svg: engineSide(Array.isArray(hl) ? hl : [hl]), cap }));
+  const out = [];
+  const k = iconKey(meta?.name || "");
+  if (k) out.push({ svg: wrap(ICON[k](), meta.name + "の形のイメージ"), cap: "形のイメージ（実物とは細部が違います）" });
+  for (const [view, hl, cap] of meta?.figs || []) out.push({ svg: engineSide(Array.isArray(hl) ? hl : [hl]), cap });
+  return out;
 }
