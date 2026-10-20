@@ -1,17 +1,18 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261020h";
-import { yomiText } from "./yomi.js?v=20261020h";
-import { sphDocsHtml } from "./sphdocs.js?v=20261020h";
-import { docModel } from "./sphxlsx.js?v=20261020h";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261020h";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261020h";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261020h";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261020h";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261020h";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261020h";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261020h";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261020h";
+import * as S from "./search.js?v=20261020i";
+import { yomiText } from "./yomi.js?v=20261020i";
+import { sphDocsHtml } from "./sphdocs.js?v=20261020i";
+import { docModel } from "./sphxlsx.js?v=20261020i";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261020i";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261020i";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261020i";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261020i";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261020i";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261020i";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261020i";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261020i";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261020i";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -168,6 +169,7 @@ const TABS = [
   ["sph", "スフィアライト"],
   ["ext", "外装検索"],
   ["inn", "部品検索(内装・機関)"],
+  ["co", "会社Excelへ"],
 ];
 export function render(main) {
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">ツール</h1>
@@ -181,7 +183,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, co: renderCo })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -2431,6 +2433,96 @@ const XK = {
     opt: () => T.bulb,
   },
 };
+// ---- 会社Excelへ：ユーザーコード検索・部品番号検索の、Excelを作る（サイトには、データを載せない） ----
+const CO_KINDS = [
+  { id: "user", kinds: ["user"], name: "ユーザーコード検索", desc: "名前・電話番号・コード・特記で、ユーザーコード・担当・特記を探す。電話の折り返し、問い合わせ、売り上げの時に。", sheets: "ユーザー検索・ユーザーデータ" },
+  { id: "part", kinds: ["part"], name: "部品番号検索", desc: "部品名の一部（ひらがなもOK）や、部品番号の一部から、部品番号・部品名を探す。", sheets: "部品検索・部品データ" },
+  { id: "both", kinds: ["user", "part"], name: "ユーザー＋部品（両方）", desc: "上の2つを、1つのExcelに。", sheets: "ユーザー検索・部品検索・データ2枚" },
+];
+function renderCo() {
+  const box = fresh();
+  const prot = T.xlk?.protect !== false;
+  box.innerHTML = `<div class="panel co-intro"><h3>会社のExcelへ</h3>
+    <ol class="co-steps"><li>どのExcelにするか、下から選ぶ</li><li>「会社のExcelに追加」を押して、会社の<b>空のExcelファイル</b>を選ぶ</li><li>検索のシートが足された、Excelが保存される</li></ol>
+    <p class="co-note">データ（ユーザー一覧・部品一覧）は、サイトには載せません。できたExcelの「データ」のシートに、貼り付けて使います。</p>
+    <div class="tacts"><button class="chip ${prot ? "on" : ""}" data-co="prot" title="できるExcelのシートに保護をかける（パスワードなし）">シート保護 ${prot ? "ON" : "OFF"}</button></div></div>
+    <div class="co-cards">${CO_KINDS.map(
+      (k) => `<div class="co-card"><div class="co-ct"><b>${esc(k.name)}</b></div><div class="co-d">${esc(k.desc)}</div><small>足されるシート：${esc(k.sheets)}</small>
+        <div class="tacts"><button class="btn pri" data-co="base" data-k="${k.id}">会社のExcelに追加</button><button class="btn" data-co="new" data-k="${k.id}" title="見本データ入りの、新しいExcelを作る（試すとき用）">新しいExcelで試す</button></div></div>`,
+    ).join("")}</div>
+    <input type="file" id="fcobase" accept=".xlsx,.xlsm" hidden>`;
+  let pick = "";
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const k = CO_KINDS.find((x) => x.id === b.dataset.k);
+    if (b.dataset.co === "prot") {
+      const on = T.xlk?.protect === false;
+      T.xlk = { ...(T.xlk || {}), protect: on };
+      save();
+      b.classList.toggle("on", on);
+      b.textContent = `シート保護 ${on ? "ON" : "OFF"}`;
+    } else if (b.dataset.co === "new" && k) exportLookupXlsx(k);
+    else if (b.dataset.co === "base" && k) {
+      pick = k.id;
+      $("#fcobase", box).click();
+    }
+  });
+  $("#fcobase", box).addEventListener("change", (e) => {
+    const k = CO_KINDS.find((x) => x.id === pick);
+    if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
+  });
+}
+async function exportLookupXlsx(k) {
+  try {
+    C.toast("Excelを作っています…");
+    const X = await loadExcelJs();
+    const { wb } = buildLookupWorkbook(X, { protect: T.xlk?.protect !== false, sample: true, kinds: k.kinds });
+    downloadXlsx(await wb.xlsx.writeBuffer(), `${k.name}.xlsx`);
+    C.toast("Excelを作りました（見本データ入りです。使う前に、見本を消してください）");
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
+async function exportLookupIntoBase(k, file) {
+  if (!file) return;
+  const ext = (file.name.match(/\.(xlsx|xlsm)$/i) || [])[1];
+  if (!ext) return C.toast("対応しているのは .xlsx（.xlsm）です。古い .xls は、Excelで「.xlsx」として保存し直してください", true);
+  let JSZip, base;
+  try {
+    C.toast("Excelを読んでいます…");
+    JSZip = await loadJsZip();
+    base = await readBase(JSZip, await file.arrayBuffer());
+  } catch (e) {
+    return C.toast("このExcelを開けませんでした：" + e.message, true);
+  }
+  const want = { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
+  const names = {};
+  for (const [key, nm] of Object.entries(want)) names[key] = uniqueName(base.names, nm);
+  const added = [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
+  const protect = T.xlk?.protect !== false;
+  const r = await C.modal(`<h3>Excelに「${esc(k.name)}」を追加</h3>
+    <div class="xlinfo">
+      <div><span>ファイル</span><b>${esc(file.name)}</b></div>
+      <div><span>作成者</span><b>${esc(base.creator || "（記録なし）")}</b></div>
+      <div><span>今あるシート</span><b>${esc(base.names.join("、") || "（なし）")}</b></div>
+      <div><span>追加するシート</span><b>${esc(added.join("・"))}</b></div>
+      <div><span>シート保護</span><b>${protect ? "あり（パスワードなし）" : "なし"}</b></div>
+    </div>
+    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容には手を触れず、シートだけを後ろに足します。元のファイルは変えず、別のファイルとして保存します。<br>・データのシートは、空です。ユーザー（または部品）の一覧を、貼り付けて使います。</p>
+    <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
+  if (!r) return;
+  try {
+    C.toast("Excelを作っています…（少し時間がかかります）");
+    const X = await loadExcelJs();
+    const { wb, list } = buildLookupWorkbook(X, { protect, sample: false, kinds: k.kinds, names });
+    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
+    downloadXlsx(out, `${k.name}.${ext.toLowerCase()}`);
+    C.toast("保存しました。開いたら「編集を有効にする」を押してください");
+  } catch (e) {
+    C.toast("Excelを作れませんでした：" + e.message, true);
+  }
+}
 // ---- 売価計算・原価計算・パッド／ローター → Excel（空の計算表。入力は20行ぶん＋予備） ----
 const calcOpts = () => {
   const s = T.sale;
@@ -3157,7 +3249,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261020h";
+const APP_VER = "20261020i";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
