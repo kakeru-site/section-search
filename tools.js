@@ -1,19 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021i";
-import { yomiText } from "./yomi.js?v=20261021i";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021i";
-import { docModel } from "./sphxlsx.js?v=20261021i";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021i";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021i";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021i";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021i";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021i";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021i";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021i";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021i";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021i";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021i";
+import * as S from "./search.js?v=20261021j";
+import { yomiText } from "./yomi.js?v=20261021j";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021j";
+import { docModel } from "./sphxlsx.js?v=20261021j";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021j";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021j";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021j";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021j";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021j";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021j";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021j";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021j";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021j";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021j";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -793,7 +793,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261021i")
+    : fetch("pitbulbs.json?v=20261021j")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2511,7 +2511,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261021i")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261021j")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
@@ -3291,7 +3291,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021i";
+const APP_VER = "20261021j";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
