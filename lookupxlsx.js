@@ -3,7 +3,7 @@
 //  ・ユーザー検索：名前（漢字・ひらがな・カタカナ・会社名の一部・担当者名）・電話番号・コード・特記で、ユーザーを出す
 //    電話を折り返す時・問い合わせ・売り上げる時に、すばやく引くためのもの
 //  ・部品検索：部品名（の一部・ひらがなでもOK）か、部品番号の一部から、部品番号と部品名を出す
-import { fillGuide } from "./oilxlsx.js?v=20261021h";
+import { fillGuide } from "./oilxlsx.js?v=20261021i";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -176,7 +176,7 @@ export function fillFinder(ws, nm, cfg, protect) {
     ws.getCell(`B${r}`).value = { formula: `IF($Y${r}="","",${k})` };
     cols.forEach((col, i) => {
       const c = ws.getCell(r, 3 + i);
-      c.value = { formula: col.nl ? (() => { const v = `INDEX(${dbr(cfg.data, col.col)},$Y${r})&""`; const K = col.cap || 99; const n = `(LEN(${v})-LEN(SUBSTITUTE(${v}," / ",""))+3)/3`; return `IF($Y${r}="","",IF(${n}<=${K},SUBSTITUTE(${v}," / ",CHAR(10)),SUBSTITUTE(LEFT(${v},FIND(CHAR(1),SUBSTITUTE(${v}," / ",CHAR(1),${K}))-1)," / ",CHAR(10))&CHAR(10)&"…ほか"&(${n}-${K})&"件"))`; })() : `IF($Y${r}="","",INDEX(${dbr(cfg.data, col.col)},$Y${r})&"")` };
+      c.value = { formula: col.tag ? `IF($Y${r}="","",INDEX(${dbr(cfg.data, col.col)},$Y${r})&CHAR(10)&"（"&INDEX(${dbr(cfg.data, col.tag)},$Y${r})&"）")` : col.nl ? (() => { const v = `INDEX(${dbr(cfg.data, col.col)},$Y${r})&""`; const K = col.cap || 99; const n = `(LEN(${v})-LEN(SUBSTITUTE(${v}," / ",""))+3)/3`; return `IF($Y${r}="","",IF(${n}<=${K},SUBSTITUTE(${v}," / ",CHAR(10)),SUBSTITUTE(LEFT(${v},FIND(CHAR(1),SUBSTITUTE(${v}," / ",CHAR(1),${K}))-1)," / ",CHAR(10))&CHAR(10)&"…ほか"&(${n}-${K})&"件"))`; })() : `IF($Y${r}="","",INDEX(${dbr(cfg.data, col.col)},$Y${r})&"")` };
       c.font = col.mono ? { name: "Consolas", size: 14, bold: true } : { ...font, size: col.big || 13, bold: !!col.center };
       c.alignment = { vertical: "middle", horizontal: col.center ? "center" : "left", wrapText: true, indent: col.center ? 0 : 1 };
       c.border = strong ? box : hair;
