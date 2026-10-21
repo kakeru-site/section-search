@@ -3,7 +3,7 @@
 //  ・ユーザー検索：名前（漢字・ひらがな・カタカナ・会社名の一部・担当者名）・電話番号・コード・特記で、ユーザーを出す
 //    電話を折り返す時・問い合わせ・売り上げる時に、すばやく引くためのもの
 //  ・部品検索：部品名（の一部・ひらがなでもOK）か、部品番号の一部から、部品番号と部品名を出す
-import { fillGuide } from "./oilxlsx.js?v=20261021b";
+import { fillGuide } from "./oilxlsx.js?v=20261021c";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -153,7 +153,7 @@ export function fillFinder(ws, nm, cfg, protect) {
   ws.getCell("P3").value = { formula: `LOWER(SUBSTITUTE(SUBSTITUTE(${FN}($D$3&""),"　","")," ",""))` };
   H2K.forEach((pairs, i) => (ws.getCell(`${["Q", "R", "S"][i]}3`).value = { formula: chain(pairs, i === 0 ? "$P3" : `$${["Q", "R", "S"][i - 1]}3`) }));
   K2H.forEach((pairs, i) => (ws.getCell(`${["T", "U", "V"][i]}3`).value = { formula: chain(pairs, i === 0 ? "$P3" : `$${["T", "U", "V"][i - 1]}3`) }));
-  ws.getCell("W3").value = { formula: `SUBSTITUTE(SUBSTITUTE(SUBSTITUTE($P3,"－",""),"‐",""),"−","")` };
+  ws.getCell("W3").value = { formula: ["－", "‐", "−", "-", "ー", "―", "–", "—", "‑", "ｰ"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, "$P3") };
   ws.getCell("X3").value = { formula: cfg.filter ? `IF(AND($P$3="",$D$4=""),0,1)` : `IF($P$3="",0,1)` };
   if (cfg.filter) ws.getCell("AA3").value = { formula: `IF($D$4="","",IFERROR(VALUE($D$4),$D$4&""))` };
   // 一覧

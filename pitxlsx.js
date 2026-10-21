@@ -1,7 +1,7 @@
 // PITWORK オイルフィルター適合表を、関数だけのExcelにして書き出す（オイル・ケミカルのExcelと同じデザイン）
 // 純正品番・他社品番のどれか1つを入れると、PITWORK品番と、各メーカーの品番が出る。
-import { fillGuide } from "./oilxlsx.js?v=20261021b";
-import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021b";
+import { fillGuide } from "./oilxlsx.js?v=20261021c";
+import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021c";
 
 export const PIT_MAKERS = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
@@ -61,7 +61,7 @@ export function buildPitWorkbook(ExcelJS, opt = {}) {
   // 検索用：全品番を「｜」でつなぎ、ハイフン・空白・注記をとる
   const raw = `$A{r}&" / "&${Array.from({ length: M }, (_, i) => `$${String.fromCharCode(67 + i)}{r}`).join('&" / "&')}`;
   const strip = (x) => ["(※1)", "(※2)", "(※3)", "(日野)", "(UD)"].reduce((a, t) => `SUBSTITUTE(${a},"${t}","")`, x);
-  const hay = (r) => `IF($A${r}="","","｜"&SUBSTITUTE(SUBSTITUTE(${FN}(LOWER(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${strip(raw.replaceAll("{r}", r))}," / ","|"),"-","")," ",""))),"|","｜"),"－","")&"｜")`;
+  const hay = (r) => `IF($A${r}="","","｜"&${["－", "‐", "−", "ー", "―", "–", "—", "‑"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, `SUBSTITUTE(${FN}(LOWER(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${strip(raw.replaceAll("{r}", r))}," / ","|"),"-","")," ",""))),"|","｜")`)}&"｜")`;
   const F = nm.find;
   const S = (c) => `${quote(F)}!$${c}$3`;
   const score = (r) => `IF(AND(${S("W")}<>"",ISNUMBER(SEARCH("｜"&${S("W")}&"｜",$P${r}))),4,IF(AND(${S("W")}<>"",ISNUMBER(SEARCH("｜"&${S("W")},$P${r}))),3,2))`;
