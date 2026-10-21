@@ -773,7 +773,7 @@ const bulbDeco = (id, b) => ({
   _s:
     S.norm(`${b.spec} ${b.code} ${String(b.code || "").replace(/[^0-9A-Za-z]/g, "")} ${b.cat} ${b.shape} ${b.use} ${b.note}`) +
     yomiIdx(`${b.cat} ${b.use} ${b.note}`) +
-    (b.star ? " 頻出 ひんしゅつ ヒンシュツ" : ""),
+    (b.star ? S.norm(" 頻出 ひんしゅつ ヒンシュツ") + " 頻出 ひんしゅつ ヒンシュツ" : ""),
   _c: S.norm(String(b.code || "").replace(/[^0-9A-Za-z]/g, "")),
   _v: voltOf(b),
   _sh: shapeKey(b.shape),
