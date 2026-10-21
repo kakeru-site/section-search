@@ -1,18 +1,18 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261020i";
-import { yomiText } from "./yomi.js?v=20261020i";
-import { sphDocsHtml } from "./sphdocs.js?v=20261020i";
-import { docModel } from "./sphxlsx.js?v=20261020i";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261020i";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261020i";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261020i";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261020i";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261020i";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261020i";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261020i";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261020i";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261020i";
+import * as S from "./search.js?v=20261021a";
+import { yomiText } from "./yomi.js?v=20261021a";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021a";
+import { docModel } from "./sphxlsx.js?v=20261021a";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021a";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021a";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021a";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021a";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021a";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021a";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021a";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021a";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021a";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -3249,7 +3249,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261020i";
+const APP_VER = "20261021a";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
