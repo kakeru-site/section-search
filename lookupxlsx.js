@@ -298,7 +298,7 @@ export function buildLookupWorkbook(ExcelJS, opt = {}) {
           { head: "ユーザーコード", col: "A", width: 15, mono: true, center: true },
           { head: "担当", col: "B", width: 7, center: true, big: 16 },
           { head: "正式名称", col: "C", width: 36 },
-          { head: "電話番号", col: "E", width: 18, big: 14 },
+          { head: "電話番号", col: "E", width: 32, big: 14 },
           { head: "特記", col: "F", width: 66, note: true },
         ],
       },
@@ -318,7 +318,7 @@ export function buildLookupWorkbook(ExcelJS, opt = {}) {
     fillData(
       wsData.user,
       nm,
-      { inHeads: ["ユーザーコード", "担当", "正式名称（会社名 担当者名）", "よみ（ひらがな・なくてもOK）", "電話番号", "特記"], inWidths: [14, 7, 36, 30, 18, 60], hayCol: "H", flagCol: "I", scoreCol: "J", rankCol: "K", finder: nm.user, filterCol: "B", hay: userHay, score: userScore, sample: !!opt.sample },
+      { inHeads: ["ユーザーコード", "担当", "正式名称（会社名 担当者名）", "よみ（ひらがな・なくてもOK）", "電話番号", "特記"], inWidths: [14, 7, 36, 30, 32, 60], hayCol: "H", flagCol: "I", scoreCol: "J", rankCol: "K", finder: nm.user, filterCol: "B", hay: userHay, score: userScore, sample: !!opt.sample },
       users,
     );
   }
