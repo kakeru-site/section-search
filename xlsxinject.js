@@ -168,7 +168,7 @@ function remapSheet(xml, xfOff, strings, dxfOff = 0) {
 }
 
 // base: readBase の結果 / ourBuf: ExcelJS が作った「検索」「使い方」「印刷用」「データ」の4枚だけのxlsx（この順）
-export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, nameD, list }) {
+export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, nameD, list, srcPaths, srcIndex, extraNames, renames, report }) {
   const B = base.zip;
   const put = (p, d) => B.file(p, d, { createFolders: false });
   const A = await JSZip.loadAsync(ourBuf);
@@ -193,8 +193,9 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
   const existing = Object.keys(B.files).filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
   let n = Math.max(0, ...existing.map((f) => +f.match(/sheet(\d+)\.xml/)[1]));
   // list：差し込むシート名を、ブックに入っている順に並べたもの（省略すると 検索・使い方・印刷用・データ）
+  const generic = !!srcPaths; // 自分で作ったExcelから、シートをそのままコピーするとき
   const sheets = list
-    ? list.map((nm, i) => [nm, `xl/worksheets/sheet${i + 1}.xml`])
+    ? list.map((nm, i) => [nm, srcPaths?.[i] || `xl/worksheets/sheet${i + 1}.xml`])
     : [
         [nameS, "xl/worksheets/sheet1.xml"],
         [nameG, "xl/worksheets/sheet2.xml"],
@@ -217,11 +218,13 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
     sid++;
     const path = `xl/worksheets/sheet${n}.xml`;
     // 元のシートの「選択中」には触れない代わりに、こちらの「選択中」を外す（複数選択でまとめて編集されないように）
-    const x = remapSheet(await text(A, src), merged.xfOff, strings, merged.dxfOff).replace(/\stabSelected="1"/g, "");
+    let x = remapSheet(await text(A, src), merged.xfOff, strings, merged.dxfOff).replace(/\stabSelected="1"/g, "");
+    if (renames?.length) x = renameRefs(x, renames);
     put(path, x);
     // 図（絵）があるシートは、図の部品（drawing・media）も、重ならない名前で一緒に差し込む
     const sRelsPath = src.replace("worksheets/", "worksheets/_rels/") + ".rels";
     const sRels = await text(A, sRelsPath);
+    const keepIds = new Set();
     if (sRels) {
       let newRels = "";
       for (const m of sRels.matchAll(/<Relationship\b[^>]*\/>/g)) {
@@ -230,6 +233,16 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
         const target = attr("Target") || "";
         if (!/\/drawing$/.test(type)) continue; // 図の関係だけを引き継ぐ
         const dSrc = "xl/" + target.replace(/^\.\.\//, "");
+        // グラフ・図形だけの描画は、部品がそろわないためコピーしない（画像だけの描画は、そのままコピー）
+        if (generic) {
+          const dXml = (await text(A, dSrc)) || "";
+          const dRelsX = (await text(A, dSrc.replace("drawings/", "drawings/_rels/") + ".rels")) || "";
+          if (/<c:chart\b|\/chart"|<mc:AlternateContent|<xdr:sp\b|<xdr:graphicFrame/.test(dXml + dRelsX)) {
+            report?.push(`「${name}」のグラフ・図形は、コピーできませんでした（セルの内容はコピーしました）`);
+            continue;
+          }
+        }
+        keepIds.add(attr("Id"));
         const dNew = `xl/drawings/oilgdrawing${++drawN}.xml`;
         put(dNew, await A.file(dSrc).async("uint8array"));
         ctAdd += `<Override PartName="/${dNew}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`;
@@ -256,6 +269,7 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
       if (newRels)
         put(`xl/worksheets/_rels/sheet${n}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${newRels}</Relationships>`);
     }
+    if (generic) put(path, sanitizeSheet(x, keepIds, report, name));
     const rid = `rIdOil${n}`;
     relsAdd += `<Relationship Id="${rid}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${n}.xml"/>`;
     ctAdd += `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
@@ -265,9 +279,22 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
   const aWb = (await text(A, "xl/workbook.xml")) || "";
   const baseCount = [...wb.matchAll(/<sheet\b/g)].length; // 差し込む前のシート数
   const ours = [...aWb.matchAll(/<definedName\b[^>]*\bname="(_xlnm\.Print_(?:Area|Titles))"[^>]*\blocalSheetId="(\d+)"[^>]*>([\s\S]*?)<\/definedName>/g)];
-  const namesAdd = ours
-    .map((x) => `<definedName name="${x[1]}" localSheetId="${baseCount + +x[2]}">${x[3]}</definedName>`)
-    .join("");
+  const order = srcIndex || sheets.map((_, i) => i); // 差し込むシートが、元のブックで何番目だったか
+  const namesAdd =
+    ours
+      .map((x) => {
+        const at = order.indexOf(+x[2]);
+        return at < 0 ? "" : `<definedName name="${x[1]}" localSheetId="${baseCount + at}">${x[3]}</definedName>`;
+      })
+      .join("") +
+    (extraNames || [])
+      .filter((x) => {
+        const dup = new RegExp(`<definedName\\b[^>]*\\bname="${reEsc(x.name)}"`).test(wb) && !/localSheetId/.test(x.xml);
+        if (dup) report?.push(`名前「${x.name}」は、会社のExcelにすでにあるため、コピーしませんでした`);
+        return !dup;
+      })
+      .map((x) => x.xml)
+      .join("");
   if (namesAdd) {
     if (/<definedNames\s*\/>/.test(wb)) wb = wb.replace(/<definedNames\s*\/>/, `<definedNames>${namesAdd}</definedNames>`);
     else if (wb.includes("</definedNames>")) wb = wb.replace("</definedNames>", namesAdd + "</definedNames>");
@@ -297,4 +324,118 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
   put(relsPath, rels);
   put("[Content_Types].xml", ct);
   return B.generateAsync({ type: "arraybuffer", compression: "DEFLATE" });
+}
+
+
+// ---- 自分で作ったExcelから、シートをコピーするための部品 ----
+const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// シート名を変えたとき、数式の中の「元の名前!」を新しい名前に直す
+const q = (n) => n.replace(/'/g, "''");
+// 数式の中で、このシート名を使っているか（'シート名'! と、引用符なしの シート名! の両方）
+export const mentionsSheet = (body, n) => body.includes(`'${q(n)}'!`) || new RegExp(`(^|[^\\p{L}\\p{N}_'.])${reEsc(n)}!`, "u").test(body);
+export function renameBody(body, renames) {
+  let b = body;
+  for (const [from, to] of renames) {
+    b = b.split(`'${q(from)}'!`).join(`'${q(to)}'!`);
+    b = b.replace(new RegExp(`(^|[^\\p{L}\\p{N}_'.])${reEsc(from)}!`, "gu"), `$1'${q(to)}'!`);
+  }
+  return b;
+}
+function renameRefs(xml, renames) {
+  return xml.replace(/<f\b([^>]*)>([\s\S]*?)<\/f>/g, (all, attrs, body) => {
+    const b = renameBody(body, renames);
+    return b === body ? all : `<f${attrs}>${b}</f>`;
+  });
+}
+// 部品がそろわないもの（表・コメント・外部リンク・グラフなど）を、シートから外す（セルの内容は残す）
+function sanitizeSheet(xml, keepIds, report, name) {
+  const dropped = new Set();
+  const drop = (re, label) => {
+    xml = xml.replace(re, () => {
+      dropped.add(label);
+      return "";
+    });
+  };
+  drop(/<tableParts\b[\s\S]*?<\/tableParts>|<tableParts\b[^>]*\/>/g, "表（テーブル）の設定");
+  drop(/<legacyDrawing\b[^>]*\/>/g, "コメント");
+  drop(/<legacyDrawingHF\b[^>]*\/>/g, "");
+  drop(/<oleObjects\b[\s\S]*?<\/oleObjects>/g, "埋め込みオブジェクト");
+  drop(/<controls\b[\s\S]*?<\/controls>/g, "フォームのボタン");
+  drop(/<picture\b[^>]*\/>/g, "");
+  drop(/<extLst\b[\s\S]*?<\/extLst>/g, "");
+  // 他のファイルを参照する数式は、数式をやめて、計算済みの値だけを残す（リンクの部品がないと、Excelが開けなくなるため）
+  xml = xml.replace(/<f\b[^>]*>[^<]*\[\d+\][^<]*<\/f>/g, () => {
+    dropped.add("他のファイルを参照する数式（値だけ残しました）");
+    return "";
+  });
+  // 外のファイルやページへのリンクは外す（シート内へのリンクは残す）
+  xml = xml.replace(/<hyperlink\b[^>]*\/>/g, (t) => (/\br:id="/.test(t) ? (dropped.add("Webページ・ファイルへのリンク"), "") : t));
+  xml = xml.replace(/<hyperlinks>\s*<\/hyperlinks>/g, "");
+  xml = xml.replace(/<drawing\b[^>]*\br:id="([^"]*)"[^>]*\/>/g, (t, id) => (keepIds.has(id) ? t : ""));
+  for (const l of dropped) if (l) report?.push(`「${name}」の${l}は、コピーできませんでした（セルの内容はコピーしました）`);
+  return xml;
+}
+
+// コピー元のExcelを読んで、シートの一覧・注意点を調べる
+export async function readSource(JSZip, buf) {
+  const zip = await JSZip.loadAsync(buf);
+  const rels = await text(zip, "_rels/.rels");
+  if (!rels) throw new Error("Excelのファイルとして読めませんでした");
+  const m = rels.match(/<Relationship\b[^>]*Type="[^"]*\/officeDocument"[^>]*>/);
+  const target = m && (m[0].match(/Target="([^"]+)"/) || [])[1];
+  const wbPath = target ? target.replace(/^\//, "") : "xl/workbook.xml";
+  const dir = wbPath.includes("/") ? wbPath.replace(/[^/]+$/, "") : "";
+  const wbXml = await text(zip, wbPath);
+  if (!wbXml) throw new Error("ブックの本体が見つかりませんでした");
+  if (/<workbookProtection\b[^>]*workbookPassword|<fileSharing\b[^>]*reservationPassword/.test(wbXml)) throw new Error("パスワードで保護されています");
+  const wbRels = (await text(zip, `${dir}_rels/${wbPath.replace(/^.*\//, "")}.rels`)) || "";
+  const relMap = {};
+  for (const r of wbRels.matchAll(/<Relationship\b[^>]*\/>/g)) {
+    const id = (r[0].match(/\bId="([^"]*)"/) || [])[1];
+    const tg = (r[0].match(/\bTarget="([^"]*)"/) || [])[1];
+    if (id && tg) relMap[id] = tg.startsWith("/") ? tg.slice(1) : dir + tg.replace(/^\.\//, "");
+  }
+  const sheets = [];
+  let idx = 0;
+  for (const x of wbXml.matchAll(/<sheet\b[^>]*\/>/g)) {
+    const name = unesc((x[0].match(/\bname="([^"]*)"/) || [])[1] || "");
+    const rid = (x[0].match(/\br:id="([^"]*)"/) || [])[1];
+    const state = (x[0].match(/\bstate="([^"]*)"/) || [])[1] || "visible";
+    const path = relMap[rid];
+    if (!path || !/worksheets\//.test(path)) {
+      idx++;
+      continue; // グラフ専用シートなどは対象外
+    }
+    const xml = (await text(zip, path)) || "";
+    sheets.push({
+      name,
+      idx: idx++,
+      path,
+      hidden: state !== "visible",
+      formulas: (xml.match(/<f\b/g) || []).length,
+      cells: (xml.match(/<c\b/g) || []).length,
+      xml,
+    });
+  }
+  // 他のシートを使っている数式
+  for (const sh of sheets) {
+    sh.refs = new Set();
+    for (const f of sh.xml.matchAll(/<f\b[^>]*>([\s\S]*?)<\/f>/g)) {
+      const body = unesc(f[1]);
+      for (const o of sheets) {
+        if (o === sh) continue;
+        if (mentionsSheet(body, o.name)) sh.refs.add(o.name);
+      }
+      if (/\[\d+\]/.test(body) && /!/.test(body)) sh.external = true; // 他のファイルへの参照
+    }
+  }
+  const names = [...wbXml.matchAll(/<definedName\b([^>]*)>([\s\S]*?)<\/definedName>/g)].map((x) => ({
+    name: (x[1].match(/\bname="([^"]*)"/) || [])[1],
+    local: (x[1].match(/\blocalSheetId="(\d+)"/) || [])[1],
+    hidden: /\bhidden="1"/.test(x[1]),
+    body: x[2],
+    attrs: x[1],
+  }));
+  for (const sh of sheets) delete sh.xml;
+  return { zip, wbPath, sheets, names, hasMacro: !!zip.file("xl/vbaProject.bin") };
 }
