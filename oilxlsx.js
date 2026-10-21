@@ -1,7 +1,7 @@
 // オイル・ケミカルを、関数だけで検索できるExcelにして書き出す（Excel 2016 で動く関数だけを使う）
-import { yomiText } from "./yomi.js?v=20261021j";
-import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261021j";
-import { fillQuick } from "./sphquick.js?v=20261021j";
+import { yomiText } from "./yomi.js?v=20261021k";
+import { fillDocScreen, fillDocPrint } from "./sphxlsx.js?v=20261021k";
+import { fillQuick } from "./sphquick.js?v=20261021k";
 const kataOf = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const hiraOf = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const NF = (s) => String(s ?? "").normalize("NFKC").toLowerCase();
@@ -557,6 +557,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
     { header: "", width: 3 },
     { header: `${K.catH}一覧`, width: 14 },
   ];
+  wd.getColumn(1).numFmt = "@"; // 品番は文字として（0で始まる品番を、そのまま入れられる）
   const hr = wd.getRow(1);
   hr.font = { ...font, bold: true, color: { argb: DK } };
   hr.eachCell((c, i) => {
@@ -622,6 +623,7 @@ export function buildOilWorkbook(ExcelJS, items, groups, opt = {}) {
   ws.mergeCells("B2:E2");
   ws.getCell("B2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3C4" } };
   ws.getCell("B2").font = { ...font, size: 14, bold: true };
+  ws.getCell("B2").numFmt = "@"; // 文字として受ける（「00090」のように0で始まる品番が、数字の「90」にならない）
   for (const a of ["B2", "C2", "D2", "E2"]) ws.getCell(a).border = box;
   ws.getRow(2).height = 26;
   ws.getCell("B3").value = "すべて";

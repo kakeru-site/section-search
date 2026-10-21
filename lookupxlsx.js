@@ -3,7 +3,7 @@
 //  ・ユーザー検索：名前（漢字・ひらがな・カタカナ・会社名の一部・担当者名）・電話番号・コード・特記で、ユーザーを出す
 //    電話を折り返す時・問い合わせ・売り上げる時に、すばやく引くためのもの
 //  ・部品検索：部品名（の一部・ひらがなでもOK）か、部品番号の一部から、部品番号と部品名を出す
-import { fillGuide } from "./oilxlsx.js?v=20261021j";
+import { fillGuide } from "./oilxlsx.js?v=20261021k";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -126,7 +126,7 @@ export function fillFinder(ws, nm, cfg, protect) {
   // 入力（言葉）
   ws.mergeCells(3, 2, 3, 3);
   label(ws, "B3", cfg.label1, { font: { size: 12 } });
-  yellow(ws, 3, 4, lastCol);
+  yellow(ws, 3, 4, lastCol, { fmt: "@" }); // 文字として受ける（0で始まるコードが、数字にならない）
   ws.getRow(3).height = 40;
   const run = dbr(cfg.data, cfg.rankCol);
   const msg = `IF($X$3=0,"← ${cfg.filter ? "言葉か担当" : "言葉"}を入れてください（${cfg.hint1}）",IF(COUNT(${run})=0,"見つかりませんでした",IF(COUNT(${run})>${SHOW},COUNT(${run})&"件（上の${SHOW}件を表示。言葉を足して絞ってください）",COUNT(${run})&"件 見つかりました")))`;
@@ -209,6 +209,7 @@ export function fillFinder(ws, nm, cfg, protect) {
 export function fillData(ws, nm, cfg, rows) {
   const n = cfg.inHeads.length;
   ws.columns = [...cfg.inWidths.map((width) => ({ width })), { width: 3 }, { width: 24 }, { width: 6 }, { width: 6 }, { width: 6 }];
+  ws.getColumn(1).numFmt = "@"; // コード・品番の列は文字として（0で始まるものも、そのまま）
   cfg.inHeads.forEach((h, i) => {
     const c = ws.getCell(1, i + 1);
     c.value = h;
