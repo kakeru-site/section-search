@@ -1,19 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021c";
-import { yomiText } from "./yomi.js?v=20261021c";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021c";
-import { docModel } from "./sphxlsx.js?v=20261021c";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021c";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021c";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021c";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021c";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021c";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021c";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021c";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021c";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021c";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021c";
+import * as S from "./search.js?v=20261021d";
+import { yomiText } from "./yomi.js?v=20261021d";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021d";
+import { docModel } from "./sphxlsx.js?v=20261021d";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021d";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021d";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021d";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021d";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021d";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021d";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021d";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021d";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021d";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021d";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2438,7 +2438,7 @@ const XK = {
 const CO_KINDS = [
   { id: "user", kinds: ["user"], name: "ユーザーコード検索", desc: "名前・電話番号・コード・特記で、ユーザーコード・担当・特記を探す。電話の折り返し、問い合わせ、売り上げの時に。", sheets: "ユーザー検索・ユーザーデータ" },
   { id: "part", kinds: ["part"], name: "部品番号検索", desc: "部品名の一部（ひらがなもOK）や、部品番号の一部から、部品番号・部品名を探す。", sheets: "部品検索・部品データ" },
-  { id: "pit", pit: true, kinds: ["pit"], name: "オイルフィルター適合表", desc: "メーカーの純正品番・他社品番から、PITWORKの品番を探す（逆も可）。カタログの適合表のデータ入り。", sheets: "フィルター検索・フィルターデータ" },
+  { id: "pit", pit: true, kinds: ["pit"], name: "オイルエレメント 純正・市販品互換表", desc: "メーカーの純正品番・他社品番から、PITWORKの品番を探す（逆も可）。普通車・中型・大型車、どちらも検索できます。カタログの適合表のデータ入り。", sheets: "オイルエレメント 純正・市販品互換表・オイルエレメントデータ" },
   { id: "both", kinds: ["user", "part"], name: "ユーザー＋部品（両方）", desc: "上の2つを、1つのExcelに。", sheets: "ユーザー検索・部品検索・データ2枚" },
 ];
 function renderCo() {
@@ -2475,7 +2475,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitfilters.json?v=20261021c")).json();
+const pitRows = async () => (await fetch("pitfilters.json?v=20261021d")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
@@ -2500,7 +2500,7 @@ async function exportLookupIntoBase(k, file) {
   } catch (e) {
     return C.toast("このExcelを開けませんでした：" + e.message, true);
   }
-  const want = k.pit ? { find: "フィルター検索", data: "フィルターデータ", guide: "フィルターの使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
+  const want = k.pit ? { find: "オイルエレメント 純正・市販品互換表", data: "オイルエレメントデータ", guide: "オイルエレメントの使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
   const names = {};
   for (const [key, nm] of Object.entries(want)) names[key] = uniqueName(base.names, nm);
   const added = k.pit ? [names.find, names.data, names.guide] : [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
@@ -3253,7 +3253,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021c";
+const APP_VER = "20261021d";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));

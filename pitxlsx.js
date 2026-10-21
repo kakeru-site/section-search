@@ -1,14 +1,14 @@
 // PITWORK オイルフィルター適合表を、関数だけのExcelにして書き出す（オイル・ケミカルのExcelと同じデザイン）
 // 純正品番・他社品番のどれか1つを入れると、PITWORK品番と、各メーカーの品番が出る。
-import { fillGuide } from "./oilxlsx.js?v=20261021c";
-import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021c";
+import { fillGuide } from "./oilxlsx.js?v=20261021d";
+import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021d";
 
 export const PIT_MAKERS = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 
 const guideBlocks = (protect, nm) => [
-  ["title", "オイルフィルター適合表の使い方"],
-  ["sub", "メーカーの純正品番（や他社品番）から、PITWORKの品番を探すシートです。黄色いところに品番を入れるだけ。入れたそばから、下に出ます。"],
+  ["title", "オイルエレメント 純正・市販品互換表の使い方"],
+  ["sub", "メーカーの純正品番（や他社品番）から、PITWORKの品番を探すシートです。普通車も、中型・大型車も、同じところで探せます。黄色いところに品番を入れるだけ。入れたそばから、下に出ます。"],
   ["h", "まずはこれだけ"],
   ["step", "①", `「${nm.find}」のシートを開きます`],
   ["step", "②", "上の黄色いところに、品番（またはその一部）を入れます。例：15208-65F0E、1520865F0E"],
@@ -47,7 +47,7 @@ export function buildPitWorkbook(ExcelJS, opt = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "セクション検索";
   if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
-  const nm = { find: opt.names?.find || "フィルター検索", data: opt.names?.data || "フィルターデータ", guide: opt.names?.guide || "フィルターの使い方" };
+  const nm = { find: opt.names?.find || "オイルエレメント 純正・市販品互換表", data: opt.names?.data || "オイルエレメントデータ", guide: opt.names?.guide || "オイルエレメントの使い方" };
   const protect = !!opt.protect;
   const wsF = wb.addWorksheet(nm.find, { views: [{ showGridLines: false, tabSelected: true }] });
   const wsD = wb.addWorksheet(nm.data);
@@ -57,7 +57,7 @@ export function buildPitWorkbook(ExcelJS, opt = {}) {
   const n = 2 + M; // A 品番, B 種別, C〜N メーカー
   const lastIn = String.fromCharCode(64 + n); // N
   const cols = [{ head: "PITWORK品番", col: "A", width: 15, mono: true, center: true }, ...PIT_MAKERS.map((m, i) => ({ head: m, col: String.fromCharCode(67 + i), width: 15, nl: true, cap: 6, big: 12 }))];
-  fillFinder(wsF, nm, { title: "オイルフィルター適合表（PITWORK）", label1: "品番（純正・他社・PITWORK）", hint1: "どのメーカーの品番でもOK。ハイフンなし・一部だけでもOK", data: nm.data, rankCol: "S", cols, rowH: 108 }, protect);
+  fillFinder(wsF, nm, { title: "オイルエレメント 純正・市販品互換表（普通車・中型・大型車 どちらも検索OK）", label1: "品番（純正・他社・PITWORK）", hint1: "どのメーカーの品番でもOK。ハイフンなし・一部だけでもOK", data: nm.data, rankCol: "S", cols, rowH: 108 }, protect);
   // 検索用：全品番を「｜」でつなぎ、ハイフン・空白・注記をとる
   const raw = `$A{r}&" / "&${Array.from({ length: M }, (_, i) => `$${String.fromCharCode(67 + i)}{r}`).join('&" / "&')}`;
   const strip = (x) => ["(※1)", "(※2)", "(※3)", "(日野)", "(UD)"].reduce((a, t) => `SUBSTITUTE(${a},"${t}","")`, x);
