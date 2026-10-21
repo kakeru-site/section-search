@@ -1,10 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261021k";
-import * as S from "./search.js?v=20261021k";
-import * as FID from "./faceid.js?v=20261021k";
-import * as IMG from "./imgtools.js?v=20261021k";
-import * as CAT from "./catalog.js?v=20261021k";
-import * as TOOLS from "./tools.js?v=20261021k";
+import { createStore, DEMO, localKey } from "./store.js?v=20261021m";
+import * as S from "./search.js?v=20261021m";
+import * as FID from "./faceid.js?v=20261021m";
+import * as IMG from "./imgtools.js?v=20261021m";
+import * as CAT from "./catalog.js?v=20261021m";
+import * as TOOLS from "./tools.js?v=20261021m";
+import * as LEARN from "./learn.js?v=20261021m";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -57,6 +58,7 @@ function debounce(fn, ms) {
 const IC = {
   search:
     '<svg viewBox="0 0 24 24" class="ic"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  book: '<svg viewBox="0 0 24 24" class="ic"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 21V5M9 8h6M9 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   note: '<svg viewBox="0 0 24 24" class="ic"><path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 11h8M8 15h8M8 7h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   face: '<svg viewBox="0 0 24 24" class="ic"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 9v1.5M15 9v1.5M12 9v4h-1M9 16c1.8 1.4 4.2 1.4 6 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   logo: '<svg viewBox="0 0 24 24" class="ic"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
@@ -361,6 +363,8 @@ function startData() {
   });
   sub("kata", "kata");
   sub("memos", "memos");
+  sub("learn", "learn");
+  sub("learnLog", "learnLog");
   sub("oils", "oils");
   sub("spheres", "spheres");
   sub("exteriors", "exteriors");
@@ -395,6 +399,7 @@ function onData(key) {
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
+  else if (v === "learn") LEARN.onData(key);
   else if (v === "tool") TOOLS.onData(key);
   else if (v === "illust" && ["images", "parts"].includes(key) && !modalOpen()) renderIllust(false);
   else if (v === "edit") {
@@ -466,6 +471,7 @@ const NAV = [
   ["sec", "セクション検索", "S", "検索", "search"],
   ["kata", "型式 → 車種", "K", "型式", "car"],
   ["memo", "メモ", "M", "メモ", "note"],
+  ["learn", "学び（発見・復習）", "L", "学び", "book"],
   ["illust", "イラスト帳", "I", "図", "pic"],
   ["tool", "ツール", "T", "ツール", "calc"],
   ["hist", "検索履歴", "H", "履歴", "clock"],
@@ -477,7 +483,8 @@ function renderShell() {
       <div class="side-foot">${DEMO ? '<div class="demo-badge">デモモード（このブラウザにだけ保存）</div>' : ""}<button class="faceid" id="fid-card" data-go="edit:settings"></button>
       <div class="who"><span id="who"></span><button class="linkbtn" id="logout">ログアウト</button></div></div></aside>
     <main id="main"></main>
-    <aside class="right" id="right"></aside></div>`;
+    <aside class="right" id="right"></aside></div>
+    <button class="ln-fab" id="ln-fab" title="発見・学んだことを書き留める（N）" aria-label="発見を書く">📝<span>発見</span></button>`;
   $("#who").textContent = st.user?.email || "";
   $("#logout").addEventListener("click", async () => {
     if (await confirmBox("ログアウトしますか？", "ログアウト")) store.logout();
@@ -488,12 +495,16 @@ function renderShell() {
 }
 function renderNav() {
   const open = vals(st.memos).filter((m) => !m.done).length;
-  const badge = (k) => (k === "memo" && open ? `<span class="badge">${open}</span>` : "");
+  const due = LEARN.dueCount();
+  const badge = (k) => (k === "memo" && open ? `<span class="badge">${open}</span>` : k === "learn" && due ? `<span class="badge">${due}</span>` : "");
   $("#nav").innerHTML = NAV.map(
     ([k, l, key, short, icon]) =>
       `<button class="nav ${st.view === k ? "on" : ""}" data-view="${k}"><span class="nlong">${l}${badge(k)}</span><span class="nshort">${IC[icon]}<i>${short}</i>${badge(k)}</span><kbd>${key}</kbd></button>`,
   ).join("");
 }
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#ln-fab")) LEARN.openAdd(learnCtx());
+});
 async function renderFid() {
   const c = $("#fid-card");
   if (!c) return;
@@ -508,6 +519,7 @@ async function renderFid() {
   }
 }
 function go(view, opt = {}) {
+  const prev = st.view;
   st.view = view;
   if (opt.editTab) st.editTab = opt.editTab;
   renderNav();
@@ -516,7 +528,10 @@ function go(view, opt = {}) {
   if (view === "sec") renderSec();
   else if (view === "kata") renderKata();
   else if (view === "memo") renderMemo(true);
-  else if (view === "hist") renderHist();
+  else if (view === "learn") {
+    if (prev !== "learn") LEARN.reset();
+    LEARN.render(m);
+  } else if (view === "hist") renderHist();
   else if (view === "illust") renderIllust(true);
   else if (view === "edit") renderEdit();
   else if (view === "tool") TOOLS.render(m);
@@ -543,7 +558,11 @@ function renderRight() {
   const open = vals(st.memos)
     .filter((m) => !m.done)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  r.innerHTML = `<div class="box"><div class="bt">検索履歴<button class="more" data-view="hist">すべて →</button></div>
+  const lnDue = LEARN.dueCount();
+  r.innerHTML = `<div class="box ln-side"><div class="bt">学び（今日の復習）${lnDue ? `<span class="num">${lnDue}</span>` : ""}<button class="more" data-view="learn">開く →</button></div>
+    <p class="ln-sidep">${lnDue ? `復習カードが <b>${lnDue}枚</b> あります` : "今日の復習はありません 👍"}</p>
+    <button class="btn sm" data-lnquick="1">📝 発見を書く</button></div>
+    <div class="box"><div class="bt">検索履歴<button class="more" data-view="hist">すべて →</button></div>
     <ul class="list">${hist.map((h) => `<li><button data-rerun="${esc(h.id)}"><time>${fmtWhen(h.at)}</time><span>${h.type === "kata" ? '<small style="color:var(--ac2)">型式 </small>' : ""}${esc(h.q)}</span></button></li>`).join("") || '<li class="empty">まだ履歴がありません</li>'}</ul></div>
     <div class="box"><div class="bt">未解決メモ ${open.length ? `<span class="num">${open.length}</span>` : ""}<button class="more" data-view="memo">一覧 →</button></div>
     <ul class="list">${
@@ -2860,6 +2879,7 @@ document.addEventListener("click", async (e) => {
   const d = t.dataset;
   const row = t.closest(".row");
   if (d.view) return go(d.view);
+  if (d.lnquick) return LEARN.openAdd(learnCtx());
   if (d.go) {
     const [v, tab] = d.go.split(":");
     return go(v, { editTab: tab });
@@ -3103,7 +3123,12 @@ document.addEventListener("keydown", (e) => {
     ($("#q") || $("#kq"))?.focus();
     return;
   }
-  const map = { s: "sec", k: "kata", m: "memo", i: "illust", t: "tool", h: "hist", e: "edit" };
+  if (k === "n") {
+    e.preventDefault();
+    LEARN.openAdd(learnCtx());
+    return;
+  }
+  const map = { s: "sec", k: "kata", m: "memo", l: "learn", i: "illust", t: "tool", h: "hist", e: "edit" };
   if (map[k]) {
     e.preventDefault();
     go(map[k]);
@@ -3129,6 +3154,24 @@ async function copyText(text) {
   }
 }
 
+// 今見ている画面から、発見ノートの「分野」「関連」を自動で入れる
+function learnCtx() {
+  if (st.view === "sec") return { tag: "部品", ref: (st.q || "").trim().slice(0, 60) };
+  if (st.view === "kata") return { tag: "型式・車種", ref: (st.kq || "").trim().slice(0, 60) };
+  if (st.view === "tool") return TOOLS.context?.() || {};
+  return {};
+}
+LEARN.setup({
+  st,
+  get store() {
+    return store;
+  },
+  toast,
+  modal,
+  confirmBox,
+  localKey,
+  context: learnCtx,
+});
 TOOLS.setup({
   st,
   get store() {
