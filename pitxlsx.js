@@ -1,20 +1,20 @@
 // PITWORK オイルエレメント・燃料エレメントの適合表を、関数だけのExcelにして書き出す（オイル・ケミカルのExcelと同じデザイン）
 // 純正品番・他社品番のどれか1つを入れると、PITWORK品番と、各メーカーの品番が出る。
-import { fillGuide } from "./oilxlsx.js?v=20261021g";
-import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021g";
+import { fillGuide } from "./oilxlsx.js?v=20261021h";
+import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021h";
 
 export const PIT_MAKERS = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 
 export const PIT_KINDS = {
   oil: { label: "オイルエレメント", find: "オイルエレメント 純正・市販品互換表", data: "オイルエレメントデータ", title: "オイルエレメント 純正・市販品互換表（普通車・中型・大型車 どちらも検索OK）", note: "普通車も、中型・大型車も、同じところで探せます。" },
-  fuel: { label: "燃料エレメント", find: "燃料エレメント 純正・市販品互換表", data: "燃料エレメントデータ", title: "燃料エレメント 純正・市販品互換表（フューエルフィルター）", note: "" },
+  fuel: { label: "燃料エレメント", find: "燃料エレメント 純正・市販品互換表", data: "燃料エレメントデータ", title: "燃料エレメント 純正・市販品互換表（普通車・中型・大型車 どちらも検索OK）", note: "普通車も、中型・大型車も、同じところで探せます。" },
 };
 const GUIDE = "エレメント互換表の使い方";
 
 const guideBlocks = (protect, nm, kinds) => [
   ["title", `${kinds.map((k) => PIT_KINDS[k].label).join("・")} 純正・市販品互換表の使い方`],
-  ["sub", `メーカーの純正品番（や他社品番）から、PITWORKの品番を探すシートです。${kinds.includes("oil") ? "オイルエレメントは、普通車も、中型・大型車も、同じところで探せます。" : ""}黄色いところに品番を入れるだけ。入れたそばから、下に出ます。`],
+  ["sub", `メーカーの純正品番（や他社品番）から、PITWORKの品番を探すシートです。普通車も、中型・大型車も、同じところで探せます。黄色いところに品番を入れるだけ。入れたそばから、下に出ます。`],
   ["h", "まずはこれだけ"],
   ["step", "①", `${kinds.map((k) => `「${nm[k].find}」`).join("か")}のシートを開きます`],
   ["step", "②", "上の黄色いところに、品番（またはその一部）を入れます。例：15208-65F0E、1520865F0E"],
