@@ -1,19 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021n";
-import { yomiText } from "./yomi.js?v=20261021n";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021n";
-import { docModel } from "./sphxlsx.js?v=20261021n";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021n";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021n";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021n";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021n";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021n";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021n";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021n";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021n";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021n";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021n";
+import * as S from "./search.js?v=20261021p";
+import { yomiText } from "./yomi.js?v=20261021p";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021p";
+import { docModel } from "./sphxlsx.js?v=20261021p";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021p";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021p";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021p";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021p";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021p";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021p";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021p";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021p";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021p";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021p";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -137,6 +137,7 @@ const T = Object.assign(
     sph: { q: "", cat: "", k: "", view: "list", protect: true },
     ext: { q: "", group: "", cat: "" },
     inn: { q: "", group: "", cat: "" },
+    pit: { q: "", kind: "", series: "" },
   },
   load() || {},
 );
@@ -170,6 +171,7 @@ const TABS = [
   ["sph", "スフィアライト"],
   ["ext", "外装検索"],
   ["inn", "部品検索(内装・機関)"],
+  ["pit", "エレメント互換表"],
   ["co", "会社Excelへ"],
 ];
 export function render(main) {
@@ -184,7 +186,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, co: renderCo })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, co: renderCo })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -798,7 +800,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261021n")
+    : fetch("pitbulbs.json?v=20261021p")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2475,6 +2477,98 @@ const XK = {
     opt: () => T.bulb,
   },
 };
+// ---- エレメント互換表（オイル・燃料）：どのメーカーの品番からでも、PITWORK品番を探す ----
+let pitData = null;
+const loadPit = () =>
+  pitData
+    ? Promise.resolve(pitData)
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021p`).then((r) => r.json())))
+        .then(([rows, pages]) => {
+          const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
+          const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
+          return (pitData = rows.map((r) => {
+            const makers = M.map((m, i) => ({ m, nums: r[2 + i] ? r[2 + i].split(" / ").filter(Boolean) : [] })).filter((x) => x.nums.length);
+            const all = [r[0], ...makers.flatMap((x) => x.nums.map(clean))];
+            return { pit: r[0], kind: r[1], makers, pages: pages[r[0]] || [], hay: "|" + all.map((x) => normPit(x)).join("|") + "|" };
+          }));
+        })
+        .catch(() => (pitData = []));
+const normPit = (x) => String(x ?? "").normalize("NFKC").toLowerCase().replace(/[\s\-‐−ー―–—‑ｰ]/g, "");
+let pitLimit = 40;
+function renderPit() {
+  const box = fresh();
+  const P = T.pit;
+  box.innerHTML = `<div class="panel pit-intro"><h3>エレメント互換表（オイル・燃料）</h3>
+    <p class="co-note" style="margin:0 0 6px">メーカーの純正品番・他社品番から、PITWORK品番を探します（逆も可）。ハイフンなし・全角・小文字でもOK。PITWORKカタログの互換表の写真から書き写したデータです。<b>注文の前に、カタログでも確認してください。</b></p></div>
+    <label class="search"><svg viewBox="0 0 24 24" class="ic"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><input id="pq" type="search" autocomplete="off" placeholder="品番（例：15208-65F0E、1520865F0E、AY100-NS001、TO-5232M）" value="${esc(P.q)}"><span class="cnt" id="pcnt"></span></label>
+    <div class="chips" id="pchips"></div>
+    <div id="plist"></div>
+    <div class="tacts" style="margin-top:12px"><button class="btn" data-pgo="co" title="このデータ入りの検索Excelを作る">会社のExcelに追加する →</button></div>`;
+  const q = $("#pq", box);
+  q.addEventListener("input", () => {
+    P.q = q.value;
+    pitLimit = 40;
+    save();
+    renderPitList();
+  });
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+    if (d.pgo) {
+      T.tab = "co";
+      save();
+      return render($("#main"));
+    }
+    if (d.pkind !== undefined) P.kind = P.kind === d.pkind ? "" : d.pkind;
+    else if (d.pser !== undefined) P.series = P.series === d.pser ? "" : d.pser;
+    else if (d.pmore) pitLimit += 60;
+    else if (d.pcopy) return C.copyText(d.pcopy).then(() => C.toast(`${d.pcopy} をコピーしました`));
+    else return;
+    save();
+    renderPitList();
+  });
+  loadPit().then(renderPitList);
+  renderPitList();
+  if (matchMedia("(hover: hover)").matches) setTimeout(() => q.focus(), 0);
+}
+function renderPitList() {
+  const list = $("#plist");
+  if (!list) return;
+  const P = T.pit;
+  const data = pitData || [];
+  const kindOf = (r) => (r.kind || "").split("・")[0]; // オイル／燃料
+  const serOf = (r) => (r.kind || "").split("・")[1] || ""; // 普通車／中大型
+  const cnt = (f) => data.filter(f).length;
+  $("#pchips").innerHTML =
+    ["オイル", "燃料"].map((k) => `<button class="chip ${P.kind === k ? "on" : ""}" data-pkind="${k}">${k}エレメント ${cnt((r) => kindOf(r) === k)}</button>`).join("") +
+    `<span class="chip-sep"></span>` +
+    ["普通車", "中大型"].map((s) => `<button class="chip ${P.series === s ? "on" : ""}" data-pser="${s}">${s === "中大型" ? "中・大型車" : s} ${cnt((r) => serOf(r) === s)}</button>`).join("");
+  if (!pitData) {
+    $("#pcnt").textContent = "";
+    return (list.innerHTML = '<p class="empty">読み込み中…</p>');
+  }
+  const nq = normPit(P.q);
+  const hits = data.filter((r) => (!P.kind || kindOf(r) === P.kind) && (!P.series || serOf(r) === P.series) && (!nq || r.hay.includes(nq)));
+  // ぴったり一致 → 先頭一致 → 途中一致
+  const rank = (r) => (!nq ? 0 : r.hay.includes("|" + nq + "|") ? 0 : r.hay.includes("|" + nq) ? 1 : 2);
+  hits.sort((a, b) => rank(a) - rank(b));
+  $("#pcnt").textContent = `${hits.length} / ${data.length}件`;
+  const shown = hits.slice(0, pitLimit);
+  const hl = (n) => {
+    const base = n.replace(/\((※\d|日野|UD)\)/g, "");
+    const on = nq && normPit(base).includes(nq);
+    return `<span class="pn ${on ? "hit" : ""}">${esc(n)}</span>`;
+  };
+  list.innerHTML =
+    (shown
+      .map(
+        (r) => `<div class="pit-card"><div class="pit-top"><button class="bcode pit-code" data-pcopy="${esc(r.pit)}" title="PITWORK品番をコピー">${esc(r.pit)}</button><span class="pit-kind">${esc(r.kind.replace("・", "　"))}</span>${r.pages.length ? `<span class="pit-page">カタログ ${r.pages.map((p) => p + "p").join("・")}</span>` : ""}</div>
+        <div class="pit-grid">${r.makers.map((x) => `<div class="pit-m"><b>${esc(x.m)}</b><div>${x.nums.map(hl).join("")}</div></div>`).join("")}</div></div>`,
+      )
+      .join("") || `<p class="empty">${nq ? "該当なし（品番を短くして試してください）" : "該当なし"}</p>`) +
+    (hits.length > shown.length ? `<button class="btn more-btn" data-pmore="1">さらに表示（残り ${hits.length - shown.length}件）</button>` : "");
+}
 // ---- 会社Excelへ：ユーザーコード検索・部品番号検索の、Excelを作る（サイトには、データを載せない） ----
 const CO_KINDS = [
   { id: "user", kinds: ["user"], name: "ユーザーコード検索", desc: "名前・電話番号・コード・特記で、ユーザーコード・担当・特記を探す。電話の折り返し、問い合わせ、売り上げの時に。", sheets: "ユーザー検索・ユーザーデータ" },
@@ -2519,7 +2613,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261021n")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261021p")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3437,7 +3531,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021n";
+const APP_VER = "20261021p";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
