@@ -767,21 +767,45 @@ async function bulbView(id) {
     <img src="${u}" alt="" style="width:100%;border-radius:8px;display:block">
     <div class="modal-foot"><button class="btn pri" data-m="cancel">閉じる</button></div>`);
 }
-function bulbList() {
+const bulbDeco = (id, b) => ({
+  id,
+  ...b,
+  _s:
+    S.norm(`${b.spec} ${b.code} ${String(b.code || "").replace(/[^0-9A-Za-z]/g, "")} ${b.cat} ${b.shape} ${b.use} ${b.note}`) +
+    yomiIdx(`${b.cat} ${b.use} ${b.note}`) +
+    (b.star ? " 頻出 ひんしゅつ ヒンシュツ" : ""),
+  _c: S.norm(String(b.code || "").replace(/[^0-9A-Za-z]/g, "")),
+  _v: voltOf(b),
+  _sh: shapeKey(b.shape),
+});
+// 店に登録してあるバルブ（＝よく扱う・頻出）
+function bulbDbList() {
   const raw = C.st.bulbs || {};
   if (raw === bulbSrc && bulbIdx) return bulbIdx;
   bulbSrc = raw;
-  bulbIdx = Object.entries(raw).map(([id, b]) => ({
-    id,
-    ...b,
-    _s:
-      S.norm(`${b.spec} ${b.code} ${String(b.code || "").replace(/[^0-9A-Za-z]/g, "")} ${b.cat} ${b.shape} ${b.use} ${b.note}`) +
-      yomiIdx(`${b.cat} ${b.use} ${b.note}`),
-    _c: S.norm(String(b.code || "").replace(/[^0-9A-Za-z]/g, "")),
-    _v: voltOf(b),
-    _sh: shapeKey(b.shape),
-  }));
+  bulbIdx = Object.entries(raw).map(([id, b]) => bulbDeco(id, { ...b, star: true }));
+  bulbAll = null;
   return bulbIdx;
+}
+// ピットワークのカタログ（pitbulbs.json）。店に登録のない品番は、★なしで後ろに並べる
+let pitBulbs = null;
+let bulbAll = null;
+const loadPitBulbs = () =>
+  pitBulbs
+    ? Promise.resolve(pitBulbs)
+    : fetch("pitbulbs.json?v=20261021i")
+        .then((r) => r.json())
+        .then((j) => ((bulbAll = null), (pitBulbs = j)))
+        .catch(() => ((bulbAll = null), (pitBulbs = [])));
+function bulbList() {
+  const db = bulbDbList();
+  if (!pitBulbs?.length) return db;
+  if (bulbAll) return bulbAll;
+  const have = new Set(db.map((b) => String(b.code).toUpperCase()));
+  const extra = pitBulbs
+    .filter((p) => !have.has(String(p.code).toUpperCase()))
+    .map((p) => bulbDeco(`p:${p.code}`, { code: p.code, spec: p.spec, cat: p.cat, shape: p.shape, use: p.use, unit: p.unit ?? "", note: "", fromCat: true, star: false }));
+  return (bulbAll = [...db, ...extra]);
 }
 // ピットワークのバルブ早見表（最新のカタログ）と照らし合わせて見つかった、古いデータの直し
 // 今の値が「直す前」と同じときだけ直す（自分で書き換えたものは、そのまま残す）
@@ -817,6 +841,7 @@ function fixBulbData() {
 }
 function renderBulb() {
   fixBulbData();
+  if (!pitBulbs) loadPitBulbs().then(() => T.tab === "bulb" && $("#blist") && renderBulbList());
   const box = fresh();
   const tog = `<div class="chips sviews">${[
     ["list", "検索"],
@@ -878,7 +903,7 @@ function renderBulb() {
     const b = e.target.closest("button");
     if (!b) return;
     const d = b.dataset;
-    const o = d.bid ? C.st.bulbs[d.bid] && { id: d.bid, ...C.st.bulbs[d.bid] } : null;
+    const o = d.bid ? bulbList().find((x) => x.id === d.bid) : null;
     if (d.bview) {
       T.bulb.view = d.bview;
       save();
@@ -904,6 +929,11 @@ function renderBulb() {
       bulbLimit = 30;
       save();
       renderBulbList();
+    } else if (d.bstar) {
+      T.bulb.star = !T.bulb.star;
+      bulbLimit = 30;
+      save();
+      renderBulbList();
     } else if (d.bvolt !== undefined) {
       T.bulb.volt = T.bulb.volt === d.bvolt ? "" : d.bvolt;
       bulbLimit = 30;
@@ -916,6 +946,7 @@ function renderBulb() {
     else if (o && d.bact === "google") C.googleOpen(bulbQuery(o));
     else if (o && d.bact === "memo") C.openMemoForBulb(o);
     else if (o && d.bact === "edit") bulbForm(o.id);
+    else if (o && d.bact === "reg") bulbForm(null, o);
     else if (o && d.bact === "view") bulbView(o.id);
   });
   renderBulbList();
@@ -941,7 +972,8 @@ function renderBulbList() {
     `<span class="chip-sep"></span>` +
     ["12V", "24V"]
       .map((v) => `<button class="chip ${T.bulb.volt === v ? "on" : ""}" data-bvolt="${v}">${v}</button>`)
-      .join("");
+      .join("") +
+    `<span class="chip-sep"></span><button class="chip star ${T.bulb.star ? "on" : ""}" data-bstar="1" title="店で登録してある（よく出る）バルブだけにする">★頻出</button>`;
   const cats = oilCats(list);
   if (T.bulb.cat && T.bulb.cat !== "__none" && !cats.some((c) => c.name === T.bulb.cat)) T.bulb.cat = "";
   const noCat = list.filter((b) => !b.cat).length;
@@ -972,6 +1004,7 @@ function renderBulbList() {
       (!T.bulb.shape || b._sh === T.bulb.shape) &&
       (!T.bulb.cat || (T.bulb.cat === "__none" ? !b.cat : b.cat === T.bulb.cat)) &&
       (!T.bulb.volt || b._v === T.bulb.volt) &&
+      (!T.bulb.star || b.star) &&
       toks.every((alts) => alts.some((a) => b._s.includes(a))),
   );
   // 品番が前方一致するものを先頭に
@@ -979,6 +1012,7 @@ function renderBulbList() {
     (a, b) =>
       (qn && b._c.startsWith(qn) ? 1 : 0) - (qn && a._c.startsWith(qn) ? 1 : 0) ||
       (b.note?.includes("一番") ? 1 : 0) - (a.note?.includes("一番") ? 1 : 0) ||
+      (b.star ? 1 : 0) - (a.star ? 1 : 0) ||
       a._sh.localeCompare(b._sh, "ja", { numeric: true }),
   );
   $("#bcnt").textContent = `${hits.length} / ${list.length}件`;
@@ -991,10 +1025,10 @@ function renderBulbList() {
         (b) => `<div class="orow">
       ${b.photo ? `<button class="oph" data-bact="view" data-bid="${esc(b.id)}" title="写真を大きく見る"><img data-bphoto="${esc(b.id)}" alt=""></button>` : ""}
       <div class="omain">
-        <div class="ot1"><span class="shape">${esc(b.shape || "?")}</span><b class="oname">${esc(prettySpec(b.spec))}</b>${b.unit ? `<span class="ocap">${esc(b.unit)}個入</span>` : ""}${b.cat ? `<span class="cat">${esc(b.cat)}</span>` : ""}${b.note ? `<span class="hot">${b.note.includes("一番") ? "★" : ""}${esc(b.note)}</span>` : ""}</div>
+        <div class="ot1"><span class="shape">${esc(b.shape || "?")}</span><b class="oname">${esc(prettySpec(b.spec))}</b>${b.unit ? `<span class="ocap">${esc(b.unit)}個入</span>` : ""}${b.cat ? `<span class="cat">${esc(b.cat)}</span>` : ""}${b.star ? `<span class="hot star">★頻出</span>` : `<span class="tagcat">カタログ</span>`}${b.note ? `<span class="hot">${b.note.includes("一番") ? "★" : ""}${esc(b.note)}</span>` : ""}</div>
         <div class="ot2"><button class="bcode" data-bcopy="${esc(b.code)}" title="品番をコピー">${esc(b.code)}</button></div>
         ${b.use ? `<div class="buse">${esc(b.use)}</div>` : ""}
-        <div class="oacts"><button class="btn" data-bact="google" data-bid="${esc(b.id)}" title="品番と形状・規格でGoogle検索">${C.IC.search}Google</button><button class="btn ${memoCnt[b.id] ? "has" : ""}" data-bact="memo" data-bid="${esc(b.id)}">${C.IC.note}メモ${memoCnt[b.id] ? `<span class="cnt">${memoCnt[b.id]}</span>` : ""}</button><button class="btn sm" data-bact="edit" data-bid="${esc(b.id)}">編集</button></div>
+        <div class="oacts"><button class="btn" data-bact="google" data-bid="${esc(b.id)}" title="品番と形状・規格でGoogle検索">${C.IC.search}Google</button>${b.fromCat ? `<button class="btn sm" data-bact="reg" data-bid="${esc(b.id)}" title="店のバルブに登録する（登録すると★頻出になります）">登録</button>` : `<button class="btn ${memoCnt[b.id] ? "has" : ""}" data-bact="memo" data-bid="${esc(b.id)}">${C.IC.note}メモ${memoCnt[b.id] ? `<span class="cnt">${memoCnt[b.id]}</span>` : ""}</button><button class="btn sm" data-bact="edit" data-bid="${esc(b.id)}">編集</button>`}</div>
       </div></div>`,
       )
       .join("") +
@@ -1003,10 +1037,10 @@ function renderBulbList() {
       : "") || '<p class="empty">該当なし</p>';
   fillBulbPhotos(box);
 }
-async function bulbForm(id) {
+async function bulbForm(id, pre) {
   const o = id ? C.st.bulbs[id] : null;
   if (id && !o) return;
-  const b = o || { spec: "", code: "", cat: "", shape: "", use: "", unit: "", note: "" };
+  const b = o || (pre && { code: pre.code, shape: pre.shape, spec: pre.spec, cat: pre.cat, use: pre.use, unit: pre.unit ?? "", note: "" }) || { spec: "", code: "", cat: "", shape: "", use: "", unit: "", note: "" };
   let photo = null,
     changed = false;
   const f = (k, l, extra = "", cls = "") =>
@@ -1090,7 +1124,7 @@ async function bulbForm(id) {
   }
   if (
     !id &&
-    bulbList().some((x) => String(x.code).toUpperCase() === rec.code) &&
+    bulbDbList().some((x) => String(x.code).toUpperCase() === rec.code) &&
     !(await C.confirmBox(`品番 ${rec.code} はすでに登録されています。\nもうひとつ追加しますか？`, "追加する"))
   )
     return;
@@ -1246,7 +1280,7 @@ async function importBulbs(file) {
     return C.toast("取り込めませんでした：" + e.message, true);
   }
   list = list.map((b) => ({ ...b, code: oilN(b.code).toUpperCase() })).filter((b) => b.code);
-  const have = new Map(bulbList().map((b) => [String(b.code).toUpperCase(), b]));
+  const have = new Map(bulbDbList().map((b) => [String(b.code).toUpperCase(), b]));
   const add = list.filter((x) => !have.has(x.code)).length;
   const upd = list.length - add;
   const L = { code: "品番", shape: "形状", spec: "規格", cat: "分類", use: "用途", unit: "入数", note: "メモ" };
@@ -2404,11 +2438,13 @@ function bulbExportItems() {
       (a, b) =>
         String(a.shape || "").localeCompare(String(b.shape || ""), "ja", { numeric: true }) ||
         (b.note?.includes("一番") ? 1 : 0) - (a.note?.includes("一番") ? 1 : 0) ||
+        (b.star ? 1 : 0) - (a.star ? 1 : 0) ||
         String(a.spec).localeCompare(String(b.spec), "ja", { numeric: true }),
     )
     .map((b) => ({
       code: b.code,
-      name: `${b.shape || ""} ${prettySpec(b.spec)}${b.cat ? `（${b.cat}）` : ""}`.trim(),
+      name: `${b.star ? "★ " : ""}${b.shape || ""} ${prettySpec(b.spec)}${b.cat ? `（${b.cat}）` : ""}`.trim(),
+      star: !!b.star,
       cap: b.unit ? `${b.unit}個入` : "",
       use: [b.use, b.note ? `【${b.note}】` : ""].filter(Boolean).join(" "),
       cat: b.shape || "",
@@ -2774,6 +2810,7 @@ async function docExtras(kind, items) {
   return {};
 }
 async function exportXlsx(kind) {
+  if (kind === "bulb") await loadPitBulbs();
   const x = XK[kind];
   const title = KINDS[kind].title;
   if (!x.list().length) return C.toast("書き出すデータがまだありません", true);
@@ -2796,6 +2833,7 @@ async function exportXlsx(kind) {
 // 元ファイルの中身には手を触れず、シートだけを差し込む（グラフ・表・図・書式はそのまま）
 async function exportIntoBase(file, kind = "oil") {
   if (!file) return;
+  if (kind === "bulb") await loadPitBulbs();
   const x = XK[kind];
   const title = KINDS[kind].title;
   if (!x.list().length) return C.toast("書き出すデータがまだありません", true);
