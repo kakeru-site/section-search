@@ -1,18 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021a";
-import { yomiText } from "./yomi.js?v=20261021a";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021a";
-import { docModel } from "./sphxlsx.js?v=20261021a";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021a";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021a";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021a";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021a";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021a";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021a";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021a";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021a";
-import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021a";
+import * as S from "./search.js?v=20261021b";
+import { yomiText } from "./yomi.js?v=20261021b";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021b";
+import { docModel } from "./sphxlsx.js?v=20261021b";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021b";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021b";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021b";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021b";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021b";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021b";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021b";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021b";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021b";
+import { readBase, injectSheets, uniqueName } from "./xlsxinject.js?v=20261021b";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2437,6 +2438,7 @@ const XK = {
 const CO_KINDS = [
   { id: "user", kinds: ["user"], name: "ユーザーコード検索", desc: "名前・電話番号・コード・特記で、ユーザーコード・担当・特記を探す。電話の折り返し、問い合わせ、売り上げの時に。", sheets: "ユーザー検索・ユーザーデータ" },
   { id: "part", kinds: ["part"], name: "部品番号検索", desc: "部品名の一部（ひらがなもOK）や、部品番号の一部から、部品番号・部品名を探す。", sheets: "部品検索・部品データ" },
+  { id: "pit", pit: true, kinds: ["pit"], name: "オイルフィルター適合表", desc: "メーカーの純正品番・他社品番から、PITWORKの品番を探す（逆も可）。カタログの適合表のデータ入り。", sheets: "フィルター検索・フィルターデータ" },
   { id: "both", kinds: ["user", "part"], name: "ユーザー＋部品（両方）", desc: "上の2つを、1つのExcelに。", sheets: "ユーザー検索・部品検索・データ2枚" },
 ];
 function renderCo() {
@@ -2473,11 +2475,13 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
+const pitRows = async () => (await fetch("pitfilters.json?v=20261021b")).json();
+const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
-    const { wb } = buildLookupWorkbook(X, { protect: T.xlk?.protect !== false, sample: true, kinds: k.kinds });
+    const { wb } = await buildCo(X, k, { protect: T.xlk?.protect !== false, sample: true });
     downloadXlsx(await wb.xlsx.writeBuffer(), `${k.name}.xlsx`);
     C.toast("Excelを作りました（見本データ入りです。使う前に、見本を消してください）");
   } catch (e) {
@@ -2496,10 +2500,10 @@ async function exportLookupIntoBase(k, file) {
   } catch (e) {
     return C.toast("このExcelを開けませんでした：" + e.message, true);
   }
-  const want = { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
+  const want = k.pit ? { find: "フィルター検索", data: "フィルターデータ", guide: "フィルターの使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
   const names = {};
   for (const [key, nm] of Object.entries(want)) names[key] = uniqueName(base.names, nm);
-  const added = [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
+  const added = k.pit ? [names.find, names.data, names.guide] : [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
   const protect = T.xlk?.protect !== false;
   const r = await C.modal(`<h3>Excelに「${esc(k.name)}」を追加</h3>
     <div class="xlinfo">
@@ -2509,13 +2513,13 @@ async function exportLookupIntoBase(k, file) {
       <div><span>追加するシート</span><b>${esc(added.join("・"))}</b></div>
       <div><span>シート保護</span><b>${protect ? "あり（パスワードなし）" : "なし"}</b></div>
     </div>
-    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容には手を触れず、シートだけを後ろに足します。元のファイルは変えず、別のファイルとして保存します。<br>・データのシートは、空です。ユーザー（または部品）の一覧を、貼り付けて使います。</p>
+    <p style="margin:10px 0 0;font-size:12px;color:var(--mu);line-height:1.7">・今ある内容には手を触れず、シートだけを後ろに足します。元のファイルは変えず、別のファイルとして保存します。<br>・${k.pit ? "データのシートには、カタログから書き写した適合表が入っています。注文の前に、カタログで確認してください。" : "データのシートは、空です。ユーザー（または部品）の一覧を、貼り付けて使います。"}</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" autofocus>実行</button></div>`);
   if (!r) return;
   try {
     C.toast("Excelを作っています…（少し時間がかかります）");
     const X = await loadExcelJs();
-    const { wb, list } = buildLookupWorkbook(X, { protect, sample: false, kinds: k.kinds, names });
+    const { wb, list } = await buildCo(X, k, { protect, sample: false, names });
     const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
     downloadXlsx(out, `${k.name}.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
@@ -3249,7 +3253,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021a";
+const APP_VER = "20261021b";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));

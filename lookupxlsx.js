@@ -3,7 +3,7 @@
 //  ・ユーザー検索：名前（漢字・ひらがな・カタカナ・会社名の一部・担当者名）・電話番号・コード・特記で、ユーザーを出す
 //    電話を折り返す時・問い合わせ・売り上げる時に、すばやく引くためのもの
 //  ・部品検索：部品名（の一部・ひらがなでもOK）か、部品番号の一部から、部品番号と部品名を出す
-import { fillGuide } from "./oilxlsx.js?v=20261021a";
+import { fillGuide } from "./oilxlsx.js?v=20261021b";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -16,6 +16,8 @@ const font = { name: "Yu Gothic UI", size: 11 };
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 
 let FN = "DBCS"; // 全角にそろえる関数（確認用に、別の名前に替えられる）
+export const LK_FONT = font;
+export const setLkFn = (x) => { FN = x || "DBCS"; };
 export const LK_MAX = 10000; // データを見る行数（2行目〜）
 const SHOW = 100; // 検索結果に並べる件数
 const STRONG = 30; // 最初から枠を整えてある行数
@@ -104,7 +106,7 @@ const yellow = (ws, r, c1, c2, o = {}) => {
 
 // ---- 検索シート ----
 // cfg: { title, label1, hint1, data, cols:[{head,col,width,mono,center,wrap,note}], rankCol, filter?:{label} }
-function fillFinder(ws, nm, cfg, protect) {
+export function fillFinder(ws, nm, cfg, protect) {
   const cols = cfg.cols;
   const lastCol = 2 + cols.length; // B=No, C.. が項目
   ws.columns = [{ width: 2 }, { width: 6 }, ...cols.map((c) => ({ width: c.width })), { width: 2 }];
@@ -166,7 +168,7 @@ function fillFinder(ws, nm, cfg, protect) {
   });
   ws.getRow(HR).height = 28;
   const F = HR + 1;
-  const rowH = cols.some((c) => c.wrap || c.note) ? 36 : 28;
+  const rowH = cfg.rowH || (cols.some((c) => c.wrap || c.note) ? 36 : 28);
   for (let k = 1; k <= SHOW; k++) {
     const r = F + k - 1;
     const strong = k <= STRONG;
@@ -174,7 +176,7 @@ function fillFinder(ws, nm, cfg, protect) {
     ws.getCell(`B${r}`).value = { formula: `IF($Y${r}="","",${k})` };
     cols.forEach((col, i) => {
       const c = ws.getCell(r, 3 + i);
-      c.value = { formula: `IF($Y${r}="","",INDEX(${dbr(cfg.data, col.col)},$Y${r})&"")` };
+      c.value = { formula: col.nl ? (() => { const v = `INDEX(${dbr(cfg.data, col.col)},$Y${r})&""`; const K = col.cap || 99; const n = `(LEN(${v})-LEN(SUBSTITUTE(${v}," / ",""))+3)/3`; return `IF($Y${r}="","",IF(${n}<=${K},SUBSTITUTE(${v}," / ",CHAR(10)),SUBSTITUTE(LEFT(${v},FIND(CHAR(1),SUBSTITUTE(${v}," / ",CHAR(1),${K}))-1)," / ",CHAR(10))&CHAR(10)&"…ほか"&(${n}-${K})&"件"))`; })() : `IF($Y${r}="","",INDEX(${dbr(cfg.data, col.col)},$Y${r})&"")` };
       c.font = col.mono ? { name: "Consolas", size: 14, bold: true } : { ...font, size: col.big || 13, bold: !!col.center };
       c.alignment = { vertical: "middle", horizontal: col.center ? "center" : "left", wrapText: true, indent: col.center ? 0 : 1 };
       c.border = strong ? box : hair;
@@ -204,7 +206,7 @@ function fillFinder(ws, nm, cfg, protect) {
 
 // ---- データシート ----
 // cfg: { inHeads, inWidths, hay(r), score(r), hayCol, flagCol, scoreCol, rankCol, finder, filterCol? }
-function fillData(ws, nm, cfg, rows) {
+export function fillData(ws, nm, cfg, rows) {
   const n = cfg.inHeads.length;
   ws.columns = [...cfg.inWidths.map((width) => ({ width })), { width: 3 }, { width: 24 }, { width: 6 }, { width: 6 }, { width: 6 }];
   cfg.inHeads.forEach((h, i) => {
