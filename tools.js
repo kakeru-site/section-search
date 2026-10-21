@@ -2438,7 +2438,7 @@ const XK = {
 const CO_KINDS = [
   { id: "user", kinds: ["user"], name: "ユーザーコード検索", desc: "名前・電話番号・コード・特記で、ユーザーコード・担当・特記を探す。電話の折り返し、問い合わせ、売り上げの時に。", sheets: "ユーザー検索・ユーザーデータ" },
   { id: "part", kinds: ["part"], name: "部品番号検索", desc: "部品名の一部（ひらがなもOK）や、部品番号の一部から、部品番号・部品名を探す。", sheets: "部品検索・部品データ" },
-  { id: "pit", pit: true, kinds: ["pit"], name: "オイルエレメント 純正・市販品互換表", desc: "メーカーの純正品番・他社品番から、PITWORKの品番を探す（逆も可）。普通車・中型・大型車、どちらも検索できます。カタログの適合表のデータ入り。", sheets: "オイルエレメント 純正・市販品互換表・オイルエレメントデータ" },
+  { id: "pit", pit: true, kinds: ["oil", "fuel"], name: "エレメント 純正・市販品互換表（オイル・燃料）", desc: "メーカーの純正品番・他社品番から、PITWORK品番を探す（逆も可）。オイルエレメント（普通車・中型・大型車どちらも）と、燃料エレメントの2シート。カタログの適合表のデータ入り。", sheets: "オイルエレメント／燃料エレメントの互換表・データ・使い方" },
   { id: "both", kinds: ["user", "part"], name: "ユーザー＋部品（両方）", desc: "上の2つを、1つのExcelに。", sheets: "ユーザー検索・部品検索・データ2枚" },
 ];
 function renderCo() {
@@ -2475,7 +2475,10 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitfilters.json?v=20261021f")).json();
+const pitRows = async () => {
+  const [oil, fuel] = await Promise.all(["pitfilters.json", "pitfuel.json"].map(async (f) => (await fetch(`${f}?v=20261021f`)).json()));
+  return { oil, fuel };
+};
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
@@ -2500,10 +2503,10 @@ async function exportLookupIntoBase(k, file) {
   } catch (e) {
     return C.toast("このExcelを開けませんでした：" + e.message, true);
   }
-  const want = k.pit ? { find: "オイルエレメント 純正・市販品互換表", data: "オイルエレメントデータ", guide: "オイルエレメントの使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
+  const want = k.pit ? { oilFind: "オイルエレメント 純正・市販品互換表", oilData: "オイルエレメントデータ", fuelFind: "燃料エレメント 純正・市販品互換表", fuelData: "燃料エレメントデータ", guide: "エレメント互換表の使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
   const names = {};
   for (const [key, nm] of Object.entries(want)) names[key] = uniqueName(base.names, nm);
-  const added = k.pit ? [names.find, names.data, names.guide] : [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
+  const added = k.pit ? [names.oilFind, names.fuelFind, names.oilData, names.fuelData, names.guide] : [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
   const protect = T.xlk?.protect !== false;
   const r = await C.modal(`<h3>Excelに「${esc(k.name)}」を追加</h3>
     <div class="xlinfo">
@@ -2519,7 +2522,7 @@ async function exportLookupIntoBase(k, file) {
   try {
     C.toast("Excelを作っています…（少し時間がかかります）");
     const X = await loadExcelJs();
-    const { wb, list } = await buildCo(X, k, { protect, sample: false, names });
+    const { wb, list } = await buildCo(X, k, { protect, sample: false, names: k.pit ? { oil: { find: names.oilFind, data: names.oilData }, fuel: { find: names.fuelFind, data: names.fuelData }, guide: names.guide } : names });
     const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
     downloadXlsx(out, `${k.name}.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
