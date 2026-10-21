@@ -1,7 +1,7 @@
 // PITWORK オイルフィルター適合表を、関数だけのExcelにして書き出す（オイル・ケミカルのExcelと同じデザイン）
 // 純正品番・他社品番のどれか1つを入れると、PITWORK品番と、各メーカーの品番が出る。
-import { fillGuide } from "./oilxlsx.js?v=20261021d";
-import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021d";
+import { fillGuide } from "./oilxlsx.js?v=20261021e";
+import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021e";
 
 export const PIT_MAKERS = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
@@ -42,8 +42,8 @@ const guideBlocks = (protect, nm) => [
 
 // opt: { protect, names?, dbcsName?, rows:[[pit, series, ...12メーカーの品番（" / "区切り）]] }
 export function buildPitWorkbook(ExcelJS, opt = {}) {
-  setLkFn(opt.dbcsName || "DBCS");
-  const FN = opt.dbcsName || "DBCS";
+  setLkFn(opt.dbcsName || "_xlfn.DBCS");
+  const FN = opt.dbcsName || "_xlfn.DBCS";
   const wb = new ExcelJS.Workbook();
   wb.creator = "セクション検索";
   if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };

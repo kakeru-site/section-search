@@ -3,7 +3,7 @@
 //  ・ユーザー検索：名前（漢字・ひらがな・カタカナ・会社名の一部・担当者名）・電話番号・コード・特記で、ユーザーを出す
 //    電話を折り返す時・問い合わせ・売り上げる時に、すばやく引くためのもの
 //  ・部品検索：部品名（の一部・ひらがなでもOK）か、部品番号の一部から、部品番号と部品名を出す
-import { fillGuide } from "./oilxlsx.js?v=20261021d";
+import { fillGuide } from "./oilxlsx.js?v=20261021e";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -15,9 +15,9 @@ const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } 
 const font = { name: "Yu Gothic UI", size: 11 };
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 
-let FN = "DBCS"; // 全角にそろえる関数（確認用に、別の名前に替えられる）
+let FN = "_xlfn.DBCS"; // 全角にそろえる関数（確認用に、別の名前に替えられる）
 export const LK_FONT = font;
-export const setLkFn = (x) => { FN = x || "DBCS"; };
+export const setLkFn = (x) => { FN = x || "_xlfn.DBCS"; };
 export const LK_MAX = 10000; // データを見る行数（2行目〜）
 const SHOW = 100; // 検索結果に並べる件数
 const STRONG = 30; // 最初から枠を整えてある行数
@@ -244,7 +244,7 @@ export function fillData(ws, nm, cfg, rows) {
 
 // opt: { protect, sample:boolean, kinds:["user","part"], names?, dbcsName? }
 export function buildLookupWorkbook(ExcelJS, opt = {}) {
-  FN = opt.dbcsName || "DBCS";
+  FN = opt.dbcsName || "_xlfn.DBCS";
   const kinds = opt.kinds?.length ? opt.kinds : ["user", "part"];
   const wb = new ExcelJS.Workbook();
   wb.creator = "セクション検索";
