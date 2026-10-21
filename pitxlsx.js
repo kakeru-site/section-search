@@ -1,7 +1,7 @@
 // PITWORK オイルフィルター適合表を、関数だけのExcelにして書き出す（オイル・ケミカルのExcelと同じデザイン）
 // 純正品番・他社品番のどれか1つを入れると、PITWORK品番と、各メーカーの品番が出る。
-import { fillGuide } from "./oilxlsx.js?v=20261021e";
-import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021e";
+import { fillGuide } from "./oilxlsx.js?v=20261021f";
+import { fillFinder, fillData, LK_FONT as font, LK_MAX, setLkFn } from "./lookupxlsx.js?v=20261021f";
 
 export const PIT_MAKERS = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
@@ -42,8 +42,7 @@ const guideBlocks = (protect, nm) => [
 
 // opt: { protect, names?, dbcsName?, rows:[[pit, series, ...12メーカーの品番（" / "区切り）]] }
 export function buildPitWorkbook(ExcelJS, opt = {}) {
-  setLkFn(opt.dbcsName || "_xlfn.DBCS");
-  const FN = opt.dbcsName || "_xlfn.DBCS";
+  setLkFn("ASC"); // 半角にそろえる（長い文字列でも使える）
   const wb = new ExcelJS.Workbook();
   wb.creator = "セクション検索";
   if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
@@ -61,10 +60,10 @@ export function buildPitWorkbook(ExcelJS, opt = {}) {
   // 検索用：全品番を「｜」でつなぎ、ハイフン・空白・注記をとる
   const raw = `$A{r}&" / "&${Array.from({ length: M }, (_, i) => `$${String.fromCharCode(67 + i)}{r}`).join('&" / "&')}`;
   const strip = (x) => ["(※1)", "(※2)", "(※3)", "(日野)", "(UD)"].reduce((a, t) => `SUBSTITUTE(${a},"${t}","")`, x);
-  const hay = (r) => `IF($A${r}="","","｜"&${["－", "‐", "−", "ー", "―", "–", "—", "‑"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, `SUBSTITUTE(${FN}(LOWER(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${strip(raw.replaceAll("{r}", r))}," / ","|"),"-","")," ",""))),"|","｜")`)}&"｜")`;
+  const hay = (r) => `IF($A${r}="","","|"&${["－", "‐", "−", "ー", "―", "–", "—", "‑"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, `SUBSTITUTE(LOWER(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${strip(raw.replaceAll("{r}", r))}," / ","|"),"-","")," ","")),"　","")`)}&"|")`;
   const F = nm.find;
   const S = (c) => `${quote(F)}!$${c}$3`;
-  const score = (r) => `IF(AND(${S("W")}<>"",ISNUMBER(SEARCH("｜"&${S("W")}&"｜",$P${r}))),4,IF(AND(${S("W")}<>"",ISNUMBER(SEARCH("｜"&${S("W")},$P${r}))),3,2))`;
+  const score = (r) => `IF(AND(${S("W")}<>"",ISNUMBER(SEARCH("|"&${S("W")}&"|",$P${r}))),4,IF(AND(${S("W")}<>"",ISNUMBER(SEARCH("|"&${S("W")},$P${r}))),3,2))`;
   fillData(wsD, nm, { inHeads: ["PITWORK品番", "種別", ...PIT_MAKERS], inWidths: [15, 9, ...PIT_MAKERS.map(() => 22)], hayCol: "P", flagCol: "Q", scoreCol: "R", rankCol: "S", finder: F, hay, score, sample: false }, opt.rows || []);
   fillGuide(wsG, { font, protect, K: {}, nameP: "", blocks: guideBlocks(protect, nm) });
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
