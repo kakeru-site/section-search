@@ -1,19 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021q";
-import { yomiText } from "./yomi.js?v=20261021q";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021q";
-import { docModel } from "./sphxlsx.js?v=20261021q";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021q";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021q";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021q";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021q";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021q";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021q";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021q";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021q";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021q";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021q";
+import * as S from "./search.js?v=20261021s";
+import { yomiText } from "./yomi.js?v=20261021s";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021s";
+import { docModel } from "./sphxlsx.js?v=20261021s";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021s";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021s";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021s";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021s";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021s";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021s";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021s";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021s";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021s";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021s";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -800,7 +800,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261021q")
+    : fetch("pitbulbs.json?v=20261021s")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2482,7 +2482,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021q`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021s`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2613,7 +2613,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261021q")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261021s")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -2623,13 +2623,14 @@ async function copyExcelFlow() {
   } catch (e) {
     return C.toast("読み込めませんでした：" + e.message, true);
   }
-  const S = { src: null, srcFile: null, base: null, baseFile: null, pick: new Set() };
+  const S = { src: null, srcFile: null, base: null, baseFile: null, pick: new Set(), n: 1 };
   const r = await C.modal(
     `<h3>Excelのシートを、会社のExcelにコピー</h3>
     <div class="field"><label>① コピー元のExcel（自分で作ったもの）</label><input type="file" id="cx-src" accept=".xlsx,.xlsm"></div>
     <div id="cx-list" class="cx-list"></div>
     <div class="field"><label>② コピー先の、会社のExcel</label><input type="file" id="cx-dst" accept=".xlsx,.xlsm"></div>
     <div id="cx-info" class="cx-info"></div>
+    <div class="field"><label>③ 何セット、コピーを作るか（1セット＝選んだシート全部のコピー）</label><input class="inp" id="cx-n" type="number" min="1" max="20" value="1" style="width:90px"> <small style="color:var(--mu)">例：3 にすると、選んだシート全部のコピーが、3セットできます</small></div>
     <p class="cx-note">・会社のExcelの今の内容には手を触れず、選んだシートを後ろに足します。元のファイルは変えず、別のファイルとして保存します。<br>・同じ名前のシートがあるときは、名前のあとに数字を付けます。<br>・グラフ・図形・コメント・マクロ・他のファイルへのリンクはコピーできません（そのほかは、そのままコピー）。</p>
     <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok" id="cx-ok" disabled>コピーする</button></div>`,
     {
@@ -2690,6 +2691,7 @@ async function copyExcelFlow() {
           if (msg.length) bg.querySelector("#cx-list").insertAdjacentHTML("beforeend", `<div class="cx-warn">数式が使っているため、「${msg.map(esc).join("」「")}」も一緒にコピーします</div>`);
           upd();
         });
+        bg.querySelector("#cx-n").addEventListener("input", (e) => (S.n = Math.max(1, Math.min(20, Math.floor(+e.target.value) || 1))));
         bg.querySelector("#cx-dst").addEventListener("change", async (e) => {
           const f = e.target.files[0];
           S.base = null;
@@ -2715,36 +2717,43 @@ async function copyExcelFlow() {
   try {
     C.toast("コピーしています…（少し時間がかかります）");
     const picks = [...S.pick].sort((a, b) => a - b).map((i) => S.src.sheets[i]);
-    const taken = [...S.base.names];
-    const names = [];
-    const renames = [];
-    for (const sh of picks) {
-      const nm = uniqueName(taken, sh.name);
-      taken.push(nm);
-      names.push(nm);
-      if (nm !== sh.name) renames.push([sh.name, nm]);
-    }
-    // 名前（セルに付けた名前）：コピーするシートだけを指しているものを、一緒にコピー
-    const sel = new Set(picks.map((s) => s.name));
-    const others = S.src.sheets.filter((s) => !sel.has(s.name)).map((s) => s.name);
-    const mentions = mentionsSheet;
-    const extraNames = [];
-    for (const n of S.src.names) {
-      if (n.local !== undefined || /^_xlnm\./.test(n.name) || n.hidden) continue;
-      const body = n.body.replace(/&apos;/g, "'");
-      if (![...sel].some((s) => mentions(body, s)) || others.some((o) => mentions(body, o))) continue;
-      extraNames.push({ name: n.name, xml: `<definedName${n.attrs}>${renameBody(n.body, renames)}</definedName>` });
-    }
     const report = [];
     if (S.src.hasMacro) report.push("マクロはコピーしていません");
-    const out = await injectSheets(JSZip, S.base, await S.srcFile.arrayBuffer(), {
-      list: names,
-      srcPaths: picks.map((s) => s.path),
-      srcIndex: picks.map((s) => s.idx),
-      renames,
-      extraNames,
-      report,
-    });
+    const srcBuf = await S.srcFile.arrayBuffer();
+    const allNames = [];
+    let out = null;
+    for (let k = 0; k < S.n; k++) {
+      if (k) S.base = await readBase(JSZip, out); // 前のセットを足した結果の上に、続けて足す
+      const taken = [...S.base.names];
+      const names = [];
+      const renames = [];
+      for (const sh of picks) {
+        const nm = uniqueName(taken, sh.name);
+        taken.push(nm);
+        names.push(nm);
+        if (nm !== sh.name) renames.push([sh.name, nm]);
+      }
+      // 名前（セルに付けた名前）：コピーするシートだけを指しているものを、一緒にコピー
+      const sel = new Set(picks.map((s) => s.name));
+      const others = S.src.sheets.filter((s) => !sel.has(s.name)).map((s) => s.name);
+      const extraNames = [];
+      for (const n of S.src.names) {
+        if (n.local !== undefined || /^_xlnm\./.test(n.name) || n.hidden) continue;
+        const body = n.body.replace(/&apos;/g, "'");
+        if (![...sel].some((s) => mentionsSheet(body, s)) || others.some((o) => mentionsSheet(body, o))) continue;
+        extraNames.push({ name: n.name, xml: `<definedName${n.attrs}>${renameBody(n.body, renames)}</definedName>` });
+      }
+      out = await injectSheets(JSZip, S.base, srcBuf, {
+        list: names,
+        srcPaths: picks.map((s) => s.path),
+        srcIndex: picks.map((s) => s.idx),
+        renames,
+        extraNames,
+        report: k ? [] : report,
+      });
+      allNames.push(...names);
+    }
+    const names = allNames;
     const ext = (S.baseFile.name.match(/\.(xlsx|xlsm)$/i) || [, "xlsx"])[1].toLowerCase();
     downloadXlsx(out, `${S.baseFile.name.replace(/\.(xlsx|xlsm)$/i, "")}_コピー済み.${ext}`);
     C.toast(`${names.length}枚のシートをコピーしました` + (report.length ? "（" + [...new Set(report)].slice(0, 3).join("／") + "）" : ""));
@@ -3531,7 +3540,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021q";
+const APP_VER = "20261021s";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));

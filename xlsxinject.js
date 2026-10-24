@@ -3,8 +3,10 @@
 
 const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// &#35211; のような「文字の番号」の書き方も、元の文字に戻す
+const numRef = (s) => String(s).replace(/&#(x[0-9a-fA-F]+|\d+);/g, (_, n) => String.fromCodePoint(n[0] === "x" || n[0] === "X" ? parseInt(n.slice(1), 16) : +n));
 const unesc = (s) =>
-  String(s)
+  numRef(s)
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
@@ -25,6 +27,16 @@ const text = async (zip, path) => {
   if (back.length !== bytes.length || back.some((b, i) => b !== bytes[i]))
     throw new Error(`${path} を安全に読み込めなかったため、追加できませんでした`);
   return s;
+};
+// 関係（rels）の Target を、ZIPの中の場所に直す（"/xl/…" の絶対指定も、"../…" の相対指定も）
+const resolveTarget = (fromFile, target) => {
+  if (target.startsWith("/")) return target.slice(1);
+  const parts = fromFile.split("/").slice(0, -1);
+  for (const seg of target.split("/")) {
+    if (seg === "..") parts.pop();
+    else if (seg && seg !== ".") parts.push(seg);
+  }
+  return parts.join("/");
 };
 const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
@@ -232,7 +244,7 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
         const type = attr("Type") || "";
         const target = attr("Target") || "";
         if (!/\/drawing$/.test(type)) continue; // 図の関係だけを引き継ぐ
-        const dSrc = "xl/" + target.replace(/^\.\.\//, "");
+        const dSrc = resolveTarget(src, target);
         // グラフ・図形だけの描画は、部品がそろわないためコピーしない（画像だけの描画は、そのままコピー）
         if (generic) {
           const dXml = (await text(A, dSrc)) || "";
@@ -253,7 +265,7 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
           const fixed = [...dRels.matchAll(/<Relationship\b[^>]*\/>/g)]
             .map((rm) => {
               const t = (rm[0].match(/\bTarget="([^"]*)"/) || [])[1] || "";
-              const mSrc = "xl/" + t.replace(/^\.\.\//, "");
+              const mSrc = resolveTarget(dSrc, t);
               if (!mediaMap.has(mSrc)) {
                 const ext = (mSrc.match(/\.(\w+)$/) || [, "png"])[1].toLowerCase();
                 mediaExt.add(ext);
@@ -334,7 +346,7 @@ const q = (n) => n.replace(/'/g, "''");
 // 数式の中で、このシート名を使っているか（'シート名'! と、引用符なしの シート名! の両方）
 export const mentionsSheet = (body, n) => body.includes(`'${q(n)}'!`) || new RegExp(`(^|[^\\p{L}\\p{N}_'.])${reEsc(n)}!`, "u").test(body);
 export function renameBody(body, renames) {
-  let b = body;
+  let b = numRef(body);
   for (const [from, to] of renames) {
     b = b.split(`'${q(from)}'!`).join(`'${q(to)}'!`);
     b = b.replace(new RegExp(`(^|[^\\p{L}\\p{N}_'.])${reEsc(from)}!`, "gu"), `$1'${q(to)}'!`);
@@ -343,8 +355,9 @@ export function renameBody(body, renames) {
 }
 function renameRefs(xml, renames) {
   return xml.replace(/<f\b([^>]*)>([\s\S]*?)<\/f>/g, (all, attrs, body) => {
-    const b = renameBody(body, renames);
-    return b === body ? all : `<f${attrs}>${b}</f>`;
+    const dec = numRef(body); // 文字の番号の書き方を、元の文字に戻してから探す
+    const b = renameBody(dec, renames);
+    return b === dec ? all : `<f${attrs}>${b}</f>`;
   });
 }
 // 部品がそろわないもの（表・コメント・外部リンク・グラフなど）を、シートから外す（セルの内容は残す）
