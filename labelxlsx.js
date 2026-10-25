@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261021v";
+import { fillGuide } from "./oilxlsx.js?v=20261021w";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -12,6 +12,7 @@ const font = { name: "Yu Gothic UI", size: 11 };
 const labelFont = (size, o = {}) => ({ name: "ＭＳ Ｐゴシック", size, ...o });
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+const colLetter = (n) => String.fromCharCode(64 + n);
 export const DATA_MAX = 6000; // 在庫リストを見る行数（2行目〜）
 export const BATCH_MAX = 30; // 「まとめて印刷」で、一度に作れる件数
 
@@ -20,6 +21,9 @@ const STOCK_HEADS = ["拠点コード", "ロケーション．", "常備", "部�
 const LOC_COL = "B"; // ロケーション．
 const PN_COL = "D"; // 部品番号 (表示)
 const NORM_COL = "V"; // 隠し：部品番号を、探しやすく整えた列
+
+// ラベル1枚ぶんの行の高さ（純正ラベルの実寸比率）。7行目は次のラベルとの余白
+const ROW_H = [12.75, 6.75, 14.25, 8.25, 21.75, 8.25, 13.5];
 
 // ---- ラベル1枚（3列×7行）を描く ----
 // r0,c0：そのラベルの左上（1始まり）。partF／locF：部品番号・ロケーションの中身にする数式（同じシート内）
@@ -63,6 +67,7 @@ function paintLabel(ws, r0, c0, partF, locF) {
 // 1ページ＝4列×7行＝28枚。pageTop：そのページの先頭の行
 function paintPage(ws, pageTop, partF, locF) {
   for (let col = 0; col < 4; col++) for (let blk = 0; blk < 7; blk++) paintLabel(ws, pageTop + blk * 7, 2 + col * 3, partF, locF);
+  for (let blk = 0; blk < 7; blk++) for (let i = 0; i < 7; i++) ws.getRow(pageTop + blk * 7 + i).height = ROW_H[i];
 }
 function setLabelCols(ws) {
   const w = [];
@@ -83,7 +88,7 @@ const guideBlocks = (protect, nm) => [
   ["b", "見つからないときは、ロケーション・部品番号の欄が「見つかりません」になります。品番か、データの貼り付けを確認してください"],
   ["h", `「${nm.batch}」シート（まとめて、何件か印刷）`],
   ["step", "①", "上の表の、黄色い「部品番号」欄に、必要な分だけ、部品番号を入れます（1行に1件）"],
-  ["step", "②", `${BATCH_MAX}件まで入れられます。右に、見つかったロケーション・状態が出ます`],
+  ["step", "②", `${BATCH_MAX}件まで入れられます。右に、ロケーションと、印刷ページの番号が出ます`],
   ["step", "③", "下に、入れた件数ぶんのページが、自動でできます（1件＝1ページ＝28枚）"],
   ["step", "④", "印刷するときは、印刷の画面で「ページ指定」に、入れた件数のページ数だけを指定してください（上の表に、ページ数が出ています）。指定しないと、空っぽのページまで印刷されます"],
   ["h", "困ったとき"],
@@ -185,16 +190,28 @@ function fillFind(ws, nm) {
   return ws;
 }
 
+// まとめて印刷の、入力欄の並び（ラベルの列幅をそのまま流用するため、狭い仕切り列（D・G）は使わない）
+const BATCH_COLS = { no: 2, input: 3, pn: 5, loc: 6, status: 8 }; // B・C・E・F・H
+const thinBorder = { style: "thin", color: { argb: "FFB7BBC2" } };
+const box = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+
 // ---- まとめて印刷 ----
 function fillBatch(ws, nm) {
   setLabelCols(ws);
-  titleBar(ws, `まとめて印刷（最大${BATCH_MAX}件・1件＝1ページ）`, 14, nm.guide);
+  titleBar(ws, `まとめて印刷（1件＝1ページ・最大${BATCH_MAX}件）`, 14, nm.guide);
   const HR = 3;
-  ["No", "部品番号", "→ 部品番号", "→ ロケーション", "状態"].forEach((h, i) => {
-    const c = ws.getCell(HR, 2 + i);
+  [
+    [BATCH_COLS.no, "No"],
+    [BATCH_COLS.input, "部品番号"],
+    [BATCH_COLS.pn, "部品番号"],
+    [BATCH_COLS.loc, "ロケーション"],
+    [BATCH_COLS.status, "印刷ページ"],
+  ].forEach(([col, h]) => {
+    const c = ws.getCell(HR, col);
     c.value = h;
     c.font = { ...font, bold: true, color: { argb: DK } };
     c.fill = solid(AC);
+    c.border = box;
     c.alignment = { horizontal: "center", vertical: "middle" };
   });
   ws.getRow(HR).height = 22;
@@ -202,26 +219,37 @@ function fillBatch(ws, nm) {
   for (let i = 0; i < BATCH_MAX; i++) {
     const r = LIST_TOP + i;
     const inp = `$C$${r}`;
-    ws.getCell(`B${r}`).value = i + 1;
-    ws.getCell(`B${r}`).alignment = { horizontal: "center" };
-    ws.getCell(`B${r}`).font = { ...font, color: { argb: "FF7A7F87" } };
+    const no = ws.getCell(r, BATCH_COLS.no);
+    no.value = i + 1;
+    no.alignment = { horizontal: "center" };
+    no.font = { ...font, color: { argb: "FF8A8F98" } };
+    no.border = box;
     yellow(ws, `C${r}`, { size: 12 });
     ws.getCell(`P${r}`).value = { formula: rowIdxFormula(nm.data, inp) };
-    ws.getCell(`D${r}`).value = { formula: pnFromIdx(nm.data, `$P$${r}`, inp) };
-    ws.getCell(`E${r}`).value = { formula: locFromIdx(nm.data, `$P$${r}`, inp) };
-    ws.getCell(`D${r}`).font = font;
-    ws.getCell(`E${r}`).font = font;
-    ws.getCell(`F${r}`).value = { formula: `IF(${inp}="","",IF($D$${r}="見つかりません","✕ 見つかりません","○ 印刷ページ "&(${i + 1})))` };
-    ws.getCell(`F${r}`).font = font;
+    const pn = ws.getCell(r, BATCH_COLS.pn);
+    pn.value = { formula: pnFromIdx(nm.data, `$P$${r}`, inp) };
+    pn.font = font;
+    pn.border = box;
+    pn.alignment = { vertical: "middle" };
+    const loc = ws.getCell(r, BATCH_COLS.loc);
+    loc.value = { formula: locFromIdx(nm.data, `$P$${r}`, inp) };
+    loc.font = font;
+    loc.border = box;
+    loc.alignment = { vertical: "middle" };
+    const st = ws.getCell(r, BATCH_COLS.status);
+    st.value = { formula: `IF(${inp}="","",IF($${colLetter(BATCH_COLS.pn)}$${r}="見つかりません","見つかりません",${i + 1}))` };
+    st.font = { ...font, color: { argb: "FFB06A00" }, bold: true };
+    st.alignment = { horizontal: "center", vertical: "middle" };
+    st.border = box;
     ws.getRow(r).height = 18;
   }
   ws.getColumn(16).hidden = true; // P列
-  ws.mergeCells(2, 2, 2, 9);
-  ws.getCell("B2").value = { formula: `"入力した件数：" & COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷するときは、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」を指定してください（それより下は、空のページです）"` };
+  ws.mergeCells(2, 2, 2, 11);
+  ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"部品番号を入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
   ws.getRow(LIST_TOP + BATCH_MAX).height = 10;
   const GRID_TOP = LIST_TOP + BATCH_MAX + 1;
-  for (let i = 0; i < BATCH_MAX; i++) paintPage(ws, GRID_TOP + i * 49, `$D$${LIST_TOP + i}`, `$E$${LIST_TOP + i}`);
+  for (let i = 0; i < BATCH_MAX; i++) paintPage(ws, GRID_TOP + i * 49, `$${colLetter(BATCH_COLS.pn)}$${LIST_TOP + i}`, `$${colLetter(BATCH_COLS.loc)}$${LIST_TOP + i}`);
   ws.views = [{ showGridLines: false, state: "frozen", ySplit: HR }];
   ws.pageSetup = { paperSize: 9, orientation: "landscape", margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `B${GRID_TOP}:L${GRID_TOP + 49 * BATCH_MAX - 1}` };
   return ws;
