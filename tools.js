@@ -1,19 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021s";
-import { yomiText } from "./yomi.js?v=20261021s";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021s";
-import { docModel } from "./sphxlsx.js?v=20261021s";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021s";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021s";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021s";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021s";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021s";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021s";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021s";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021s";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021s";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021s";
+import * as S from "./search.js?v=20261021t";
+import { yomiText } from "./yomi.js?v=20261021t";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021t";
+import { docModel } from "./sphxlsx.js?v=20261021t";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021t";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021t";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021t";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021t";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021t";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021t";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021t";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021t";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021t";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021t";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -173,6 +173,7 @@ const TABS = [
   ["inn", "部品検索(内装・機関)"],
   ["pit", "エレメント互換表"],
   ["co", "会社Excelへ"],
+  ["xfer", "ファイル受け渡し"],
 ];
 export function render(main) {
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">ツール</h1>
@@ -186,7 +187,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, co: renderCo })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, co: renderCo, xfer: renderXfer })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -201,6 +202,7 @@ export function context() {
   return g ? { tag: g[0], ref: String(g[1] || "").trim().slice(0, 60) } : {};
 }
 export function onData(key) {
+  if (T.tab === "xfer" && key === "xferMeta" && $("#xlist")) renderXferList();
   if (T.tab === "bulb" && key === "bulbs" && $("#blist")) renderBulbList();
   if (T.tab === "oil" && (key === "oils" || key === "memos") && $("#olist")) renderOilList();
   if (T.tab === "sph" && (key === "spheres" || key === "memos") && $("#slist")) renderSphList();
@@ -800,7 +802,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261021s")
+    : fetch("pitbulbs.json?v=20261021t")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2477,12 +2479,138 @@ const XK = {
     opt: () => T.bulb,
   },
 };
+// ---- ファイル受け渡し：会社のパソコンで預けて、自分のパソコンで取り出す ----
+const XFER_DAYS = 7; // 預けてから、この日数がたつと、自動で消える
+const XFER_MAX = 8 * 1024 * 1024; // 1ファイルの上限（8MB）
+const XCHUNK = 400000; // 1つに区切る文字数（base64）
+const toB64 = (u8) => {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const fromB64 = (b) => Uint8Array.from(atob(b), (c) => c.charCodeAt(0));
+async function xKey(pass, salt) {
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 150000, hash: "SHA-256" }, km, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(n / 1024)) + "KB");
+function renderXfer() {
+  const box = fresh();
+  box.innerHTML = `<div class="panel xf-intro"><h3>ファイル受け渡し</h3>
+    <ol class="co-steps"><li>会社のパソコンで、このサイトを開く → 下の枠にファイルを入れて「預ける」</li><li>自分のパソコンで、このサイトを開く → 一覧から「取り出す」</li></ol>
+    <p class="co-note" style="margin:0">預けたファイルは、あなたのアカウントにだけ保管されます。<b>${XFER_DAYS}日たつと、自動で消えます</b>。1ファイル ${fmtSize(XFER_MAX)} まで。<br><b>会社のファイルを社外に出してよいかは、社内のルールを確認してください。</b>個人情報が入っているファイルは、必ず「パスワード」をかけてください（パスワードは、サイトにも保存されません）。</p></div>
+    <div class="xf-drop" id="xdrop"><div class="xf-dt">ここにファイルをドラッグ、または</div><button class="btn pri" id="xpick">ファイルを選ぶ</button><input type="file" id="xfile" multiple hidden>
+      <div class="xf-pw"><label>パスワード（任意）</label><input class="inp" id="xpw" type="password" autocomplete="new-password" placeholder="かけると、パスワードを知っている人だけ開けます"></div></div>
+    <h3 class="ln-h">預けているファイル</h3><div id="xlist"></div>`;
+  const input = $("#xfile", box);
+  $("#xpick", box).addEventListener("click", () => input.click());
+  input.addEventListener("change", () => xferUpload([...input.files]).finally(() => (input.value = "")));
+  const drop = $("#xdrop", box);
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => (e.preventDefault(), drop.classList.add("on"))));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => (e.preventDefault(), drop.classList.remove("on"))));
+  drop.addEventListener("drop", (e) => xferUpload([...(e.dataTransfer?.files || [])]));
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.xget) xferDownload(b.dataset.xget);
+    else if (b.dataset.xdel) xferRemove(b.dataset.xdel);
+  });
+  renderXferList();
+  xferCleanup();
+}
+function renderXferList() {
+  const el = $("#xlist");
+  if (!el) return;
+  const list = Object.entries(C.st.xferMeta || {})
+    .map(([id, m]) => ({ id, ...m }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+  el.innerHTML =
+    list
+      .map((m) => {
+        const left = Math.max(0, Math.ceil((m.at + XFER_DAYS * 86400000 - Date.now()) / 86400000));
+        return `<div class="xf-row"><div class="xf-main"><b>${esc(m.name)}</b>${m.enc ? '<span class="xf-lock">🔒 パスワードつき</span>' : ""}<small>${fmtSize(m.size || 0)}　${new Date(m.at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} に預けた　あと${left}日で自動削除</small></div>
+        <div class="xf-acts"><button class="btn pri" data-xget="${esc(m.id)}">取り出す</button><button class="btn sm" data-xdel="${esc(m.id)}">削除</button></div></div>`;
+      })
+      .join("") || '<p class="empty">預けているファイルはありません</p>';
+}
+async function xferUpload(files) {
+  const pw = ($("#xpw")?.value || "").trim();
+  for (const f of files) {
+    if (f.size > XFER_MAX) {
+      C.toast(`「${f.name}」は大きすぎます（${fmtSize(XFER_MAX)}まで）`, true);
+      continue;
+    }
+    try {
+      C.toast(`「${f.name}」を預けています…`);
+      let u8 = new Uint8Array(await f.arrayBuffer());
+      let enc = null;
+      if (pw) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        u8 = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await xKey(pw, salt), u8));
+        enc = { salt: toB64(salt), iv: toB64(iv) };
+      }
+      const b64 = toB64(u8);
+      const id = C.localKey();
+      const n = Math.ceil(b64.length / XCHUNK) || 1;
+      for (let i = 0; i < n; i++) await C.store.set(`xferData/${id}/${i}`, b64.slice(i * XCHUNK, (i + 1) * XCHUNK));
+      await C.store.set(`xferMeta/${id}`, { name: f.name, size: f.size, at: Date.now(), chunks: n, enc, type: f.type || "" });
+      C.toast(`「${f.name}」を預けました`);
+    } catch (e) {
+      C.toast("預けられませんでした：" + e.message, true);
+    }
+  }
+}
+async function xferDownload(id) {
+  const m = C.st.xferMeta?.[id];
+  if (!m) return;
+  try {
+    let pw = "";
+    if (m.enc) {
+      const r = await C.modal(`<h3>パスワード</h3><form><div class="field"><label>「${esc(m.name)}」のパスワード</label><input class="inp" name="pw" type="password" autocomplete="off" required autofocus></div></form><div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok">取り出す</button></div>`);
+      if (!r) return;
+      pw = r.data.pw;
+    }
+    C.toast("取り出しています…");
+    const parts = [];
+    for (let i = 0; i < (m.chunks || 1); i++) parts.push((await C.store.get(`xferData/${id}/${i}`)) || "");
+    let u8 = fromB64(parts.join(""));
+    if (m.enc) {
+      try {
+        u8 = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(m.enc.iv) }, await xKey(pw, fromB64(m.enc.salt)), u8));
+      } catch {
+        return C.toast("パスワードが違います", true);
+      }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([u8], { type: m.type || "application/octet-stream" }));
+    a.download = m.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    C.toast(`「${m.name}」を保存しました`);
+  } catch (e) {
+    C.toast("取り出せませんでした：" + e.message, true);
+  }
+}
+async function xferRemove(id, quiet = false) {
+  const m = C.st.xferMeta?.[id];
+  if (!quiet && !(await C.confirmBox(`「${m?.name || "このファイル"}」を削除しますか？`, "削除", true))) return;
+  await C.store.remove(`xferMeta/${id}`).catch(() => {});
+  await C.store.remove(`xferData/${id}`).catch(() => {});
+  if (!quiet) C.toast("削除しました");
+}
+// 期限（${XFER_DAYS}日）が切れたものを消す
+function xferCleanup() {
+  for (const [id, m] of Object.entries(C.st.xferMeta || {})) if (m.at && Date.now() - m.at > XFER_DAYS * 86400000) xferRemove(id, true);
+}
 // ---- エレメント互換表（オイル・燃料）：どのメーカーの品番からでも、PITWORK品番を探す ----
 let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021s`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021t`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2613,7 +2741,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261021s")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261021t")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3540,7 +3668,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021s";
+const APP_VER = "20261021t";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));

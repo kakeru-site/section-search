@@ -4736,3 +4736,65 @@ img.blur {
   margin-left: -4px;
   font-weight: 700;
 }
+
+/* ファイル受け渡し */
+.xf-drop {
+  border: 2px dashed var(--ln2);
+  border-radius: var(--r);
+  padding: 22px;
+  text-align: center;
+  margin: 12px 0;
+}
+.xf-drop.on {
+  border-color: var(--ac);
+  background: rgba(242, 194, 48, 0.07);
+}
+.xf-dt {
+  color: var(--mu);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.xf-pw {
+  max-width: 380px;
+  margin: 14px auto 0;
+  text-align: left;
+}
+.xf-pw label {
+  font-size: 11.5px;
+  color: var(--mu);
+}
+.xf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 11px 14px;
+  margin-bottom: 8px;
+}
+.xf-main b {
+  display: block;
+  word-break: break-all;
+}
+.xf-main small {
+  color: var(--mu);
+  font-size: 11.5px;
+}
+.xf-lock {
+  font-size: 11px;
+  color: var(--ac);
+  margin-left: 8px;
+}
+.xf-acts {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+@media (max-width: 760px) {
+  .xf-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
