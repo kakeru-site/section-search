@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261021w";
+import { fillGuide } from "./oilxlsx.js?v=20261021x";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -186,7 +186,7 @@ function fillFind(ws, nm) {
   const GRID_TOP = 6;
   paintPage(ws, GRID_TOP, "$Q$3", "$R$3");
   ws.views = [{ showGridLines: false }];
-  ws.pageSetup = { paperSize: 9, orientation: "landscape", margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `B${GRID_TOP}:L${GRID_TOP + 48}` };
+  ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `B${GRID_TOP}:L${GRID_TOP + 48}` };
   return ws;
 }
 
@@ -251,7 +251,7 @@ function fillBatch(ws, nm) {
   const GRID_TOP = LIST_TOP + BATCH_MAX + 1;
   for (let i = 0; i < BATCH_MAX; i++) paintPage(ws, GRID_TOP + i * 49, `$${colLetter(BATCH_COLS.pn)}$${LIST_TOP + i}`, `$${colLetter(BATCH_COLS.loc)}$${LIST_TOP + i}`);
   ws.views = [{ showGridLines: false, state: "frozen", ySplit: HR }];
-  ws.pageSetup = { paperSize: 9, orientation: "landscape", margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `B${GRID_TOP}:L${GRID_TOP + 49 * BATCH_MAX - 1}` };
+  ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `B${GRID_TOP}:L${GRID_TOP + 49 * BATCH_MAX - 1}` };
   return ws;
 }
 
