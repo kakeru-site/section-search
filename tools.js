@@ -14,6 +14,7 @@ import { buildPitWorkbook } from "./pitxlsx.js?v=20261021u";
 import { buildPartWorkbook } from "./partxlsx.js?v=20261021u";
 import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021u";
 import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021u";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261021u";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -2703,6 +2704,7 @@ const CO_KINDS = [
   { id: "part", kinds: ["part"], name: "部品番号検索", desc: "部品名の一部（ひらがなもOK）や、部品番号の一部から、部品番号・部品名を探す。", sheets: "部品検索・部品データ" },
   { id: "pit", pit: true, kinds: ["pit"], name: "オイル・燃料エレメント 純正・市販品互換表", desc: "メーカーの純正品番・他社品番から、PITWORK品番を探す（逆も可）。オイル・燃料エレメント、普通車・中型・大型車、どちらも1つのシートで検索できます。カタログの適合表のデータ入り。", sheets: "互換表・データ・使い方" },
   { id: "both", kinds: ["user", "part"], name: "ユーザー＋部品（両方）", desc: "上の2つを、1つのExcelに。", sheets: "ユーザー検索・部品検索・データ2枚" },
+  { id: "label", label: true, name: "部品番号ラベル作成", desc: "在庫リストのロケーション・部品番号から、NISSAN純正ラベルを作って印刷する。1件ずつすぐ印刷か、まとめて複数件も可。", sheets: "ラベル作成・まとめて印刷・ラベルデータ・使い方" },
 ];
 function renderCo() {
   const box = fresh();
@@ -2742,7 +2744,7 @@ function renderCo() {
   });
 }
 const pitRows = async () => (await fetch("pitelements.json?v=20261021u")).json();
-const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
+const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
   let JSZip;
@@ -2913,10 +2915,10 @@ async function exportLookupIntoBase(k, file) {
   } catch (e) {
     return C.toast("このExcelを開けませんでした：" + e.message, true);
   }
-  const want = k.pit ? { find: "オイル・燃料エレメント 純正・市販品互換表", data: "オイル・燃料エレメントデータ", guide: "エレメント互換表の使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
+  const want = k.pit ? { find: "オイル・燃料エレメント 純正・市販品互換表", data: "オイル・燃料エレメントデータ", guide: "エレメント互換表の使い方" } : k.label ? { find: "ラベル作成", batch: "まとめて印刷", data: "ラベルデータ", guide: "ラベルの使い方" } : { user: "ユーザー検索", part: "部品検索", userData: "ユーザーデータ", partData: "部品データ", guide: "検索の使い方" };
   const names = {};
   for (const [key, nm] of Object.entries(want)) names[key] = uniqueName(base.names, nm);
-  const added = k.pit ? [names.find, names.data, names.guide] : [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
+  const added = k.pit ? [names.find, names.data, names.guide] : k.label ? [names.find, names.batch, names.data, names.guide] : [k.kinds.includes("user") && names.user, k.kinds.includes("part") && names.part, k.kinds.includes("user") && names.userData, k.kinds.includes("part") && names.partData, names.guide].filter(Boolean);
   const protect = T.xlk?.protect !== false;
   const r = await C.modal(`<h3>Excelに「${esc(k.name)}」を追加</h3>
     <div class="xlinfo">
@@ -2932,7 +2934,7 @@ async function exportLookupIntoBase(k, file) {
   try {
     C.toast("Excelを作っています…（少し時間がかかります）");
     const X = await loadExcelJs();
-    const { wb, list } = await buildCo(X, k, { protect, sample: false, names });
+    const { wb, list } = await buildCo(X, k, { protect, sample: false, names: k.label ? { find: names.find, batch: names.batch, data: names.data, guide: names.guide } : names });
     const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
     downloadXlsx(out, `${k.name}.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
