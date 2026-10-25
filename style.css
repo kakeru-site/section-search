@@ -4798,3 +4798,11 @@ img.blur {
     align-items: stretch;
   }
 }
+
+/* データ編集：緊急リセット */
+.danger-card {
+  border-color: var(--ng) !important;
+}
+.danger-card h4 {
+  color: var(--ng);
+}

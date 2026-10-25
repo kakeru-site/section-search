@@ -1,19 +1,19 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021t";
-import { yomiText } from "./yomi.js?v=20261021t";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021t";
-import { docModel } from "./sphxlsx.js?v=20261021t";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021t";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021t";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021t";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021t";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021t";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021t";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021t";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021t";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021t";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021t";
+import * as S from "./search.js?v=20261021u";
+import { yomiText } from "./yomi.js?v=20261021u";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021u";
+import { docModel } from "./sphxlsx.js?v=20261021u";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021u";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021u";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021u";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021u";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021u";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021u";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021u";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021u";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021u";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021u";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -802,7 +802,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261021t")
+    : fetch("pitbulbs.json?v=20261021u")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2610,7 +2610,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021t`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021u`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2741,7 +2741,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261021t")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261021u")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3668,7 +3668,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021t";
+const APP_VER = "20261021u";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));

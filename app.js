@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261021t";
-import * as S from "./search.js?v=20261021t";
-import * as FID from "./faceid.js?v=20261021t";
-import * as IMG from "./imgtools.js?v=20261021t";
-import * as CAT from "./catalog.js?v=20261021t";
-import * as TOOLS from "./tools.js?v=20261021t";
-import * as LEARN from "./learn.js?v=20261021t";
+import { createStore, DEMO, localKey } from "./store.js?v=20261021u";
+import * as S from "./search.js?v=20261021u";
+import * as FID from "./faceid.js?v=20261021u";
+import * as IMG from "./imgtools.js?v=20261021u";
+import * as CAT from "./catalog.js?v=20261021u";
+import * as TOOLS from "./tools.js?v=20261021u";
+import * as LEARN from "./learn.js?v=20261021u";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -2030,6 +2030,8 @@ async function editSettings() {
       <div class="row2" style="margin-top:8px"><button class="btn pri" id="syn-save">保存</button><button class="btn" id="syn-reset">初期値に戻す</button></div></div>
     <div class="card"><h4>アカウント</h4><p>ログイン中：<b>${esc(st.user?.email)}</b>${DEMO ? "<br>デモモードで動いています。js/config.js にFirebaseの設定を入れると本番モードになります。" : ""}</p>
       <div class="row2">${DEMO ? "" : '<button class="btn" id="pw-reset">パスワード再設定メールを送る</button>'}<button class="btn danger" id="logout2">ログアウト</button></div></div>
+    <div class="card danger-card" style="grid-column:1/-1"><h4>緊急リセット（全データ削除）</h4><p>部品データ・型式対応表・メモ・オイルやバルブなどの登録内容・学びの記録・預けたファイルなど、<b>すべてのデータを完全に削除</b>します。<b style="color:var(--ng)">元に戻せません。</b>乗っ取りや重大なデータ破損など、緊急時以外には使わないでください。</p>
+      <button class="btn danger" id="hard-reset">緊急リセットを実行する</button></div>
   </div>`;
   const sset = async (k, v, msg = "保存しました") => {
     try {
@@ -2092,6 +2094,24 @@ async function editSettings() {
   });
   $("#logout2").addEventListener("click", async () => {
     if (await confirmBox("ログアウトしますか？", "ログアウト")) store.logout();
+  });
+  $("#hard-reset")?.addEventListener("click", async () => {
+    const phrase = "削除する";
+    const r = await modal(`<h3 style="color:var(--ng)">緊急リセット（全データ削除）</h3>
+      <p style="line-height:1.8">部品・型式・メモ・オイル／バルブなどの登録内容・学びの記録・預けたファイルなど、<b>すべてのデータが、完全に削除</b>されます。<b style="color:var(--ng)">この操作は元に戻せません。</b></p>
+      <form><div class="field"><label>本当に実行する場合は、下に「${phrase}」と入力してください</label><input class="inp" name="confirm" autocomplete="off" required autofocus></div></form>
+      <div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn danger" data-m="ok">完全に削除する</button></div>`);
+    if (!r || r.data.confirm !== phrase) {
+      if (r) toast("文字が一致しなかったため、中止しました", true);
+      return;
+    }
+    if (!(await confirmBox("最終確認です。本当にすべてのデータを削除しますか？\nこの操作は元に戻せません。", "完全に削除する", true))) return;
+    try {
+      await store.remove("");
+      toast("すべてのデータを削除しました");
+    } catch (e) {
+      toast("削除できませんでした：" + e.message, true);
+    }
   });
 }
 
