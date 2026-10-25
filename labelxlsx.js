@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261021u";
+import { fillGuide } from "./oilxlsx.js?v=20261021v";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -67,7 +67,7 @@ function paintPage(ws, pageTop, partF, locF) {
 function setLabelCols(ws) {
   const w = [];
   for (let i = 0; i < 4; i++) w.push({ width: 18 }, { width: 13.9 }, { width: 3.1 });
-  ws.columns = [{ width: 2 }, ...w];
+  ws.columns = [{ width: 2 }, ...w, { width: 12 }]; // 最後の1列（N）は、画面の「使い方」リンク用（印刷はされない）
 }
 
 const guideBlocks = (protect, nm) => [
@@ -163,7 +163,7 @@ const locFromIdx = (dataName, idxAddr, inputAddr) => `IF(${inputAddr}="","",IF($
 // ---- ラベル作成（1件ずつ） ----
 function fillFind(ws, nm) {
   setLabelCols(ws);
-  titleBar(ws, "ラベル作成（1件ずつ・すぐ印刷）", 13, nm.guide);
+  titleBar(ws, "ラベル作成（1件ずつ・すぐ印刷）", 14, nm.guide);
   label2(ws, "B3", "部品番号", { font: { size: 12 } });
   ws.mergeCells(3, 3, 3, 7);
   yellow(ws, "C3", { size: 16 });
@@ -188,7 +188,7 @@ function fillFind(ws, nm) {
 // ---- まとめて印刷 ----
 function fillBatch(ws, nm) {
   setLabelCols(ws);
-  titleBar(ws, `まとめて印刷（最大${BATCH_MAX}件・1件＝1ページ）`, 13, nm.guide);
+  titleBar(ws, `まとめて印刷（最大${BATCH_MAX}件・1件＝1ページ）`, 14, nm.guide);
   const HR = 3;
   ["No", "部品番号", "→ 部品番号", "→ ロケーション", "状態"].forEach((h, i) => {
     const c = ws.getCell(HR, 2 + i);
