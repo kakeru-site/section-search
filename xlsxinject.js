@@ -319,6 +319,18 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
       wb = wb.slice(0, at) + `<definedNames>${namesAdd}</definedNames>` + wb.slice(at);
     }
   }
+  // 会社のExcelが「手動計算」のままだと、貼り付けたデータや数式が、開いただけでは反映されない。
+  // 開いたときに必ず再計算されるよう、計算方式の設定を上書きする
+  if (/<calcPr\b[^>]*\/>/.test(wb)) {
+    wb = wb.replace(/<calcPr\b([^>]*)\/>/, (m, attrs) => {
+      const a = attrs.replace(/\s*fullCalcOnLoad="[^"]*"/, "").replace(/\s*calcMode="[^"]*"/, "");
+      return `<calcPr${a} calcMode="auto" fullCalcOnLoad="1"/>`;
+    });
+  } else {
+    const after = ["<oleSize", "<customWorkbookViews", "<pivotCaches", "<smartTagPr", "<smartTagTypes", "<webPublishing", "<fileRecoveryPr", "<webPublishObjects", "<extLst", "</workbook>"].map((t) => wb.indexOf(t)).filter((i) => i >= 0);
+    const at = Math.min(...after);
+    wb = wb.slice(0, at) + `<calcPr calcMode="auto" fullCalcOnLoad="1"/>` + wb.slice(at);
+  }
   rels = rels.replace("</Relationships>", relsAdd + "</Relationships>");
   // 絵のファイルを書き、種類（png など）の登録が無ければ足す
   for (const [from, to] of mediaMap) put(to, await A.file(from).async("uint8array"));

@@ -1,20 +1,20 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261021x";
-import { yomiText } from "./yomi.js?v=20261021x";
-import { sphDocsHtml } from "./sphdocs.js?v=20261021x";
-import { docModel } from "./sphxlsx.js?v=20261021x";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261021x";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021x";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021x";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021x";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021x";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021x";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261021x";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261021x";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021x";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021x";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261021x";
+import * as S from "./search.js?v=20261021y";
+import { yomiText } from "./yomi.js?v=20261021y";
+import { sphDocsHtml } from "./sphdocs.js?v=20261021y";
+import { docModel } from "./sphxlsx.js?v=20261021y";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261021y";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261021y";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261021y";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261021y";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261021y";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261021y";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261021y";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261021y";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261021y";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261021y";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261021y";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -803,7 +803,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261021x")
+    : fetch("pitbulbs.json?v=20261021y")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2611,7 +2611,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021x`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261021y`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2743,7 +2743,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261021x")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261021y")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3670,7 +3670,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261021x";
+const APP_VER = "20261021y";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
