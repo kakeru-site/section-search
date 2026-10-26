@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261021z";
+import { fillGuide } from "./oilxlsx.js?v=20261022a";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -156,7 +156,7 @@ function fillData(ws) {
   ws.getCell(`${NORM_COL}1`).value = "検索用（消さない）";
   ws.getCell(`${NORM_COL}1`).font = { ...font, size: 9, bold: true, color: { argb: "FF7A7F87" } };
   ws.getCell(`${NORM_COL}1`).fill = solid("FFEDEFF2");
-  for (let r = 2; r <= DATA_MAX + 1; r++) ws.getCell(`${NORM_COL}${r}`).value = { formula: `IF($${PN_COL}${r}="","",SUBSTITUTE(SUBSTITUTE(UPPER(TRIM($${PN_COL}${r})),"-",""),"　",""))` };
+  for (let r = 2; r <= DATA_MAX + 1; r++) ws.getCell(`${NORM_COL}${r}`).value = { formula: `IF($${PN_COL}${r}="","",${norm(`$${PN_COL}${r}`)})` };
   ws.getColumn(NORM_IDX).hidden = true; // 検索用（隠し列）
   const info = ws.getCell(1, STOCK_HEADS.length + 3);
   info.value = `← 在庫リストのExcelを、A1から、見出しごと、そのまま丸ごとコピーして貼り付けます（${DATA_MAX.toLocaleString()}行目まで見ます）`;
@@ -164,8 +164,10 @@ function fillData(ws) {
   ws.views = [{ state: "frozen", ySplit: 1 }];
 }
 
+// 全角／半角の違い（ハイフン・スペースなど）を吸収して、見つかりやすくする
+const norm = (addr) => `SUBSTITUTE(SUBSTITUTE(UPPER(TRIM(ASC(${addr}))),"-","")," ","")`;
 // 入力セル addr の中身から、見つかった行番号を返す数式（正規化して、部品番号列と突き合わせ）
-const rowIdxFormula = (dataName, addr) => `IFERROR(MATCH(SUBSTITUTE(SUBSTITUTE(UPPER(TRIM(${addr})),"-",""),"　",""),${quote(dataName)}!$${NORM_COL}$2:$${NORM_COL}$${DATA_MAX + 1},0),"")`;
+const rowIdxFormula = (dataName, addr) => `IFERROR(MATCH(${norm(addr)},${quote(dataName)}!$${NORM_COL}$2:$${NORM_COL}$${DATA_MAX + 1},0),"")`;
 const pnFromIdx = (dataName, idxAddr, inputAddr) => `IF(${inputAddr}="","",IF(${idxAddr}="","見つかりません",INDEX(${quote(dataName)}!$${PN_COL}$2:$${PN_COL}$${DATA_MAX + 1},${idxAddr})&""))`;
 const locFromIdx = (dataName, idxAddr, inputAddr) => `IF(${inputAddr}="","",IF(${idxAddr}="","見つかりません",INDEX(${quote(dataName)}!$${LOC_COL}$2:$${LOC_COL}$${DATA_MAX + 1},${idxAddr})&""))`;
 
