@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022b";
+import { fillGuide } from "./oilxlsx.js?v=20261022c";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -26,8 +26,9 @@ const PN_COL = "D"; // 部品番号 (表示)
 // 別の隠しシート（nm.calc）に置く
 const NORM_COL = "A";
 
-// ラベル1枚ぶんの行の高さ（純正ラベルの実寸比率）。7行目は次のラベルとの余白
-const ROW_H = [12.75, 6.75, 14.25, 8.25, 21.75, 8.25, 13.5];
+// ラベル1枚ぶんの行の高さ（純正ラベルの実寸比率がもと。2・6行目は、小さい文字が
+// 印刷でつぶれないよう、4行目のあき・7行目の余白から少し分けて広げてある）
+const ROW_H = [12.75, 9, 14.25, 4.25, 21.75, 10, 13.5];
 
 // ---- ラベル1枚（3列×7行）を描く ----
 // r0,c0：そのラベルの左上（1始まり）。partF／locF：部品番号・ロケーションの中身にする数式（同じシート内）
@@ -42,10 +43,10 @@ function paintLabel(ws, r0, c0, partF, locF) {
   ws.getCell(r0, c1).font = labelFont(24, { bold: true, color: { argb: "FFFFFFFF" } });
   ws.getCell(r0, c1).alignment = { horizontal: "center", vertical: "center" };
   ws.getCell(r0, c2).value = "GENUINE PARTS";
-  ws.getCell(r0, c2).font = labelFont(6, { color: { argb: "FFFFFFFF" } });
+  ws.getCell(r0, c2).font = labelFont(7, { bold: true, color: { argb: "FFFFFFFF" } });
   ws.getCell(r0, c2).alignment = { vertical: "center" };
   ws.getCell(r0 + 1, c2).value = "                 Made in japan";
-  ws.getCell(r0 + 1, c2).font = labelFont(6, { color: { argb: "FFFFFFFF" } });
+  ws.getCell(r0 + 1, c2).font = labelFont(7, { bold: true, color: { argb: "FFFFFFFF" } });
   ws.getCell(r0 + 1, c2).alignment = { vertical: "center" };
   for (const rr of [r0, r0 + 1]) for (const cc of [c1, c2, c3]) ws.getCell(rr, cc).fill = solid(GRAY);
   // ロケーション（白地）
@@ -63,7 +64,7 @@ function paintLabel(ws, r0, c0, partF, locF) {
   ws.getCell(r0 + 5, c1).fill = solid(GRAY);
   ws.getCell(r0 + 5, c2).fill = solid(GRAY);
   ws.getCell(r0 + 5, c2).value = "NISSAN MOTOR CO.LTD";
-  ws.getCell(r0 + 5, c2).font = labelFont(6, { color: { argb: "FFFFFFFF" } });
+  ws.getCell(r0 + 5, c2).font = labelFont(7, { bold: true, color: { argb: "FFFFFFFF" } });
   ws.getCell(r0 + 5, c2).alignment = { vertical: "center" };
   // 右端の仕切り（縦の灰色の帯）
   for (let rr = r0; rr <= r0 + 6; rr++) ws.getCell(rr, c3).fill = solid(GRAY);
