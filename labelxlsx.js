@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022a";
+import { fillGuide } from "./oilxlsx.js?v=20261022b";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -13,7 +13,6 @@ const labelFont = (size, o = {}) => ({ name: "ＭＳ Ｐゴシック", size, ...
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 const colLetter = (n) => String.fromCharCode(64 + n);
-const colIndex = (letters) => [...letters].reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0);
 export const DATA_MAX = 6000; // 在庫リストを見る行数（2行目〜）
 export const BATCH_MAX = 30; // 「まとめて印刷」で、一度に作れる件数
 
@@ -21,10 +20,11 @@ export const BATCH_MAX = 30; // 「まとめて印刷」で、一度に作れる
 const STOCK_HEADS = ["拠点コード", "ロケーション．", "常備", "部品番号 (表示)", "部品名称", "取得", "商区", "メーカーロケ", "実在庫数", "委託数", "移管中数", "自送Ｎ", "自送Ｎ＋１", "MAX", "O/P", "MIN", "拠点３Ｄ", "拠点６Ｄ", "原価", "販売単位"];
 const LOC_COL = "B"; // ロケーション．
 const PN_COL = "D"; // 部品番号 (表示)
-// 隠し：部品番号を、探しやすく整えた列。在庫リストを「シート全体コピー」で貼り付けたとき、
-// 選択範囲が見出し（20列）より広いと、近い列だと上書きで消えてしまうため、かなり離しておく
-const NORM_COL = "BZ";
-const NORM_IDX = colIndex(NORM_COL);
+// 部品番号を、探しやすく整えた列（検索用）。データシートの中に置くと、在庫リストの
+// 元のシートが見出し（20列）より広い範囲を含んでいた場合、「シート全体コピー」の
+// 貼り付けで巻き込まれて消えてしまうため、貼り付けの影響がぜったいに及ばない、
+// 別の隠しシート（nm.calc）に置く
+const NORM_COL = "A";
 
 // ラベル1枚ぶんの行の高さ（純正ラベルの実寸比率）。7行目は次のラベルとの余白
 const ROW_H = [12.75, 6.75, 14.25, 8.25, 21.75, 8.25, 13.5];
@@ -153,11 +153,6 @@ function fillData(ws) {
     c.font = { ...font, bold: true, color: { argb: DK } };
     c.fill = solid(AC);
   });
-  ws.getCell(`${NORM_COL}1`).value = "検索用（消さない）";
-  ws.getCell(`${NORM_COL}1`).font = { ...font, size: 9, bold: true, color: { argb: "FF7A7F87" } };
-  ws.getCell(`${NORM_COL}1`).fill = solid("FFEDEFF2");
-  for (let r = 2; r <= DATA_MAX + 1; r++) ws.getCell(`${NORM_COL}${r}`).value = { formula: `IF($${PN_COL}${r}="","",${norm(`$${PN_COL}${r}`)})` };
-  ws.getColumn(NORM_IDX).hidden = true; // 検索用（隠し列）
   const info = ws.getCell(1, STOCK_HEADS.length + 3);
   info.value = `← 在庫リストのExcelを、A1から、見出しごと、そのまま丸ごとコピーして貼り付けます（${DATA_MAX.toLocaleString()}行目まで見ます）`;
   info.font = { ...font, size: 9, bold: true, color: { argb: "FFD93025" } };
@@ -166,8 +161,18 @@ function fillData(ws) {
 
 // 全角／半角の違い（ハイフン・スペースなど）を吸収して、見つかりやすくする
 const norm = (addr) => `SUBSTITUTE(SUBSTITUTE(UPPER(TRIM(ASC(${addr}))),"-","")," ","")`;
+
+// ---- 検索用シート（隠し。部品番号を、探しやすく整えた列だけを持つ） ----
+// データシートとは別のシートに置くことで、在庫リストの貼り付けが、どれだけ広い範囲でも
+// 巻き込まれないようにしている
+function fillCalc(ws, dataName) {
+  ws.getCell(`${NORM_COL}1`).value = "検索用（消さない・触らない）";
+  for (let r = 2; r <= DATA_MAX + 1; r++)
+    ws.getCell(`${NORM_COL}${r}`).value = { formula: `IF(${quote(dataName)}!$${PN_COL}${r}="","",${norm(`${quote(dataName)}!$${PN_COL}${r}`)})` };
+}
+
 // 入力セル addr の中身から、見つかった行番号を返す数式（正規化して、部品番号列と突き合わせ）
-const rowIdxFormula = (dataName, addr) => `IFERROR(MATCH(${norm(addr)},${quote(dataName)}!$${NORM_COL}$2:$${NORM_COL}$${DATA_MAX + 1},0),"")`;
+const rowIdxFormula = (calcName, addr) => `IFERROR(MATCH(${norm(addr)},${quote(calcName)}!$${NORM_COL}$2:$${NORM_COL}$${DATA_MAX + 1},0),"")`;
 const pnFromIdx = (dataName, idxAddr, inputAddr) => `IF(${inputAddr}="","",IF(${idxAddr}="","見つかりません",INDEX(${quote(dataName)}!$${PN_COL}$2:$${PN_COL}$${DATA_MAX + 1},${idxAddr})&""))`;
 const locFromIdx = (dataName, idxAddr, inputAddr) => `IF(${inputAddr}="","",IF(${idxAddr}="","見つかりません",INDEX(${quote(dataName)}!$${LOC_COL}$2:$${LOC_COL}$${DATA_MAX + 1},${idxAddr})&""))`;
 
@@ -184,7 +189,7 @@ function fillFind(ws, nm) {
   ws.mergeCells(4, 2, 4, 10);
   ws.getRow(4).height = 22;
   // P：見つかった行番号（隠し）／Q：部品番号／R：ロケーション
-  ws.getCell("P3").value = { formula: rowIdxFormula(nm.data, "$C$3") };
+  ws.getCell("P3").value = { formula: rowIdxFormula(nm.calc, "$C$3") };
   ws.getCell("Q3").value = { formula: pnFromIdx(nm.data, "$P$3", "$C$3") };
   ws.getCell("R3").value = { formula: locFromIdx(nm.data, "$P$3", "$C$3") };
   for (const c of ["P", "Q", "R"]) ws.getColumn(c.charCodeAt(0) - 64).hidden = true;
@@ -231,7 +236,7 @@ function fillBatch(ws, nm) {
     no.font = { ...font, color: { argb: "FF8A8F98" } };
     no.border = box;
     yellow(ws, `C${r}`, { size: 12 });
-    ws.getCell(`P${r}`).value = { formula: rowIdxFormula(nm.data, inp) };
+    ws.getCell(`P${r}`).value = { formula: rowIdxFormula(nm.calc, inp) };
     const pn = ws.getCell(r, BATCH_COLS.pn);
     pn.value = { formula: pnFromIdx(nm.data, `$P$${r}`, inp) };
     pn.font = font;
@@ -261,7 +266,7 @@ function fillBatch(ws, nm) {
   return ws;
 }
 
-// opt: { protect, names?: {find,batch,data,guide}, sample?:boolean, rows?: 在庫リストの行（配列の配列。STOCK_HEADSの並び） }
+// opt: { protect, names?: {find,batch,data,guide,calc}, sample?:boolean, rows?: 在庫リストの行（配列の配列。STOCK_HEADSの並び） }
 export function buildLabelWorkbook(ExcelJS, opt = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "セクション検索";
@@ -271,17 +276,20 @@ export function buildLabelWorkbook(ExcelJS, opt = {}) {
     batch: opt.names?.batch || "まとめて印刷",
     data: opt.names?.data || "ラベルデータ",
     guide: opt.names?.guide || "ラベルの使い方",
+    calc: opt.names?.calc || "検索用（隠し）",
   };
   const protect = !!opt.protect;
   const wsFind = wb.addWorksheet(nm.find, { views: [{ showGridLines: false, tabSelected: true }] });
   const wsBatch = wb.addWorksheet(nm.batch, { views: [{ showGridLines: false }] });
   const wsData = wb.addWorksheet(nm.data, { views: [{ state: "frozen", ySplit: 1 }] });
   const wsGuide = wb.addWorksheet(nm.guide, { views: [{ showGridLines: false }] });
-  const list = [nm.find, nm.batch, nm.data, nm.guide];
+  const wsCalc = wb.addWorksheet(nm.calc, { state: "veryHidden" });
+  const list = [nm.find, nm.batch, nm.data, nm.guide, nm.calc];
 
   fillData(wsData);
   const rows = opt.rows || (opt.sample ? sampleRows() : []);
   rows.forEach((row, i) => row.forEach((v, j) => v !== null && v !== undefined && (wsData.getCell(i + 2, j + 1).value = v)));
+  fillCalc(wsCalc, nm.data);
 
   fillFind(wsFind, nm);
   fillBatch(wsBatch, nm);
@@ -293,6 +301,7 @@ export function buildLabelWorkbook(ExcelJS, opt = {}) {
   if (protect) {
     wsFind.sheetProtection = { sheet: true, formatColumns: true, formatRows: true };
     wsBatch.sheetProtection = { sheet: true, formatColumns: true, formatRows: true };
+    wsCalc.sheetProtection = { sheet: true };
   }
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
   return { wb, list, names: nm };

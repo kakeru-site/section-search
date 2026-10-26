@@ -225,10 +225,14 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
   const mediaExt = new Set();
   // 名前空間はこの要素の上で宣言する（元のファイルの書き方に左右されないように）
   const nsDecl = ` xmlns:r="${REL_NS}"`;
-  for (const [name, src] of sheets) {
+  // 差し込む側のシートの「隠す／すごく隠す」設定（検索用の隠しシートなど）を、そのまま引き継ぐ
+  const srcWbXml = (await text(A, "xl/workbook.xml")) || "";
+  const srcStates = [...srcWbXml.matchAll(/<sheet\b[^>]*\/>/g)].map((m) => (m[0].match(/\bstate="([^"]*)"/) || [])[1] || "visible");
+  for (const [i, [name, src]] of sheets.entries()) {
     n++;
     sid++;
     const path = `xl/worksheets/sheet${n}.xml`;
+    const state = srcStates[i] || "visible";
     // 元のシートの「選択中」には触れない代わりに、こちらの「選択中」を外す（複数選択でまとめて編集されないように）
     let x = remapSheet(await text(A, src), merged.xfOff, strings, merged.dxfOff).replace(/\stabSelected="1"/g, "");
     if (renames?.length) x = renameRefs(x, renames);
@@ -285,7 +289,7 @@ export async function injectSheets(JSZip, base, ourBuf, { nameS, nameG, nameP, n
     const rid = `rIdOil${n}`;
     relsAdd += `<Relationship Id="${rid}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${n}.xml"/>`;
     ctAdd += `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
-    sheetsAdd += `<sheet name="${esc(name)}" sheetId="${sid}"${nsDecl} r:id="${rid}"/>`;
+    sheetsAdd += `<sheet name="${esc(name)}" sheetId="${sid}"${state !== "visible" ? ` state="${state}"` : ""}${nsDecl} r:id="${rid}"/>`;
   }
   // 印刷範囲・見出し行の繰り返し（シート名に紐づく定義）を、こちらのシートぶんだけ足す
   const aWb = (await text(A, "xl/workbook.xml")) || "";
