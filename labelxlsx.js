@@ -2,7 +2,7 @@
 //  ・ラベル作成：部品番号を1つ入れると、同じラベルが28枚（A4いっぱい）、すぐ印刷できる
 //  ・まとめて印刷：部品番号を何件かリストに入れると、1件＝1ページで、まとめて印刷できる
 //  ・ラベルデータ：在庫リストのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、在庫リストと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261021y";
+import { fillGuide } from "./oilxlsx.js?v=20261021z";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -13,6 +13,7 @@ const labelFont = (size, o = {}) => ({ name: "ＭＳ Ｐゴシック", size, ...
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 const colLetter = (n) => String.fromCharCode(64 + n);
+const colIndex = (letters) => [...letters].reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0);
 export const DATA_MAX = 6000; // 在庫リストを見る行数（2行目〜）
 export const BATCH_MAX = 30; // 「まとめて印刷」で、一度に作れる件数
 
@@ -20,7 +21,10 @@ export const BATCH_MAX = 30; // 「まとめて印刷」で、一度に作れる
 const STOCK_HEADS = ["拠点コード", "ロケーション．", "常備", "部品番号 (表示)", "部品名称", "取得", "商区", "メーカーロケ", "実在庫数", "委託数", "移管中数", "自送Ｎ", "自送Ｎ＋１", "MAX", "O/P", "MIN", "拠点３Ｄ", "拠点６Ｄ", "原価", "販売単位"];
 const LOC_COL = "B"; // ロケーション．
 const PN_COL = "D"; // 部品番号 (表示)
-const NORM_COL = "V"; // 隠し：部品番号を、探しやすく整えた列
+// 隠し：部品番号を、探しやすく整えた列。在庫リストを「シート全体コピー」で貼り付けたとき、
+// 選択範囲が見出し（20列）より広いと、近い列だと上書きで消えてしまうため、かなり離しておく
+const NORM_COL = "BZ";
+const NORM_IDX = colIndex(NORM_COL);
 
 // ラベル1枚ぶんの行の高さ（純正ラベルの実寸比率）。7行目は次のラベルとの余白
 const ROW_H = [12.75, 6.75, 14.25, 8.25, 21.75, 8.25, 13.5];
@@ -153,7 +157,7 @@ function fillData(ws) {
   ws.getCell(`${NORM_COL}1`).font = { ...font, size: 9, bold: true, color: { argb: "FF7A7F87" } };
   ws.getCell(`${NORM_COL}1`).fill = solid("FFEDEFF2");
   for (let r = 2; r <= DATA_MAX + 1; r++) ws.getCell(`${NORM_COL}${r}`).value = { formula: `IF($${PN_COL}${r}="","",SUBSTITUTE(SUBSTITUTE(UPPER(TRIM($${PN_COL}${r})),"-",""),"　",""))` };
-  ws.getColumn(22).hidden = true; // V列（検索用）
+  ws.getColumn(NORM_IDX).hidden = true; // 検索用（隠し列）
   const info = ws.getCell(1, STOCK_HEADS.length + 3);
   info.value = `← 在庫リストのExcelを、A1から、見出しごと、そのまま丸ごとコピーして貼り付けます（${DATA_MAX.toLocaleString()}行目まで見ます）`;
   info.font = { ...font, size: 9, bold: true, color: { argb: "FFD93025" } };
