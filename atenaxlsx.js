@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022e";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022e";
+import { fillGuide } from "./oilxlsx.js?v=20261022f";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022f";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -34,12 +34,15 @@ const NAME_COL = "D"; // 顧客名称（漢字）
 const ADDR_COL = "F"; // 住所（漢字）
 const YOMI_COL = "O"; // よみ（任意）
 
-// ---- ラベル1枚ぶんの列・行（実際の宛名シール用紙と同じ寸法。A5横・2列×3行＝6枚） ----
-const COL_W = [6.25, 39.875, 22.5, 46.125]; // A・B・C・D（B,Dが2枚のラベル、Cは間の余白）
+// ---- ラベル1枚ぶんの列・行（実際の宛名シール用紙と、まったく同じ寸法。A5横・2列×3行＝6枚） ----
+// 実物のシール用紙のExcel（カーロード様シート）から、そのまま写した数値
+const COL_W = [6.25, 39.875, 22.5, 39.875, 6.375]; // A・B・C・D・E（B,Dが2枚のラベル、C・Eは余白。印刷範囲はA〜E）
 const ROW_H = [52, 57, 75]; // 住所の行・名称の行・次のラベルとの余白（3行×3ブロック＝9行）
+const PRINT_TOP_MARGIN = 0.5905511811023623; // 実物と同じ、上の余白（約1.5cm）
+const PRINT_SCALE = 77; // 実物と同じ、印刷の拡大縮小
 
 function setAtenaCols(ws) {
-  ws.columns = [{ width: COL_W[0] }, { width: COL_W[1] }, { width: COL_W[2] }, { width: COL_W[3] }, { width: 12 }]; // E列は、画面の「使い方」リンク用（印刷はされない）
+  ws.columns = [...COL_W.map((width) => ({ width })), { width: 12 }]; // 最後の列は、画面の「使い方」リンク用（印刷はされない）
 }
 // ラベル1枚（B列 or D列、1つぶん）を描く。r0：そのラベルの先頭行。col：B=2 or D=4。addrF／nameF：中身の数式
 function paintAtena(ws, r0, col, addrF, nameF) {
@@ -77,7 +80,8 @@ const guideBlocks = (protect, nm) => [
   ["step", "④", "下に、同じラベルが6枚（A5・シール用紙いっぱい）出ます。そのまま印刷します"],
   ["b", "見つからないときは、候補が0件になります。言葉を短くするか、顧客コードを確認してください"],
   ["h", `「${nm.batch}」シート（まとめて、何件か印刷）`],
-  ["step", "①", "上の表の、黄色い「顧客コード」欄に、必要な分だけ、顧客コードを入れます（1行に1件）。コードは、あいまい検索ではなく、正確な番号で入れてください"],
+  ["step", "①", "上の表の、黄色い「顧客コード」欄に、必要な分だけ、入れます（1行に1件）。顧客コードでも、お客様名の一部（あいまい検索）でもOKです"],
+  ["b", "お客様名であいまいに探すと、同じ言葉を含む顧客が複数いる場合、どれか1件に自動で決まります（1件ずつの「選ぶ番号」のような、候補選びはできません）。あやふやなときは、顧客コードで入れてください"],
   ["step", "②", `${BATCH_MAX}件まで入れられます。右に、名称と、印刷ページの番号が出ます`],
   ["step", "③", "下に、入れた件数ぶんのページが、自動でできます（1件＝1ページ＝6枚）"],
   ["step", "④", "印刷するときは、印刷の画面で「ページ指定」に、入れた件数のページ数だけを指定してください（上の表に、ページ数が出ています）。指定しないと、空っぽのページまで印刷されます"],
@@ -180,7 +184,7 @@ function fillCalc(ws, nm) {
 // ---- 宛名ラベル作成（1件ずつ） ----
 function fillFind(ws, nm) {
   setAtenaCols(ws);
-  titleBar(ws, "宛名シール作成（1件ずつ・すぐ印刷）", 5, nm.guide);
+  titleBar(ws, "宛名シール作成（1件ずつ・すぐ印刷）", 6, nm.guide);
   label2(ws, "B3", "お客様名・コード", { font: { size: 12 } });
   ws.mergeCells(3, 2, 3, 2);
   ws.mergeCells("C3:D3");
@@ -247,7 +251,7 @@ function fillFind(ws, nm) {
   const nameF = `IF($Z$${PICK_R}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$Z$${PICK_R}))`;
   paintAtenaPage(ws, GRID_TOP, addrF, nameF);
   ws.views = [{ showGridLines: false }];
-  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: 75, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `A${GRID_TOP}:D${GRID_TOP + 7}` };
+  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A${GRID_TOP}:E${GRID_TOP + 7}` };
   return ws;
 }
 
@@ -260,7 +264,7 @@ const colLetter = (n) => String.fromCharCode(64 + n);
 // ---- まとめて作成 ----
 function fillBatch(ws, nm) {
   setAtenaCols(ws);
-  titleBar(ws, `まとめて作成（1件＝1ページ・最大${BATCH_MAX}件）`, 5, nm.guide);
+  titleBar(ws, `まとめて作成（1件＝1ページ・最大${BATCH_MAX}件）`, 6, nm.guide);
   const HR = 3;
   [
     [BATCH_COLS.no, "No"],
@@ -278,6 +282,8 @@ function fillBatch(ws, nm) {
   ws.getRow(HR).height = 22;
   const LIST_TOP = HR + 1;
   const calcCode = `${quote(nm.calc)}!$E$2:$E$${DATA_MAX + 1}`;
+  const calcName = `${quote(nm.calc)}!$F$2:$F$${DATA_MAX + 1}`;
+  const hyphenStrip = (expr) => ["－", "‐", "−", "-", "ー", "―", "–", "—", "‑", "ｰ", " ", "　"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, expr);
   for (let i = 0; i < BATCH_MAX; i++) {
     const r = LIST_TOP + i;
     const inp = `$C$${r}`;
@@ -287,7 +293,15 @@ function fillBatch(ws, nm) {
     no.font = { ...font, color: { argb: "FF8A8F98" } };
     no.border = batchBox;
     yellow(ws, `C${r}`, { size: 12 });
-    const idxF = `IFERROR(MATCH(SUBSTITUTE(SUBSTITUTE(${codeNormExpr(inp)},"-",""),"ー",""),${calcCode},0),"")`;
+    // あいまい検索（1件ずつのラベル作成と同じ考え方）：①コード完全一致 ②名称完全一致 ③名称の一部（ひらがな・カタカナ・ハイフン抜きを順に試す）
+    const codeNormF = `SUBSTITUTE(SUBSTITUTE(${codeNormExpr(inp)},"-",""),"ー","")`;
+    ws.getCell(`Q${r}`).value = { formula: nameNormExpr(`${inp}&""`) };
+    const letters1 = ["R", "S", "T"];
+    KANA_H2K.forEach((pairs, i2) => (ws.getCell(`${letters1[i2]}${r}`).value = { formula: kanaChain(pairs, i2 === 0 ? `$Q${r}` : `$${letters1[i2 - 1]}${r}`) }));
+    const letters2 = ["U", "V", "W"];
+    KANA_K2H.forEach((pairs, i2) => (ws.getCell(`${letters2[i2]}${r}`).value = { formula: kanaChain(pairs, i2 === 0 ? `$Q${r}` : `$${letters2[i2 - 1]}${r}`) }));
+    ws.getCell(`X${r}`).value = { formula: hyphenStrip(`$Q${r}`) };
+    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IFERROR(MATCH($Q${r},${calcName},0),IFERROR(MATCH("*"&$Q${r}&"*",${calcName},0),IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),"")))))))`;
     ws.getCell(`P${r}`).value = { formula: idxF };
     const name = ws.getCell(r, BATCH_COLS.name);
     name.value = { formula: `IF(${inp}="","",IF($P$${r}="","見つかりません",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${r})))` };
@@ -301,7 +315,7 @@ function fillBatch(ws, nm) {
     st.border = batchBox;
     ws.getRow(r).height = 18;
   }
-  ws.getColumn(16).hidden = true; // P列
+  for (const c of ["P", "Q", "R", "S", "T", "U", "V", "W", "X"]) ws.getColumn(c.charCodeAt(0) - 64).hidden = true;
   ws.mergeCells(2, 2, 2, 5);
   ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客コードを入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
@@ -313,7 +327,7 @@ function fillBatch(ws, nm) {
     paintAtenaPage(ws, GRID_TOP + i * 9, addrF, nameF);
   }
   ws.views = [{ showGridLines: false, state: "frozen", ySplit: HR }];
-  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: 75, margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 }, printArea: `A${GRID_TOP}:D${GRID_TOP + 9 * BATCH_MAX - 1}` };
+  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A${GRID_TOP}:E${GRID_TOP + 9 * BATCH_MAX - 1}` };
   return ws;
 }
 
