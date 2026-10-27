@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022g";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022g";
+import { fillGuide } from "./oilxlsx.js?v=20261022h";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022h";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -251,7 +251,7 @@ function fillFind(ws, nm) {
   const nameF = `IF($Z$${PICK_R}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$Z$${PICK_R}))`;
   paintAtenaPage(ws, GRID_TOP, addrF, nameF);
   ws.views = [{ showGridLines: false }];
-  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A${GRID_TOP}:E${GRID_TOP + 7}` };
+  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 7}` };
   return ws;
 }
 
@@ -327,7 +327,7 @@ function fillBatch(ws, nm) {
     paintAtenaPage(ws, GRID_TOP + i * 9, addrF, nameF);
   }
   ws.views = [{ showGridLines: false, state: "frozen", ySplit: HR }];
-  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A${GRID_TOP}:E${GRID_TOP + 9 * BATCH_MAX - 1}` };
+  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 9 * BATCH_MAX - 1}` };
   return ws;
 }
 
