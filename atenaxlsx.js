@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022i";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022i";
+import { fillGuide } from "./oilxlsx.js?v=20261022j";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022j";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -56,14 +56,17 @@ function paintAtena(ws, r0, col, addrF, nameF) {
   n.alignment = { horizontal: "left", vertical: "center", shrinkToFit: true };
 }
 // 1ページ＝2列×3行＝6枚。pageTop：そのページの先頭の行
-function paintAtenaPage(ws, pageTop, addrF, nameF) {
+// withTrailingGap：最後（3つ目）のブロックの後ろにも、余白の行を確保するか。
+// 「まとめて作成」のように、お客様ごとに次のページがすぐ続く場合は false にして、
+// 1人分の行（実質8行）が、物理的に1ページぶんの高さを超えないようにする
+function paintAtenaPage(ws, pageTop, addrF, nameF, withTrailingGap = true) {
   for (let blk = 0; blk < 3; blk++) {
     const r0 = pageTop + blk * 3;
     paintAtena(ws, r0, 2, addrF, nameF);
     paintAtena(ws, r0, 4, addrF, nameF);
     ws.getRow(r0).height = ROW_H[0];
     ws.getRow(r0 + 1).height = ROW_H[1];
-    ws.getRow(r0 + 2).height = ROW_H[2];
+    if (blk < 2 || withTrailingGap) ws.getRow(r0 + 2).height = ROW_H[2];
   }
 }
 
@@ -324,10 +327,10 @@ function fillBatch(ws, nm) {
   for (let i = 0; i < BATCH_MAX; i++) {
     const addrF = `IF($P$${LIST_TOP + i}="","",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$P$${LIST_TOP + i}))`;
     const nameF = `IF($P$${LIST_TOP + i}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${LIST_TOP + i}))`;
-    paintAtenaPage(ws, GRID_TOP + i * 9, addrF, nameF);
+    paintAtenaPage(ws, GRID_TOP + i * 8, addrF, nameF, false);
   }
   ws.views = [{ showGridLines: false, state: "frozen", ySplit: HR }];
-  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 9 * BATCH_MAX - 1}` };
+  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 8 * BATCH_MAX - 1}` };
   return ws;
 }
 
