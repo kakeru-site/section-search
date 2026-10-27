@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261022h";
-import * as S from "./search.js?v=20261022h";
-import * as FID from "./faceid.js?v=20261022h";
-import * as IMG from "./imgtools.js?v=20261022h";
-import * as CAT from "./catalog.js?v=20261022h";
-import * as TOOLS from "./tools.js?v=20261022h";
-import * as LEARN from "./learn.js?v=20261022h";
+import { createStore, DEMO, localKey } from "./store.js?v=20261022i";
+import * as S from "./search.js?v=20261022i";
+import * as FID from "./faceid.js?v=20261022i";
+import * as IMG from "./imgtools.js?v=20261022i";
+import * as CAT from "./catalog.js?v=20261022i";
+import * as TOOLS from "./tools.js?v=20261022i";
+import * as LEARN from "./learn.js?v=20261022i";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
