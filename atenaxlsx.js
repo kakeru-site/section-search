@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022l";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022l";
+import { fillGuide } from "./oilxlsx.js?v=20261022m";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022m";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -86,7 +86,7 @@ const guideBlocks = (protect, nm) => [
   ["b", "見つからないときは、候補が0件になります。言葉を短くするか、顧客コードを確認してください"],
   ["b", "ラベルの名称は、印刷のときだけ「株式会社」→「㈱」「有限会社」→「㈲」に短くなります（顧客データ・検索は、元の名称のままです）"],
   ["h", `「${nm.batch}」シート（まとめて、何件か印刷）`],
-  ["step", "①", "上の表の、黄色い「顧客コード」欄に、必要な分だけ、入れます（1行に1件）。顧客コードでも、お客様名の一部（あいまい検索）でもOKです"],
+  ["step", "①", "上の表の、黄色い「顧客名・コード」欄に、必要な分だけ、入れます（1行に1件）。お客様名の一部（あいまい検索）でも、顧客コードでもOKです"],
   ["b", "お客様名であいまいに探すと、同じ言葉を含む顧客が複数いる場合、どれか1件に自動で決まります（1件ずつの「選ぶ番号」のような、候補選びはできません）。あやふやなときは、顧客コードで入れてください"],
   ["step", "②", `${BATCH_MAX}件まで入れられます。右に、名称と、印刷ページの番号が出ます`],
   ["step", "③", "下に、入れた件数ぶんのページが、自動でできます（1件＝1ページ＝6枚）"],
@@ -282,7 +282,7 @@ function fillBatch(ws, nm) {
   const HR = BATCH_HR;
   [
     [BATCH_COLS.no, "No"],
-    [BATCH_COLS.code, "顧客コード"],
+    [BATCH_COLS.code, "顧客名・コード"],
     [BATCH_COLS.name, "名称"],
     [BATCH_COLS.status, "印刷ページ"],
   ].forEach(([col, h]) => {
@@ -331,7 +331,7 @@ function fillBatch(ws, nm) {
   }
   for (const c of ["P", "Q", "R", "S", "T", "U", "V", "W", "X"]) ws.getColumn(c.charCodeAt(0) - 64).hidden = true;
   ws.mergeCells(2, 2, 2, 5);
-  ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客コードを入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
+  ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客名（またはコード）を入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
   ws.getRow(LIST_TOP + BATCH_MAX).height = 10;
   const GRID_TOP = BATCH_GRID_TOP;
