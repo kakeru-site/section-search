@@ -3,7 +3,7 @@
 //  ・ユーザー検索：名前（漢字・ひらがな・カタカナ・会社名の一部・担当者名）・電話番号・コード・特記で、ユーザーを出す
 //    電話を折り返す時・問い合わせ・売り上げる時に、すばやく引くためのもの
 //  ・部品検索：部品名（の一部・ひらがなでもOK）か、部品番号の一部から、部品番号と部品名を出す
-import { fillGuide } from "./oilxlsx.js?v=20261022c";
+import { fillGuide } from "./oilxlsx.js?v=20261022e";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
@@ -35,6 +35,11 @@ const chunks = (arr, n) => {
 };
 const H2K = chunks(HIRA.map((h) => [h, toKata(h)]), 3);
 const K2H = chunks(HIRA.map((h) => [toKata(h), h]), 3);
+// 他のExcel生成（宛名シールなど）からも、ひらがな⇄カタカナの変換を使えるように
+export const KANA_H2K = H2K;
+export const KANA_K2H = K2H;
+export const kanaChain = chain;
+export const normExpr = (x, fnName = "_xlfn.DBCS") => `${fnName}(LOWER(SUBSTITUTE(SUBSTITUTE(${x},"　","")," ","")))`;
 
 const guideBlocks = (protect, nm, kinds) => [
   ["title", "検索の使い方"],
