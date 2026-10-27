@@ -48,6 +48,27 @@ export const uniqueName = (names, base) => {
   return n;
 };
 
+// 自分（ExcelJS）が作ったばかりのxlsxに、指定したシートの「ここで改ページ」を、生のXMLで足す。
+// ExcelJSには、手動改ページを作るAPIが無いため、この方式にしている。
+// rows：そのシートの「この行の直後で改ページ」という行番号（1始まり）の配列
+export async function addRowBreaks(JSZip, buf, sheetName, rows) {
+  if (!rows.length) return buf;
+  const zip = await JSZip.loadAsync(buf);
+  const wbXml = (await text(zip, "xl/workbook.xml")) || "";
+  const m = wbXml.match(new RegExp(`<sheet\\b[^>]*\\bname="${reEsc(esc(sheetName))}"[^>]*\\br:id="([^"]+)"`));
+  if (!m) return buf; // 見つからなければ、何もしない（壊さない）
+  const relsXml = (await text(zip, "xl/_rels/workbook.xml.rels")) || "";
+  const rm = relsXml.match(new RegExp(`<Relationship\\b[^>]*\\bId="${m[1]}"[^>]*\\bTarget="([^"]+)"`));
+  if (!rm) return buf;
+  const path = resolveTarget("xl/workbook.xml", rm[1]);
+  const xml = await text(zip, path);
+  if (!xml || !/<pageSetup\b[^>]*\/>/.test(xml)) return buf;
+  const brk = rows.map((r) => `<brk id="${r}" max="16383" man="1"/>`).join("");
+  const node = `<rowBreaks count="${rows.length}" manualBreakCount="${rows.length}">${brk}</rowBreaks>`;
+  zip.file(path, xml.replace(/(<pageSetup\b[^>]*\/>)/, `$1${node}`), { createFolders: false });
+  return zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE" });
+}
+
 // 差し込む前に、元ファイルを読んでシート名・作成者などを調べる
 export async function readBase(JSZip, buf) {
   const zip = await JSZip.loadAsync(buf);

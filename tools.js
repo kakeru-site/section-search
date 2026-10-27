@@ -1,21 +1,21 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261022j";
-import { yomiText } from "./yomi.js?v=20261022j";
-import { sphDocsHtml } from "./sphdocs.js?v=20261022j";
-import { docModel } from "./sphxlsx.js?v=20261022j";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261022j";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261022j";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261022j";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261022j";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261022j";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261022j";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261022j";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261022j";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261022j";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet } from "./xlsxinject.js?v=20261022j";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261022j";
-import { buildAtenaWorkbook } from "./atenaxlsx.js?v=20261022j";
+import * as S from "./search.js?v=20261022k";
+import { yomiText } from "./yomi.js?v=20261022k";
+import { sphDocsHtml } from "./sphdocs.js?v=20261022k";
+import { docModel } from "./sphxlsx.js?v=20261022k";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261022k";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261022k";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261022k";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261022k";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261022k";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261022k";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261022k";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261022k";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261022k";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261022k";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261022k";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261022k";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -804,7 +804,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261022j")
+    : fetch("pitbulbs.json?v=20261022k")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2612,7 +2612,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261022j`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261022k`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2745,7 +2745,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261022j")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261022k")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -2898,8 +2898,10 @@ async function exportLookupXlsx(k) {
   try {
     C.toast("Excelを作っています…");
     const X = await loadExcelJs();
-    const { wb } = await buildCo(X, k, { protect: T.xlk?.protect !== false, sample: true });
-    downloadXlsx(await wb.xlsx.writeBuffer(), `${k.name}.xlsx`);
+    const { wb, names } = await buildCo(X, k, { protect: T.xlk?.protect !== false, sample: true });
+    let buf = await wb.xlsx.writeBuffer();
+    if (k.atena) buf = await addRowBreaks(await loadJsZip(), buf, names.batch, atenaBatchBreakRows());
+    downloadXlsx(buf, `${k.name}.xlsx`);
     C.toast("Excelを作りました（見本データ入りです。使う前に、見本を消してください）");
   } catch (e) {
     C.toast("Excelを作れませんでした：" + e.message, true);
@@ -2946,7 +2948,9 @@ async function exportLookupIntoBase(k, file) {
     C.toast("Excelを作っています…（少し時間がかかります）");
     const X = await loadExcelJs();
     const { wb, list } = await buildCo(X, k, { protect, sample: false, names: k.label || k.atena ? { find: names.find, batch: names.batch, data: names.data, guide: names.guide, calc: names.calc } : names });
-    const out = await injectSheets(JSZip, base, await wb.xlsx.writeBuffer(), { list });
+    let ourBuf = await wb.xlsx.writeBuffer();
+    if (k.atena) ourBuf = await addRowBreaks(JSZip, ourBuf, names.batch, atenaBatchBreakRows());
+    const out = await injectSheets(JSZip, base, ourBuf, { list });
     downloadXlsx(out, `${k.name}.${ext.toLowerCase()}`);
     C.toast("保存しました。開いたら「編集を有効にする」を押してください");
   } catch (e) {
@@ -3681,7 +3685,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261022j";
+const APP_VER = "20261022k";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));

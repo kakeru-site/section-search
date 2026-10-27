@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022j";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022j";
+import { fillGuide } from "./oilxlsx.js?v=20261022k";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022k";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -258,6 +258,14 @@ function fillFind(ws, nm) {
   return ws;
 }
 
+// まとめて作成の、各お客様のページの先頭行（お客様ごとに8行）。改ページを手動で入れる場所の計算にも使う
+const BATCH_HR = 3;
+const BATCH_LIST_TOP = BATCH_HR + 1;
+export const BATCH_GRID_TOP = BATCH_LIST_TOP + BATCH_MAX + 1;
+// Excelの自動改ページ（行の高さの合計から計算）にまかせると、端数のずれで、お客様の境目とページの境目がズレることがあるため、
+// 1件＝1ページになるよう、お客様の最後の行のあとに、改ページを手動で指定する
+export const atenaBatchBreakRows = () => Array.from({ length: BATCH_MAX - 1 }, (_, i) => BATCH_GRID_TOP + i * 8 + 7);
+
 // まとめて作成の、入力欄の並び
 const BATCH_COLS = { no: 2, code: 3, name: 5, status: 6 }; // B・C・E・F
 const thinBorder = { style: "thin", color: { argb: "FFB7BBC2" } };
@@ -268,7 +276,7 @@ const colLetter = (n) => String.fromCharCode(64 + n);
 function fillBatch(ws, nm) {
   setAtenaCols(ws);
   titleBar(ws, `まとめて作成（1件＝1ページ・最大${BATCH_MAX}件）`, 6, nm.guide);
-  const HR = 3;
+  const HR = BATCH_HR;
   [
     [BATCH_COLS.no, "No"],
     [BATCH_COLS.code, "顧客コード"],
@@ -323,7 +331,7 @@ function fillBatch(ws, nm) {
   ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客コードを入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
   ws.getRow(LIST_TOP + BATCH_MAX).height = 10;
-  const GRID_TOP = LIST_TOP + BATCH_MAX + 1;
+  const GRID_TOP = BATCH_GRID_TOP;
   for (let i = 0; i < BATCH_MAX; i++) {
     const addrF = `IF($P$${LIST_TOP + i}="","",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$P$${LIST_TOP + i}))`;
     const nameF = `IF($P$${LIST_TOP + i}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${LIST_TOP + i}))`;
