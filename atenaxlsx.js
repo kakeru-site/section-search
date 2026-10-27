@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022k";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022k";
+import { fillGuide } from "./oilxlsx.js?v=20261022l";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022l";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -44,6 +44,8 @@ const PRINT_SCALE = 77; // 実物と同じ、印刷の拡大縮小
 function setAtenaCols(ws) {
   ws.columns = [...COL_W.map((width) => ({ width })), { width: 12 }]; // 最後の列は、画面の「使い方」リンク用（印刷はされない）
 }
+// シールに印刷するときだけ、「株式会社」→「㈱」「有限会社」→「㈲」に短くする（検索・顧客データ側はそのまま）
+const abbrevCo = (x) => `SUBSTITUTE(SUBSTITUTE(${x},"有限会社","㈲"),"株式会社","㈱")`;
 // ラベル1枚（B列 or D列、1つぶん）を描く。r0：そのラベルの先頭行。col：B=2 or D=4。addrF／nameF：中身の数式
 function paintAtena(ws, r0, col, addrF, nameF) {
   const a = ws.getCell(r0, col);
@@ -51,7 +53,7 @@ function paintAtena(ws, r0, col, addrF, nameF) {
   a.font = atenaFont(15);
   a.alignment = { horizontal: "left", vertical: "center", wrapText: true };
   const n = ws.getCell(r0 + 1, col);
-  n.value = { formula: nameF };
+  n.value = { formula: abbrevCo(nameF) };
   n.font = atenaFont(36); // 実物のシール（カーロード様シート）と同じ大きさ
   n.alignment = { horizontal: "left", vertical: "center", shrinkToFit: true };
 }
@@ -82,6 +84,7 @@ const guideBlocks = (protect, nm) => [
   ["step", "③", "「選ぶ番号」に、その番号を入れると、住所・名称がラベルに反映されます"],
   ["step", "④", "下に、同じラベルが6枚（A5・シール用紙いっぱい）出ます。そのまま印刷します"],
   ["b", "見つからないときは、候補が0件になります。言葉を短くするか、顧客コードを確認してください"],
+  ["b", "ラベルの名称は、印刷のときだけ「株式会社」→「㈱」「有限会社」→「㈲」に短くなります（顧客データ・検索は、元の名称のままです）"],
   ["h", `「${nm.batch}」シート（まとめて、何件か印刷）`],
   ["step", "①", "上の表の、黄色い「顧客コード」欄に、必要な分だけ、入れます（1行に1件）。顧客コードでも、お客様名の一部（あいまい検索）でもOKです"],
   ["b", "お客様名であいまいに探すと、同じ言葉を含む顧客が複数いる場合、どれか1件に自動で決まります（1件ずつの「選ぶ番号」のような、候補選びはできません）。あやふやなときは、顧客コードで入れてください"],
