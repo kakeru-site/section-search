@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022w";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022w";
+import { fillGuide } from "./oilxlsx.js?v=20261022x";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022x";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -137,6 +137,12 @@ const yellow = (ws, addr, o = {}) => {
   c.font = { ...font, size: o.size || 14, bold: true };
   c.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
 };
+// セルの書式変更を許可している（文字の大きさ等をその場で変えられるように）ため、
+// 別の場所からの貼り付けで、黄色い塗りが上書きされて消えることがある。
+// 条件付き書式で「常に黄色」を重ねておき、貼り付けで消えても、見た目は黄色に戻るようにする
+const yellowGuard = (ws, ref) => {
+  ws.addConditionalFormatting({ ref, rules: [{ type: "expression", formulae: ["TRUE"], style: { fill: solid(IN) } }] });
+};
 const titleBar = (ws, title, lastCol, guideName) => {
   ws.mergeCells(1, 2, 1, lastCol - 1);
   const t = ws.getCell(1, 2);
@@ -204,6 +210,7 @@ function fillFind(ws, nm) {
   ws.mergeCells(3, 2, 3, 2);
   ws.mergeCells("C3:D3");
   yellow(ws, "C3", { size: 14 });
+  yellowGuard(ws, "C3:D3");
   ws.getRow(3).height = 30;
   // P：正規化した入力（全角そろえ・小文字・空白なし。名称の検索用）／Q,R,S：ひらがな→カタカナ（3段）／T,U,V：カタカナ→ひらがな（3段）
   // W：Pのハイフン抜き（名称用）／X：入力あり／AB：半角そろえ・ハイフン抜き（顧客コードの検索用）
@@ -247,6 +254,7 @@ function fillFind(ws, nm) {
   label2(ws, `B${PICK_R}`, "選ぶ番号", { font: { size: 12 } });
   ws.mergeCells(`C${PICK_R}:D${PICK_R}`);
   yellow(ws, `C${PICK_R}`, { size: 16 });
+  yellowGuard(ws, `C${PICK_R}:D${PICK_R}`);
   ws.getRow(PICK_R).height = 30;
   // Z：選んだ候補の行番号（CHOOSEで、候補1〜CAND_Nの行番号から選ぶ）
   const yRefs = Array.from({ length: CAND_N }, (_, i) => `$Y$${CAND_TOP + i}`).join(",");
@@ -277,11 +285,13 @@ function fillFree(ws, nm) {
   label2(ws, "B3", "上の文字", { font: { size: 12 } });
   ws.mergeCells("C3:D3");
   yellow(ws, "C3", { size: 14 });
+  yellowGuard(ws, "C3:D3");
   ws.getCell("C3").alignment = { vertical: "middle", horizontal: "left", indent: 1, wrapText: true };
   ws.getRow(3).height = 34;
   label2(ws, "B4", "下の文字", { font: { size: 12 } });
   ws.mergeCells("C4:D4");
   yellow(ws, "C4", { size: 16 });
+  yellowGuard(ws, "C4:D4");
   ws.getRow(4).height = 30;
   ws.getRow(5).height = 10;
   const GRID_TOP = 6;
@@ -417,6 +427,9 @@ function fillBatch(ws, nm) {
     ref: `${candCol}${LIST_TOP}:${candCol}${LIST_TOP + BATCH_MAX - 1}`,
     rules: [{ type: "expression", formulae: [`$${codeCol}${LIST_TOP}=""`], style: { font: { color: { argb: IN } } } }],
   });
+  // 一覧へのコピー貼り付けで、黄色い塗りが上書きされて消えることがあるため、条件付き書式で黄色を重ねておく
+  yellowGuard(ws, `${codeCol}${LIST_TOP}:${codeCol}${LIST_TOP + BATCH_MAX - 1}`);
+  yellowGuard(ws, `${candCol}${LIST_TOP}:${candCol}${LIST_TOP + BATCH_MAX - 1}`);
   ws.mergeCells(2, 2, 2, 5);
   ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客名（またはコード）を入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
