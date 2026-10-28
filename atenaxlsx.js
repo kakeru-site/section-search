@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022v";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022v";
+import { fillGuide } from "./oilxlsx.js?v=20261022w";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022w";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -389,11 +389,14 @@ function fillBatch(ws, nm) {
     cand.protection = { locked: false };
     cand.dataValidation = { type: "list", allowBlank: true, formulae: [cnRange], showErrorMessage: false };
     // 選んだ候補（CHOOSEは引数254個までのため、件数を増やせるようINDEX+MATCHにしている）
-    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IF(${pick}<>"",IFERROR(INDEX(${ciRangeFull},MATCH(${pick},${cnRange},0)),""),IFERROR(MATCH($Q${r},${calcName},0),IF($${CI_COL(1)}$${r}<>"",$${CI_COL(1)}$${r},IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),""))))))))`;
+    // 「候補」欄は、入力欄をあとで消しても文字が残るので、今の候補の一覧に実際にある（ISNUMBER(MATCH…)）ときだけ使う。
+    // 残ったままの古い候補は、ここで無視され、自動のあいまい検索に戻る
+    const pickValidF = `AND(${pick}<>"",ISNUMBER(MATCH(${pick},${cnRange},0)))`;
+    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IF(${pickValidF},INDEX(${ciRangeFull},MATCH(${pick},${cnRange},0)),IFERROR(MATCH($Q${r},${calcName},0),IF($${CI_COL(1)}$${r}<>"",$${CI_COL(1)}$${r},IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),""))))))))`;
     ws.getCell(`P${r}`).value = { formula: idxF };
     const name = ws.getCell(r, BATCH_COLS.name);
     name.value = {
-      formula: `IF(${inp}="","",IF($P$${r}="","見つかりません",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${r})&IF(AND($${CNT_COL}$${r}>1,${pick}=""),"　（候補"&$${CNT_COL}$${r}&"件・左で選べます）","")))`,
+      formula: `IF(${inp}="","",IF($P$${r}="","見つかりません",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${r})&IF(AND($${CNT_COL}$${r}>1,NOT(${pickValidF})),"　（候補"&$${CNT_COL}$${r}&"件・左で選べます）","")))`,
     };
     name.font = font;
     name.border = batchBox;
@@ -406,6 +409,14 @@ function fillBatch(ws, nm) {
     ws.getRow(r).height = 18;
   }
   for (let n = 16; n <= CNT_COL_IDX; n++) ws.getColumn(n).hidden = true; // P〜（検索・候補の計算用）
+  // 「候補」欄は普通の入力欄なので、顧客名・コードを消しても文字は残る。見た目だけでも分かるよう、
+  // 顧客名・コードが空のときは、候補欄の文字色を背景色と同じにして、見えなくする（計算は上のpickValidFで無視済み）
+  const candCol = colLetter(BATCH_COLS.cand);
+  const codeCol = colLetter(BATCH_COLS.code);
+  ws.addConditionalFormatting({
+    ref: `${candCol}${LIST_TOP}:${candCol}${LIST_TOP + BATCH_MAX - 1}`,
+    rules: [{ type: "expression", formulae: [`$${codeCol}${LIST_TOP}=""`], style: { font: { color: { argb: IN } } } }],
+  });
   ws.mergeCells(2, 2, 2, 5);
   ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客名（またはコード）を入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
