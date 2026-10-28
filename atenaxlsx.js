@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022n";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022n";
+import { fillGuide } from "./oilxlsx.js?v=20261022o";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022o";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -17,7 +17,7 @@ const AC = "FFF2C230";
 const DK = "FF17191C";
 const IN = "FFFFF3C4";
 const font = { name: "Yu Gothic UI", size: 11 };
-const atenaFont = (size, o = {}) => ({ name: "HGP行書体", size, ...o });
+const atenaFont = (size, o = {}) => ({ name: "HGP創英角ゴシックUB", size, ...o });
 const quote = (n) => `'${n.replace(/'/g, "''")}'`;
 const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 const thin = { style: "thin", color: { argb: "FF8A8F98" } };
