@@ -2,8 +2,8 @@
 //  ・シール作成（自由入力）：顧客マスターを使わず、上・下の文字をそのまま打ってシールにする
 //  ・まとめて作成：顧客名・コードを何件か入れると、1件＝1ページで、まとめて印刷できる（あいまい検索・候補選びに対応）
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022y";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022y";
+import { fillGuide } from "./oilxlsx.js?v=20261022z";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022z";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -330,13 +330,15 @@ function fillBatch(ws, nm) {
     ws.getRow(r).height = 18;
   }
   for (let n = 16; n <= CNT_COL_IDX; n++) ws.getColumn(n).hidden = true; // P〜（検索・候補の計算用）
-  // 「候補」欄は普通の入力欄なので、顧客名・コードを消しても文字は残る。見た目だけでも分かるよう、
-  // 顧客名・コードが空のときは、候補欄の文字色を背景色と同じにして、見えなくする（計算は上のpickValidFで無視済み）
+  // 「候補」欄は普通の入力欄なので、顧客名・コードを消したり、別の名前に変えたりしても、選んだ文字はそのまま残る。
+  // 見た目だけでも分かるよう、今の候補一覧に実際に無い（古い・無関係な）ときは、候補欄の文字色を背景色と同じにして、
+  // 見えなくする（計算は上のpickValidFで、同じ条件を使って無視している）
   const candCol = colLetter(BATCH_COLS.cand);
   const codeCol = colLetter(BATCH_COLS.code);
+  const cnRangeTop = `$${CN_COL(1)}${LIST_TOP}:$${CN_COL(BATCH_CAND_N)}${LIST_TOP}`;
   ws.addConditionalFormatting({
     ref: `${candCol}${LIST_TOP}:${candCol}${LIST_TOP + BATCH_MAX - 1}`,
-    rules: [{ type: "expression", formulae: [`$${codeCol}${LIST_TOP}=""`], style: { font: { color: { argb: IN } } } }],
+    rules: [{ type: "expression", formulae: [`OR($${candCol}${LIST_TOP}="",ISERROR(MATCH($${candCol}${LIST_TOP},${cnRangeTop},0)))`], style: { font: { color: { argb: IN } } } }],
   });
   // 一覧へのコピー貼り付けで、黄色い塗りが上書きされて消えることがあるため、条件付き書式で黄色を重ねておく
   yellowGuard(ws, `${codeCol}${LIST_TOP}:${codeCol}${LIST_TOP + BATCH_MAX - 1}`);

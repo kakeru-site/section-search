@@ -1,21 +1,21 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261022y";
-import { yomiText } from "./yomi.js?v=20261022y";
-import { sphDocsHtml } from "./sphdocs.js?v=20261022y";
-import { docModel } from "./sphxlsx.js?v=20261022y";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261022y";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261022y";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261022y";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261022y";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261022y";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261022y";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261022y";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261022y";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261022y";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261022y";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261022y";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261022y";
+import * as S from "./search.js?v=20261022z";
+import { yomiText } from "./yomi.js?v=20261022z";
+import { sphDocsHtml } from "./sphdocs.js?v=20261022z";
+import { docModel } from "./sphxlsx.js?v=20261022z";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261022z";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261022z";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261022z";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261022z";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261022z";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261022z";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261022z";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261022z";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261022z";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261022z";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261022z";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261022z";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -804,7 +804,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261022y")
+    : fetch("pitbulbs.json?v=20261022z")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2612,7 +2612,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261022y`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261022z`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2745,7 +2745,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261022y")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261022z")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3685,7 +3685,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261022y";
+const APP_VER = "20261022z";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
