@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022q";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022q";
+import { fillGuide } from "./oilxlsx.js?v=20261022r";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022r";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -85,6 +85,10 @@ const guideBlocks = (protect, nm) => [
   ["step", "④", "下に、同じラベルが6枚（A5・シール用紙いっぱい）出ます。そのまま印刷します"],
   ["b", "見つからないときは、候補が0件になります。言葉を短くするか、顧客コードを確認してください"],
   ["b", "ラベルの名称は、印刷のときだけ「株式会社」→「㈱」「有限会社」→「㈲」に短くなります（顧客データ・検索は、元の名称のままです）"],
+  ["h", `「${nm.free}」シート（顧客マスターを使わず、好きな文字でシールを作る）`],
+  ["step", "①", "上の黄色いところに1行目（例：「釧路本店様分」）、下の黄色いところに2行目（例：「ビッグオートボディ」）を、そのまま打ちます"],
+  ["step", "②", "下に、同じラベルが6枚、すぐ出ます。そのまま印刷します"],
+  ["b", "上の文字は、長ければ2行まで折り返します。下の文字は、1行に収まるよう自動で縮みます"],
   ["h", `「${nm.batch}」シート（まとめて、何件か印刷）`],
   ["step", "①", "上の表の、黄色い「顧客名・コード」欄に、必要な分だけ、入れます（1行に1件）。お客様名の一部（あいまい検索）でも、顧客コードでもOKです"],
   ["b", "お客様名であいまいに探すと、同じ言葉を含む顧客が複数いる場合、どれか1件に自動で決まります（1件ずつの「選ぶ番号」のような、候補選びはできません）。あやふやなときは、顧客コードで入れてください"],
@@ -263,6 +267,27 @@ function fillFind(ws, nm) {
   return ws;
 }
 
+// ---- 自由入力ラベル（顧客マスターを使わず、上・下、好きな文字を直接打ってシールにする） ----
+function fillFree(ws, nm) {
+  setAtenaCols(ws);
+  titleBar(ws, "シール作成（自由入力・すぐ印刷）", 6, nm.guide);
+  label2(ws, "B3", "上の文字", { font: { size: 12 } });
+  ws.mergeCells("C3:D3");
+  yellow(ws, "C3", { size: 14 });
+  ws.getCell("C3").alignment = { vertical: "middle", horizontal: "left", indent: 1, wrapText: true };
+  ws.getRow(3).height = 34;
+  label2(ws, "B4", "下の文字", { font: { size: 12 } });
+  ws.mergeCells("C4:D4");
+  yellow(ws, "C4", { size: 16 });
+  ws.getRow(4).height = 30;
+  ws.getRow(5).height = 10;
+  const GRID_TOP = 6;
+  paintAtenaPage(ws, GRID_TOP, "$C$3", "$C$4");
+  ws.views = [{ showGridLines: false }];
+  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 7}` };
+  return ws;
+}
+
 // まとめて作成の、各お客様のページの先頭行（お客様ごとに8行）。改ページを手動で入れる場所の計算にも使う
 const BATCH_HR = 3;
 const BATCH_LIST_TOP = BATCH_HR + 1;
@@ -354,6 +379,7 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
   if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
   const nm = {
     find: opt.names?.find || "宛名ラベル作成",
+    free: opt.names?.free || "シール作成（自由入力）",
     batch: opt.names?.batch || "まとめて作成",
     data: opt.names?.data || "顧客データ",
     calc: opt.names?.calc || "検索用（隠し）",
@@ -362,12 +388,14 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
   const protect = !!opt.protect;
   const wsFind = wb.addWorksheet(nm.find, { views: [{ showGridLines: false, tabSelected: true }] });
   wsFind.properties.dyDescent = 0.4; // 実物のシール用紙のExcelと同じ値にそろえる（印刷時の行の詰まりを防ぐ）
+  const wsFree = wb.addWorksheet(nm.free, { views: [{ showGridLines: false }] });
+  wsFree.properties.dyDescent = 0.4;
   const wsBatch = wb.addWorksheet(nm.batch, { views: [{ showGridLines: false }] });
   wsBatch.properties.dyDescent = 0.4;
   const wsData = wb.addWorksheet(nm.data, { views: [{ state: "frozen", ySplit: 1 }] });
   const wsGuide = wb.addWorksheet(nm.guide, { views: [{ showGridLines: false }] });
   const wsCalc = wb.addWorksheet(nm.calc, { state: "veryHidden" });
-  const list = [nm.find, nm.batch, nm.data, nm.guide, nm.calc];
+  const list = [nm.find, nm.free, nm.batch, nm.data, nm.guide, nm.calc];
 
   fillData(wsData);
   const rows = opt.rows || (opt.sample ? sampleRows() : []);
@@ -375,8 +403,13 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
   fillCalc(wsCalc, nm);
 
   fillFind(wsFind, nm);
+  fillFree(wsFree, nm);
   fillBatch(wsBatch, nm);
   if (opt.sample) wsFind.getCell("C3").value = rows[0]?.[3] || "";
+  if (opt.sample) {
+    wsFree.getCell("C3").value = "釧路本店様分";
+    wsFree.getCell("C4").value = "ビッグオートボディ";
+  }
 
   fillGuide(wsGuide, { font, protect, K: {}, nameP: "", blocks: guideBlocks(protect, nm) });
   fillGuideStyle(wsGuide, { title: "宛名シール作成の使い方" });
@@ -385,6 +418,7 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
     // formatCells：true にして、ラベルの文字（大きさ・太さなど）を、見ながらその場で自由に変えられるようにしている
     // （数式・中身は、locked（入力不可）のまま変わらない。黄色い欄だけが、中身も変えられる）
     wsFind.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
+    wsFree.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
     wsBatch.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
     wsCalc.sheetProtection = { sheet: true };
   }
