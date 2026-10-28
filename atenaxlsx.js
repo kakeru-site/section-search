@@ -2,8 +2,8 @@
 //  ・シール作成（自由入力）：顧客マスターを使わず、上・下の文字をそのまま打ってシールにする
 //  ・まとめて作成：顧客名・コードを何件か入れると、1件＝1ページで、まとめて印刷できる（あいまい検索・候補選びに対応）
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022z";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022z";
+import { fillGuide } from "./oilxlsx.js?v=20261023a";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261023a";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -53,7 +53,7 @@ function paintAtena(ws, r0, col, addrF, nameF, opts = {}) {
   const a = ws.getCell(r0, col);
   a.value = { formula: squeezeSpaces(addrF) };
   a.font = atenaFont(opts.addrSize || 15);
-  a.alignment = opts.addrAlign || { horizontal: "left", vertical: "center", wrapText: true };
+  a.alignment = opts.addrAlign || { horizontal: "right", vertical: "center", wrapText: true };
   const n = ws.getCell(r0 + 1, col);
   n.value = { formula: abbrevCo(squeezeSpaces(nameF)) };
   n.font = atenaFont(36); // 実物のシール（カーロード様シート）と同じ大きさ
