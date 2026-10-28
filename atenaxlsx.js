@@ -1,9 +1,9 @@
 // 宛名シールを、関数だけで作れるExcel（部品番号ラベルと同じ構造）
-//  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
-//  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
+//  ・シール作成（自由入力）：顧客マスターを使わず、上・下の文字をそのまま打ってシールにする
+//  ・まとめて作成：顧客名・コードを何件か入れると、1件＝1ページで、まとめて印刷できる（あいまい検索・候補選びに対応）
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022x";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022x";
+import { fillGuide } from "./oilxlsx.js?v=20261022y";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022y";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -25,7 +25,6 @@ const box = { top: thin, left: thin, bottom: thin, right: thin };
 
 export const DATA_MAX = 2000; // 顧客マスターを見る行数（2行目〜）
 export const BATCH_MAX = 30; // 「まとめて作成」で、一度に作れる件数
-const CAND_N = 8; // あいまい検索で、一度に出す候補の数
 
 // 顧客マスターと、まったく同じ列の並び（丸ごとコピー貼り付けできるように）
 const MASTER_HEADS = ["売上担当", "顧客コード", "取", "顧客名称（漢字）", "郵便番号", "住所（漢字）", "業種", "電話番号", "ＦＡＸ番号", "代表者名（漢字）", "支払日", "請求締日", "サマリー区分", "取引停止区分", "よみ（ひらがな・なくてもOK）"];
@@ -81,12 +80,6 @@ const guideBlocks = (protect, nm) => [
   ["h", "まずはこれだけ（データを入れる）"],
   ["step", "①", `「${nm.data}」シートに、顧客マスターのExcelの中身を、そのまま丸ごとコピーして、貼り付けます（A1から。見出しの1行目も、そのまま上書きしてOKです）`],
   ["b", `列の並びは、顧客マスターと同じです（${MASTER_HEADS.slice(0, 4).join("・")}…）。並びを変えずに、そのまま貼り付けてください`],
-  ["h", `「${nm.find}」シート（1件ずつ、すぐ印刷）`],
-  ["step", "①", "黄色いところに、お客様名の一部を入れます（あいまい検索：ひらがな・カタカナ、スペースの有無は気にしなくてOK。顧客コードでもOK）"],
-  ["step", "②", `下に、候補が番号付きで出ます（最大${CAND_N}件）`],
-  ["step", "③", "「選ぶ番号」に、その番号を入れると、住所・名称がラベルに反映されます"],
-  ["step", "④", "下に、同じラベルが6枚（A5・シール用紙いっぱい）出ます。そのまま印刷します"],
-  ["b", "見つからないときは、候補が0件になります。言葉を短くするか、顧客コードを確認してください"],
   ["b", "ラベルの名称は、印刷のときだけ「株式会社」→「㈱」「有限会社」→「㈲」に短くなります（顧客データ・検索は、元の名称のままです）"],
   ["h", `「${nm.free}」シート（顧客マスターを使わず、好きな文字でシールを作る）`],
   ["step", "①", "上の黄色いところに1行目（例：「釧路本店様分」）、下の黄色いところに2行目（例：「ビッグオートボディ」）を、そのまま打ちます"],
@@ -176,8 +169,7 @@ function fillData(ws) {
 // データシートとは別のシートに置くことで、顧客マスターの貼り付けが、どれだけ広い範囲でも巻き込まれないようにしている ----
 function fillCalc(ws, nm) {
   const D = quote(nm.data);
-  const F = quote(nm.find);
-  ["コード", "名称", "住所", "よみ", "検索用コード", "検索用（名称）", "一致", "近さ", "順位"].forEach((h, i) => {
+  ["コード", "名称", "住所", "よみ", "検索用コード", "検索用（名称）"].forEach((h, i) => {
     const c = ws.getCell(1, i + 1);
     c.value = h;
     c.font = { ...font, size: 9, bold: true };
@@ -193,89 +185,8 @@ function fillCalc(ws, nm) {
     ws.getCell(`D${r}`).value = { formula: `${D}!$${YOMI_COL}${r}&""` };
     ws.getCell(`E${r}`).value = { formula: `IF(${A}="","",${codeNorm(A)})` };
     ws.getCell(`F${r}`).value = { formula: `IF(${B}&${A}="","",${nameNormExpr(`${B}&${A}&${Dd}`)})` };
-    ws.getCell(`G${r}`).value = { formula: `IF($F${r}="","",IF(${F}!$X$3=0,0,IF(OR(ISNUMBER(SEARCH(${F}!$P$3,$F${r})),ISNUMBER(SEARCH(${F}!$S$3,$F${r})),ISNUMBER(SEARCH(${F}!$V$3,$F${r})),ISNUMBER(SEARCH(${F}!$W$3,$F${r})),AND(${F}!$AB$3<>"",ISNUMBER(SEARCH(${F}!$AB$3,$E${r})))),1,0)))` };
-    ws.getCell(`H${r}`).value = {
-      formula: `IF($G${r}=1,IF(OR(AND(${F}!$AB$3<>"",$E${r}=${F}!$AB$3),AND(${F}!$P$3<>"",$F${r}=${F}!$P$3)),4,IF(OR(IFERROR(SEARCH(${F}!$P$3,$F${r})=1,FALSE),IFERROR(SEARCH(${F}!$S$3,$F${r})=1,FALSE),IFERROR(SEARCH(${F}!$V$3,$F${r})=1,FALSE),IFERROR(SEARCH(${F}!$AB$3,$E${r})=1,FALSE)),3,2)),"")`,
-    };
-    ws.getCell(`I${r}`).value = { formula: `IF($G${r}=1,COUNTIF($H$2:$H$${DATA_MAX + 1},">"&$H${r})+COUNTIF($H$2:H${r},$H${r}),"")` };
   }
   ws.views = [{ state: "frozen", ySplit: 1 }];
-}
-
-// ---- 宛名ラベル作成（1件ずつ） ----
-function fillFind(ws, nm) {
-  setAtenaCols(ws);
-  titleBar(ws, "宛名シール作成（1件ずつ・すぐ印刷）", 6, nm.guide);
-  label2(ws, "B3", "お客様名・コード", { font: { size: 12 } });
-  ws.mergeCells(3, 2, 3, 2);
-  ws.mergeCells("C3:D3");
-  yellow(ws, "C3", { size: 14 });
-  yellowGuard(ws, "C3:D3");
-  ws.getRow(3).height = 30;
-  // P：正規化した入力（全角そろえ・小文字・空白なし。名称の検索用）／Q,R,S：ひらがな→カタカナ（3段）／T,U,V：カタカナ→ひらがな（3段）
-  // W：Pのハイフン抜き（名称用）／X：入力あり／AB：半角そろえ・ハイフン抜き（顧客コードの検索用）
-  ws.getCell("P3").value = { formula: nameNormExpr('$C$3&""') };
-  const letters1 = ["Q", "R", "S"];
-  KANA_H2K.forEach((pairs, i) => (ws.getCell(`${letters1[i]}3`).value = { formula: kanaChain(pairs, i === 0 ? "$P3" : `$${letters1[i - 1]}3`) }));
-  const letters2 = ["T", "U", "V"];
-  KANA_K2H.forEach((pairs, i) => (ws.getCell(`${letters2[i]}3`).value = { formula: kanaChain(pairs, i === 0 ? "$P3" : `$${letters2[i - 1]}3`) }));
-  ws.getCell("W3").value = { formula: ["－", "‐", "−", "-", "ー", "―", "–", "—", "‑", "ｰ", " ", "　"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, "$P3") };
-  ws.getCell("X3").value = { formula: `IF($C$3="",0,1)` };
-  ws.getCell("AB3").value = { formula: `SUBSTITUTE(SUBSTITUTE(${codeNormExpr('$C$3&""')},"-",""),"ー","")` };
-  for (const c of ["P", "Q", "R", "S", "T", "U", "V", "W", "X", "AB"]) ws.getColumn(c.length === 1 ? c.charCodeAt(0) - 64 : (c.charCodeAt(0) - 64) * 26 + (c.charCodeAt(1) - 64)).hidden = true;
-
-  const msg = `IF($X$3=0,"← お客様名の一部（または顧客コード）を入れてください",IF(COUNTIF(${quote(nm.calc)}!$G$2:$G$${DATA_MAX + 1},1)=0,"見つかりませんでした","下から、番号を選んでください（"&COUNTIF(${quote(nm.calc)}!$G$2:$G$${DATA_MAX + 1},1)&"件）"))`;
-  ws.mergeCells("B4:E4");
-  const m4 = ws.getCell("B4");
-  m4.value = { formula: msg };
-  m4.font = { ...font, size: 12, bold: true, color: { argb: "FFB06A00" } };
-  m4.alignment = { vertical: "middle", indent: 1 };
-  ws.getRow(4).height = 24;
-
-  // 候補一覧（最大CAND_N件）：Y列＝順位kの行番号、B〜E列（結合）＝候補の文字
-  const CAND_TOP = 5;
-  for (let k = 1; k <= CAND_N; k++) {
-    const r = CAND_TOP + k - 1;
-    ws.getCell(`Y${r}`).value = { formula: `IFERROR(MATCH(${k},${quote(nm.calc)}!$I$2:$I$${DATA_MAX + 1},0),"")` };
-    ws.mergeCells(r, 2, r, 4);
-    const c = ws.getCell(r, 2);
-    c.value = {
-      formula: `IF($Y${r}="","",${k}&"．"&INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$Y${r})&"　（"&INDEX(${quote(nm.calc)}!$A$2:$A$${DATA_MAX + 1},$Y${r})&"）"&CHAR(10)&INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$Y${r}))`,
-    };
-    c.font = { ...font, size: 11 };
-    c.alignment = { vertical: "middle", wrapText: true, indent: 1 };
-    c.border = box;
-    ws.getRow(r).height = 34;
-  }
-  ws.getColumn(25).hidden = true; // Y列
-
-  // 選ぶ番号
-  const PICK_R = CAND_TOP + CAND_N + 1;
-  label2(ws, `B${PICK_R}`, "選ぶ番号", { font: { size: 12 } });
-  ws.mergeCells(`C${PICK_R}:D${PICK_R}`);
-  yellow(ws, `C${PICK_R}`, { size: 16 });
-  yellowGuard(ws, `C${PICK_R}:D${PICK_R}`);
-  ws.getRow(PICK_R).height = 30;
-  // Z：選んだ候補の行番号（CHOOSEで、候補1〜CAND_Nの行番号から選ぶ）
-  const yRefs = Array.from({ length: CAND_N }, (_, i) => `$Y$${CAND_TOP + i}`).join(",");
-  ws.getCell(`Z${PICK_R}`).value = { formula: `IFERROR(CHOOSE($C$${PICK_R},${yRefs}),"")` };
-  ws.getColumn(26).hidden = true; // Z列
-  const msg2Row = PICK_R + 1;
-  ws.mergeCells(`B${msg2Row}:E${msg2Row}`);
-  const m2 = ws.getCell(`B${msg2Row}`);
-  m2.value = { formula: `IF($C$${PICK_R}="","← 上の番号を入れてください",IF($Z$${PICK_R}="","その番号の候補がありません","選びました：" & INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$Z$${PICK_R})))` };
-  m2.font = { ...font, size: 12, bold: true, color: { argb: "FFB06A00" } };
-  m2.alignment = { vertical: "middle", indent: 1 };
-  ws.getRow(msg2Row).height = 24;
-
-  ws.getRow(msg2Row + 1).height = 10;
-  const GRID_TOP = msg2Row + 2;
-  const addrF = `IF($Z$${PICK_R}="","",IF(INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$Z$${PICK_R})="","分",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$Z$${PICK_R})))`;
-  const nameF = `IF($Z$${PICK_R}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$Z$${PICK_R}))`;
-  paintAtenaPage(ws, GRID_TOP, addrF, nameF);
-  ws.views = [{ showGridLines: false }];
-  ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 7}` };
-  return ws;
 }
 
 // ---- 自由入力ラベル（顧客マスターを使わず、上・下、好きな文字を直接打ってシールにする） ----
@@ -451,7 +362,6 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
   wb.creator = "セクション検索";
   if (!opt.names) wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
   const nm = {
-    find: opt.names?.find || "宛名ラベル作成",
     free: opt.names?.free || "シール作成（自由入力）",
     batch: opt.names?.batch || "まとめて作成",
     data: opt.names?.data || "顧客データ",
@@ -459,26 +369,22 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
     guide: opt.names?.guide || "宛名シールの使い方",
   };
   const protect = !!opt.protect;
-  const wsFind = wb.addWorksheet(nm.find, { views: [{ showGridLines: false, tabSelected: true }] });
-  wsFind.properties.dyDescent = 0.4; // 実物のシール用紙のExcelと同じ値にそろえる（印刷時の行の詰まりを防ぐ）
-  const wsFree = wb.addWorksheet(nm.free, { views: [{ showGridLines: false }] });
+  const wsFree = wb.addWorksheet(nm.free, { views: [{ showGridLines: false, tabSelected: true }] });
   wsFree.properties.dyDescent = 0.4;
   const wsBatch = wb.addWorksheet(nm.batch, { views: [{ showGridLines: false }] });
   wsBatch.properties.dyDescent = 0.4;
   const wsData = wb.addWorksheet(nm.data, { views: [{ state: "frozen", ySplit: 1 }] });
   const wsGuide = wb.addWorksheet(nm.guide, { views: [{ showGridLines: false }] });
   const wsCalc = wb.addWorksheet(nm.calc, { state: "veryHidden" });
-  const list = [nm.find, nm.free, nm.batch, nm.data, nm.guide, nm.calc];
+  const list = [nm.free, nm.batch, nm.data, nm.guide, nm.calc];
 
   fillData(wsData);
   const rows = opt.rows || (opt.sample ? sampleRows() : []);
   rows.forEach((row, i) => row.forEach((v, j) => v !== null && v !== undefined && (wsData.getCell(i + 2, j + 1).value = v)));
   fillCalc(wsCalc, nm);
 
-  fillFind(wsFind, nm);
   fillFree(wsFree, nm);
   fillBatch(wsBatch, nm);
-  if (opt.sample) wsFind.getCell("C3").value = rows[0]?.[3] || "";
   if (opt.sample) {
     wsFree.getCell("C3").value = "釧路本店様分";
     wsFree.getCell("C4").value = "ビッグオートボディ";
@@ -490,7 +396,6 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
   if (protect) {
     // formatCells：true にして、ラベルの文字（大きさ・太さなど）を、見ながらその場で自由に変えられるようにしている
     // （数式・中身は、locked（入力不可）のまま変わらない。黄色い欄だけが、中身も変えられる）
-    wsFind.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
     wsFree.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
     wsBatch.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
     wsCalc.sheetProtection = { sheet: true };
