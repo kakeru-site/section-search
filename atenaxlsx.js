@@ -2,8 +2,8 @@
 //  ・シール作成（自由入力）：顧客マスターを使わず、上・下の文字をそのまま打ってシールにする
 //  ・まとめて作成：顧客名・コードを何件か入れると、1件＝1ページで、まとめて印刷できる（あいまい検索・候補選びに対応）
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261023a";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261023a";
+import { fillGuide } from "./oilxlsx.js?v=20261023b";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261023b";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -339,6 +339,18 @@ function fillBatch(ws, nm) {
   ws.addConditionalFormatting({
     ref: `${candCol}${LIST_TOP}:${candCol}${LIST_TOP + BATCH_MAX - 1}`,
     rules: [{ type: "expression", formulae: [`OR($${candCol}${LIST_TOP}="",ISERROR(MATCH($${candCol}${LIST_TOP},${cnRangeTop},0)))`], style: { font: { color: { argb: IN } } } }],
+  });
+  // 候補が複数あって、まだ選んでいないときは、ぱっと見て分かるよう、候補欄・名称欄を目立つ色にする
+  const nameCol = colLetter(BATCH_COLS.name);
+  const ambigCond = `AND($${CNT_COL}${LIST_TOP}>1,OR($${candCol}${LIST_TOP}="",ISERROR(MATCH($${candCol}${LIST_TOP},${cnRangeTop},0))))`;
+  const ATT = "FFFFB15E"; // 濃いオレンジ（目立つ色）
+  ws.addConditionalFormatting({
+    ref: `${candCol}${LIST_TOP}:${candCol}${LIST_TOP + BATCH_MAX - 1}`,
+    rules: [{ type: "expression", formulae: [ambigCond], style: { fill: solid(ATT), border: { top: { style: "medium", color: { argb: "FFB0540A" } }, left: { style: "medium", color: { argb: "FFB0540A" } }, bottom: { style: "medium", color: { argb: "FFB0540A" } }, right: { style: "medium", color: { argb: "FFB0540A" } } } } }],
+  });
+  ws.addConditionalFormatting({
+    ref: `${nameCol}${LIST_TOP}:${nameCol}${LIST_TOP + BATCH_MAX - 1}`,
+    rules: [{ type: "expression", formulae: [ambigCond], style: { font: { bold: true, color: { argb: "FFB0540A" } }, fill: solid("FFFFEEDD") } }],
   });
   // 一覧へのコピー貼り付けで、黄色い塗りが上書きされて消えることがあるため、条件付き書式で黄色を重ねておく
   yellowGuard(ws, `${codeCol}${LIST_TOP}:${codeCol}${LIST_TOP + BATCH_MAX - 1}`);
