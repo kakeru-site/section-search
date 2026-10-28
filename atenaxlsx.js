@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022r";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022r";
+import { fillGuide } from "./oilxlsx.js?v=20261022s";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022s";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -46,14 +46,16 @@ function setAtenaCols(ws) {
 }
 // シールに印刷するときだけ、「株式会社」→「㈱」「有限会社」→「㈲」に短くする（検索・顧客データ側はそのまま）
 const abbrevCo = (x) => `SUBSTITUTE(SUBSTITUTE(${x},"有限会社","㈲"),"株式会社","㈱")`;
+// シールに印刷するときだけ、文字の間の空白（全角・半角とも）を詰める（検索・顧客データ側はそのまま）
+const squeezeSpaces = (x) => `SUBSTITUTE(SUBSTITUTE(${x}," ",""),"　","")`;
 // ラベル1枚（B列 or D列、1つぶん）を描く。r0：そのラベルの先頭行。col：B=2 or D=4。addrF／nameF：中身の数式
 function paintAtena(ws, r0, col, addrF, nameF) {
   const a = ws.getCell(r0, col);
-  a.value = { formula: addrF };
+  a.value = { formula: squeezeSpaces(addrF) };
   a.font = atenaFont(15);
   a.alignment = { horizontal: "left", vertical: "center", wrapText: true };
   const n = ws.getCell(r0 + 1, col);
-  n.value = { formula: abbrevCo(nameF) };
+  n.value = { formula: abbrevCo(squeezeSpaces(nameF)) };
   n.font = atenaFont(36); // 実物のシール（カーロード様シート）と同じ大きさ
   n.alignment = { horizontal: "left", vertical: "center", shrinkToFit: true };
 }
