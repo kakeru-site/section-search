@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022t";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022t";
+import { fillGuide } from "./oilxlsx.js?v=20261022u";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022u";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -313,11 +313,12 @@ const colName = (n) => {
   }
   return s;
 };
-const BATCH_CAND_N = 5; // あいまい検索で、お客様ごとに出す候補の数（まとめて作成）
+const BATCH_CAND_N = 50; // あいまい検索で、お客様ごとに出す候補の数（まとめて作成。これだけ当てはまることは、まず無いはずの件数）
 // 候補の行番号（CI）・候補の表示名（CN）・候補の件数（CNT）を置く、隠し列（P〜Xの続きから）
-const CI_COL = (k) => colName(24 + k); // 1〜5 → Y,Z,AA,AB,AC
-const CN_COL = (k) => colName(29 + k); // 1〜5 → AD,AE,AF,AG,AH
-const CNT_COL = colName(35); // AI
+const CI_COL = (k) => colName(24 + k); // 1〜BATCH_CAND_N
+const CN_COL = (k) => colName(24 + BATCH_CAND_N + k); // 1〜BATCH_CAND_N
+const CNT_COL_IDX = 24 + 2 * BATCH_CAND_N + 1;
+const CNT_COL = colName(CNT_COL_IDX);
 
 // ---- まとめて作成 ----
 function fillBatch(ws, nm) {
@@ -376,8 +377,8 @@ function fillBatch(ws, nm) {
       ws.getCell(`${CN_COL(k)}${r}`).value = { formula: `IF(${ciCell}="","",INDEX(${calcNameDisp},${ciCell})&"（"&INDEX(${calcCodeDisp},${ciCell})&"）")` };
     }
     const cnRange = `$${CN_COL(1)}$${r}:$${CN_COL(BATCH_CAND_N)}$${r}`;
-    const ciRange = Array.from({ length: BATCH_CAND_N }, (_, k) => `$${CI_COL(k + 1)}$${r}`).join(",");
-    ws.getCell(`${CNT_COL}${r}`).value = { formula: `COUNT($${CI_COL(1)}$${r}:$${CI_COL(BATCH_CAND_N)}$${r})` };
+    const ciRangeFull = `$${CI_COL(1)}$${r}:$${CI_COL(BATCH_CAND_N)}$${r}`;
+    ws.getCell(`${CNT_COL}${r}`).value = { formula: `COUNT(${ciRangeFull})` };
     const cand = ws.getCell(r, BATCH_COLS.cand);
     cand.numFmt = "@";
     cand.font = { ...font, size: 10 };
@@ -386,7 +387,8 @@ function fillBatch(ws, nm) {
     cand.alignment = { vertical: "middle", horizontal: "left", indent: 1, wrapText: true };
     cand.protection = { locked: false };
     cand.dataValidation = { type: "list", allowBlank: true, formulae: [cnRange], showErrorMessage: false };
-    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IF(${pick}<>"",IFERROR(CHOOSE(MATCH(${pick},${cnRange},0),${ciRange}),""),IFERROR(MATCH($Q${r},${calcName},0),IF($${CI_COL(1)}$${r}<>"",$${CI_COL(1)}$${r},IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),""))))))))`;
+    // 選んだ候補（CHOOSEは引数254個までのため、件数を増やせるようINDEX+MATCHにしている）
+    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IF(${pick}<>"",IFERROR(INDEX(${ciRangeFull},MATCH(${pick},${cnRange},0)),""),IFERROR(MATCH($Q${r},${calcName},0),IF($${CI_COL(1)}$${r}<>"",$${CI_COL(1)}$${r},IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),""))))))))`;
     ws.getCell(`P${r}`).value = { formula: idxF };
     const name = ws.getCell(r, BATCH_COLS.name);
     name.value = {
@@ -402,7 +404,7 @@ function fillBatch(ws, nm) {
     st.border = batchBox;
     ws.getRow(r).height = 18;
   }
-  for (let n = 16; n <= 35; n++) ws.getColumn(n).hidden = true; // P〜AI（検索・候補の計算用）
+  for (let n = 16; n <= CNT_COL_IDX; n++) ws.getColumn(n).hidden = true; // P〜（検索・候補の計算用）
   ws.mergeCells(2, 2, 2, 5);
   ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客名（またはコード）を入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
