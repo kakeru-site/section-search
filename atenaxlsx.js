@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022p";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022p";
+import { fillGuide } from "./oilxlsx.js?v=20261022q";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022q";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -91,6 +91,8 @@ const guideBlocks = (protect, nm) => [
   ["step", "②", `${BATCH_MAX}件まで入れられます。右に、名称と、印刷ページの番号が出ます`],
   ["step", "③", "下に、入れた件数ぶんのページが、自動でできます（1件＝1ページ＝6枚）"],
   ["step", "④", "印刷するときは、印刷の画面で「ページ指定」に、入れた件数のページ数だけを指定してください（上の表に、ページ数が出ています）。指定しないと、空っぽのページまで印刷されます"],
+  ["h", "文字の大きさ・太さを変えたいとき"],
+  ["b", "ラベルの文字（住所・名称）は、クリックして選んでから、普通のExcelと同じように、上のリボンの「フォントサイズ」「Ｂ（太字）」で、その場で自由に変えられます（中身の文字そのものは、保護されていて直接は打てません）"],
   ["h", "困ったとき"],
   ["b", "何も出ない・計算されない → 画面上の黄色い帯の「編集を有効にする」を押してください"],
   ["b", `見つからない → 「${nm.data}」シートに、顧客マスターのデータが、正しく貼り付けてあるか確認してください`],
@@ -380,8 +382,10 @@ export function buildAtenaWorkbook(ExcelJS, opt = {}) {
   fillGuideStyle(wsGuide, { title: "宛名シール作成の使い方" });
 
   if (protect) {
-    wsFind.sheetProtection = { sheet: true, formatColumns: true, formatRows: true };
-    wsBatch.sheetProtection = { sheet: true, formatColumns: true, formatRows: true };
+    // formatCells：true にして、ラベルの文字（大きさ・太さなど）を、見ながらその場で自由に変えられるようにしている
+    // （数式・中身は、locked（入力不可）のまま変わらない。黄色い欄だけが、中身も変えられる）
+    wsFind.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
+    wsBatch.sheetProtection = { sheet: true, formatColumns: true, formatRows: true, formatCells: true };
     wsCalc.sheetProtection = { sheet: true };
   }
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 0, visibility: "visible" }];

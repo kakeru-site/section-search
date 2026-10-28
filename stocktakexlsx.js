@@ -5,7 +5,7 @@
 //  ③ ランダム抽出：DBから、割合（例：20%）だけ、ランダムに抜き出し、場所順に並べる
 //  ④ DB：最新の在庫リストを貼る場所
 //  ⑤ 誤差記録と目標：誤差を記録し、誤差率が目標以内かを見る
-import { fillGuide } from "./oilxlsx.js?v=20261022p";
+import { fillGuide } from "./oilxlsx.js?v=20261022q";
 
 const AC = "FFF2C230";
 const DK = "FF17191C";
