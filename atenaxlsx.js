@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022s";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022s";
+import { fillGuide } from "./oilxlsx.js?v=20261022t";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022t";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -93,7 +93,7 @@ const guideBlocks = (protect, nm) => [
   ["b", "上の文字は、長ければ2行まで折り返します。下の文字は、1行に収まるよう自動で縮みます"],
   ["h", `「${nm.batch}」シート（まとめて、何件か印刷）`],
   ["step", "①", "上の表の、黄色い「顧客名・コード」欄に、必要な分だけ、入れます（1行に1件）。お客様名の一部（あいまい検索）でも、顧客コードでもOKです"],
-  ["b", "お客様名であいまいに探すと、同じ言葉を含む顧客が複数いる場合、どれか1件に自動で決まります（1件ずつの「選ぶ番号」のような、候補選びはできません）。あやふやなときは、顧客コードで入れてください"],
+  ["b", "お客様名であいまいに探すと、同じ言葉を含む顧客が複数いる場合、ひとまずどれか1件に自動で決まり、「名称」に「（候補◯件・左で選べます）」と出ます。左の「候補」欄をクリックすると▽が出るので、一覧から選び直せます"],
   ["step", "②", `${BATCH_MAX}件まで入れられます。右に、名称と、印刷ページの番号が出ます`],
   ["step", "③", "下に、入れた件数ぶんのページが、自動でできます（1件＝1ページ＝6枚）"],
   ["step", "④", "印刷するときは、印刷の画面で「ページ指定」に、入れた件数のページ数だけを指定してください（上の表に、ページ数が出ています）。指定しないと、空っぽのページまで印刷されます"],
@@ -299,10 +299,25 @@ export const BATCH_GRID_TOP = BATCH_LIST_TOP + BATCH_MAX + 1;
 export const atenaBatchBreakRows = () => Array.from({ length: BATCH_MAX - 1 }, (_, i) => BATCH_GRID_TOP + i * 8 + 7);
 
 // まとめて作成の、入力欄の並び
-const BATCH_COLS = { no: 2, code: 3, name: 5, status: 6 }; // B・C・E・F
+const BATCH_COLS = { no: 2, code: 3, cand: 4, name: 5, status: 6 }; // B・C・D・E・F
 const thinBorder = { style: "thin", color: { argb: "FFB7BBC2" } };
 const batchBox = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
 const colLetter = (n) => String.fromCharCode(64 + n);
+// A・B・C…Z・AA・AB… という、Excelの列名（26を超えてもOK）
+const colName = (n) => {
+  let s = "";
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+};
+const BATCH_CAND_N = 5; // あいまい検索で、お客様ごとに出す候補の数（まとめて作成）
+// 候補の行番号（CI）・候補の表示名（CN）・候補の件数（CNT）を置く、隠し列（P〜Xの続きから）
+const CI_COL = (k) => colName(24 + k); // 1〜5 → Y,Z,AA,AB,AC
+const CN_COL = (k) => colName(29 + k); // 1〜5 → AD,AE,AF,AG,AH
+const CNT_COL = colName(35); // AI
 
 // ---- まとめて作成 ----
 function fillBatch(ws, nm) {
@@ -312,6 +327,7 @@ function fillBatch(ws, nm) {
   [
     [BATCH_COLS.no, "No"],
     [BATCH_COLS.code, "顧客名・コード"],
+    [BATCH_COLS.cand, "候補（複数のとき）"],
     [BATCH_COLS.name, "名称"],
     [BATCH_COLS.status, "印刷ページ"],
   ].forEach(([col, h]) => {
@@ -326,10 +342,14 @@ function fillBatch(ws, nm) {
   const LIST_TOP = HR + 1;
   const calcCode = `${quote(nm.calc)}!$E$2:$E$${DATA_MAX + 1}`;
   const calcName = `${quote(nm.calc)}!$F$2:$F$${DATA_MAX + 1}`;
+  const calcNameAnchor = `${quote(nm.calc)}!$F$2`;
+  const calcNameDisp = `${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1}`;
+  const calcCodeDisp = `${quote(nm.calc)}!$A$2:$A$${DATA_MAX + 1}`;
   const hyphenStrip = (expr) => ["－", "‐", "−", "-", "ー", "―", "–", "—", "‑", "ｰ", " ", "　"].reduce((a, h) => `SUBSTITUTE(${a},"${h}","")`, expr);
   for (let i = 0; i < BATCH_MAX; i++) {
     const r = LIST_TOP + i;
     const inp = `$C$${r}`;
+    const pick = `$${colLetter(BATCH_COLS.cand)}$${r}`;
     const no = ws.getCell(r, BATCH_COLS.no);
     no.value = i + 1;
     no.alignment = { horizontal: "center" };
@@ -344,13 +364,37 @@ function fillBatch(ws, nm) {
     const letters2 = ["U", "V", "W"];
     KANA_K2H.forEach((pairs, i2) => (ws.getCell(`${letters2[i2]}${r}`).value = { formula: kanaChain(pairs, i2 === 0 ? `$Q${r}` : `$${letters2[i2 - 1]}${r}`) }));
     ws.getCell(`X${r}`).value = { formula: hyphenStrip(`$Q${r}`) };
-    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IFERROR(MATCH($Q${r},${calcName},0),IFERROR(MATCH("*"&$Q${r}&"*",${calcName},0),IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),"")))))))`;
+    // 候補（お客様名があいまいに何件かに当てはまるとき、1件ずつ・前の候補の続きから探す）
+    for (let k = 1; k <= BATCH_CAND_N; k++) {
+      const ciCell = `$${CI_COL(k)}$${r}`;
+      const prevCi = k === 1 ? "" : `$${CI_COL(k - 1)}$${r}`;
+      const ciF =
+        k === 1
+          ? `IFERROR(MATCH("*"&$Q${r}&"*",${calcName},0),"")`
+          : `IF(${prevCi}="","",IFERROR(${prevCi}+MATCH("*"&$Q${r}&"*",OFFSET(${calcNameAnchor},${prevCi},0,${DATA_MAX}-${prevCi},1),0),""))`;
+      ws.getCell(`${CI_COL(k)}${r}`).value = { formula: ciF };
+      ws.getCell(`${CN_COL(k)}${r}`).value = { formula: `IF(${ciCell}="","",INDEX(${calcNameDisp},${ciCell})&"（"&INDEX(${calcCodeDisp},${ciCell})&"）")` };
+    }
+    const cnRange = `$${CN_COL(1)}$${r}:$${CN_COL(BATCH_CAND_N)}$${r}`;
+    const ciRange = Array.from({ length: BATCH_CAND_N }, (_, k) => `$${CI_COL(k + 1)}$${r}`).join(",");
+    ws.getCell(`${CNT_COL}${r}`).value = { formula: `COUNT($${CI_COL(1)}$${r}:$${CI_COL(BATCH_CAND_N)}$${r})` };
+    const cand = ws.getCell(r, BATCH_COLS.cand);
+    cand.numFmt = "@";
+    cand.font = { ...font, size: 10 };
+    cand.fill = solid(IN);
+    cand.border = batchBox;
+    cand.alignment = { vertical: "middle", horizontal: "left", indent: 1, wrapText: true };
+    cand.protection = { locked: false };
+    cand.dataValidation = { type: "list", allowBlank: true, formulae: [cnRange], showErrorMessage: false };
+    const idxF = `IF(${inp}="","",IFERROR(MATCH(${codeNormF},${calcCode},0),IF(${pick}<>"",IFERROR(CHOOSE(MATCH(${pick},${cnRange},0),${ciRange}),""),IFERROR(MATCH($Q${r},${calcName},0),IF($${CI_COL(1)}$${r}<>"",$${CI_COL(1)}$${r},IFERROR(MATCH("*"&$T${r}&"*",${calcName},0),IFERROR(MATCH("*"&$W${r}&"*",${calcName},0),IFERROR(MATCH("*"&$X${r}&"*",${calcName},0),""))))))))`;
     ws.getCell(`P${r}`).value = { formula: idxF };
     const name = ws.getCell(r, BATCH_COLS.name);
-    name.value = { formula: `IF(${inp}="","",IF($P$${r}="","見つかりません",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${r})))` };
+    name.value = {
+      formula: `IF(${inp}="","",IF($P$${r}="","見つかりません",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${r})&IF(AND($${CNT_COL}$${r}>1,${pick}=""),"　（候補"&$${CNT_COL}$${r}&"件・左で選べます）","")))`,
+    };
     name.font = font;
     name.border = batchBox;
-    name.alignment = { vertical: "middle" };
+    name.alignment = { vertical: "middle", wrapText: true };
     const st = ws.getCell(r, BATCH_COLS.status);
     st.value = { formula: `IF(${inp}="","",IF($${colLetter(BATCH_COLS.name)}$${r}="見つかりません","見つかりません",${i + 1}))` };
     st.font = { ...font, color: { argb: "FFB06A00" }, bold: true };
@@ -358,7 +402,7 @@ function fillBatch(ws, nm) {
     st.border = batchBox;
     ws.getRow(r).height = 18;
   }
-  for (const c of ["P", "Q", "R", "S", "T", "U", "V", "W", "X"]) ws.getColumn(c.charCodeAt(0) - 64).hidden = true;
+  for (let n = 16; n <= 35; n++) ws.getColumn(n).hidden = true; // P〜AI（検索・候補の計算用）
   ws.mergeCells(2, 2, 2, 5);
   ws.getCell("B2").value = { formula: `IF(COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")=0,"顧客名（またはコード）を入れると、下にページができます","入力 "&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"件　→　印刷は、ページ指定で「1-"&COUNTIF($C$${LIST_TOP}:$C$${LIST_TOP + BATCH_MAX - 1},"<>")&"」")` };
   ws.getCell("B2").font = { ...font, size: 11, bold: true, color: { argb: "FFB06A00" } };
