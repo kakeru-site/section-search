@@ -2,8 +2,8 @@
 //  ・宛名ラベル作成：お客様名を入れると、あいまい検索で候補が出る → 番号を選ぶと、住所・名称入りのラベルが6枚（A5・実物のシール用紙サイズ）、すぐ印刷できる
 //  ・まとめて作成：顧客コードを何件か入れると、1件＝1ページで、まとめて印刷できる
 //  ・顧客データ：顧客マスターのExcelを、そのまま丸ごとコピー貼り付けして使う（列の並びは、顧客マスターと同じ）
-import { fillGuide } from "./oilxlsx.js?v=20261022u";
-import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022u";
+import { fillGuide } from "./oilxlsx.js?v=20261022v";
+import { KANA_H2K, KANA_K2H, kanaChain, normExpr as normExprBase } from "./lookupxlsx.js?v=20261022v";
 // 顧客コードは、半角にそろえる（部品番号と同じ考え方）
 const codeNormExpr = (x) => normExprBase(x, "ASC");
 // 名称は、全角にそろえる（ひらがな⇔カタカナの変換表が、全角カタカナ前提のため）
@@ -49,11 +49,12 @@ const abbrevCo = (x) => `SUBSTITUTE(SUBSTITUTE(${x},"有限会社","㈲"),"株�
 // シールに印刷するときだけ、文字の間の空白（全角・半角とも）を詰める（検索・顧客データ側はそのまま）
 const squeezeSpaces = (x) => `SUBSTITUTE(SUBSTITUTE(${x}," ",""),"　","")`;
 // ラベル1枚（B列 or D列、1つぶん）を描く。r0：そのラベルの先頭行。col：B=2 or D=4。addrF／nameF：中身の数式
-function paintAtena(ws, r0, col, addrF, nameF) {
+// opts.addrSize／opts.addrAlign：上の欄（住所／自由入力の上の文字）の、文字の大きさ・寄せを変えたいときに指定
+function paintAtena(ws, r0, col, addrF, nameF, opts = {}) {
   const a = ws.getCell(r0, col);
   a.value = { formula: squeezeSpaces(addrF) };
-  a.font = atenaFont(15);
-  a.alignment = { horizontal: "left", vertical: "center", wrapText: true };
+  a.font = atenaFont(opts.addrSize || 15);
+  a.alignment = opts.addrAlign || { horizontal: "left", vertical: "center", wrapText: true };
   const n = ws.getCell(r0 + 1, col);
   n.value = { formula: abbrevCo(squeezeSpaces(nameF)) };
   n.font = atenaFont(36); // 実物のシール（カーロード様シート）と同じ大きさ
@@ -63,11 +64,11 @@ function paintAtena(ws, r0, col, addrF, nameF) {
 // withTrailingGap：最後（3つ目）のブロックの後ろにも、余白の行を確保するか。
 // 「まとめて作成」のように、お客様ごとに次のページがすぐ続く場合は false にして、
 // 1人分の行（実質8行）が、物理的に1ページぶんの高さを超えないようにする
-function paintAtenaPage(ws, pageTop, addrF, nameF, withTrailingGap = true) {
+function paintAtenaPage(ws, pageTop, addrF, nameF, withTrailingGap = true, opts = {}) {
   for (let blk = 0; blk < 3; blk++) {
     const r0 = pageTop + blk * 3;
-    paintAtena(ws, r0, 2, addrF, nameF);
-    paintAtena(ws, r0, 4, addrF, nameF);
+    paintAtena(ws, r0, 2, addrF, nameF, opts);
+    paintAtena(ws, r0, 4, addrF, nameF, opts);
     ws.getRow(r0).height = ROW_H[0];
     ws.getRow(r0 + 1).height = ROW_H[1];
     if (blk < 2 || withTrailingGap) ws.getRow(r0 + 2).height = ROW_H[2];
@@ -152,7 +153,7 @@ const titleBar = (ws, title, lastCol, guideName) => {
 
 // ---- データシート（顧客マスターと同じ列。丸ごと貼り付け用） ----
 function fillData(ws) {
-  ws.columns = MASTER_HEADS.map((h, i) => ({ width: i === 3 ? 30 : i === 5 ? 36 : i === 14 ? 22 : 11 }));
+  ws.columns = MASTER_HEADS.map((h, i) => ({ width: i === 3 || i === 4 ? 30 : i === 5 ? 36 : i === 14 ? 22 : 11 }));
   MASTER_HEADS.forEach((h, i) => {
     const c = ws.getCell(1, i + 1);
     c.value = h;
@@ -261,7 +262,7 @@ function fillFind(ws, nm) {
 
   ws.getRow(msg2Row + 1).height = 10;
   const GRID_TOP = msg2Row + 2;
-  const addrF = `IF($Z$${PICK_R}="","",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$Z$${PICK_R}))`;
+  const addrF = `IF($Z$${PICK_R}="","",IF(INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$Z$${PICK_R})="","分",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$Z$${PICK_R})))`;
   const nameF = `IF($Z$${PICK_R}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$Z$${PICK_R}))`;
   paintAtenaPage(ws, GRID_TOP, addrF, nameF);
   ws.views = [{ showGridLines: false }];
@@ -284,7 +285,7 @@ function fillFree(ws, nm) {
   ws.getRow(4).height = 30;
   ws.getRow(5).height = 10;
   const GRID_TOP = 6;
-  paintAtenaPage(ws, GRID_TOP, "$C$3", "$C$4");
+  paintAtenaPage(ws, GRID_TOP, "$C$3", "$C$4", true, { addrSize: 18, addrAlign: { horizontal: "center", vertical: "middle", wrapText: true } });
   ws.views = [{ showGridLines: false }];
   ws.pageSetup = { paperSize: 11, orientation: "landscape", scale: PRINT_SCALE, margins: { left: 0, right: 0, top: PRINT_TOP_MARGIN, bottom: 0, header: 0, footer: 0 }, printArea: `A$${GRID_TOP}:E$${GRID_TOP + 7}` };
   return ws;
@@ -411,7 +412,7 @@ function fillBatch(ws, nm) {
   ws.getRow(LIST_TOP + BATCH_MAX).height = 10;
   const GRID_TOP = BATCH_GRID_TOP;
   for (let i = 0; i < BATCH_MAX; i++) {
-    const addrF = `IF($P$${LIST_TOP + i}="","",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$P$${LIST_TOP + i}))`;
+    const addrF = `IF($P$${LIST_TOP + i}="","",IF(INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$P$${LIST_TOP + i})="","分",INDEX(${quote(nm.calc)}!$C$2:$C$${DATA_MAX + 1},$P$${LIST_TOP + i})))`;
     const nameF = `IF($P$${LIST_TOP + i}="","",INDEX(${quote(nm.calc)}!$B$2:$B$${DATA_MAX + 1},$P$${LIST_TOP + i}))`;
     paintAtenaPage(ws, GRID_TOP + i * 8, addrF, nameF, false);
   }
