@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023d";
-import * as S from "./search.js?v=20261023d";
-import * as FID from "./faceid.js?v=20261023d";
-import * as IMG from "./imgtools.js?v=20261023d";
-import * as CAT from "./catalog.js?v=20261023d";
-import * as TOOLS from "./tools.js?v=20261023d";
-import * as LEARN from "./learn.js?v=20261023d";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023e";
+import * as S from "./search.js?v=20261023e";
+import * as FID from "./faceid.js?v=20261023e";
+import * as IMG from "./imgtools.js?v=20261023e";
+import * as CAT from "./catalog.js?v=20261023e";
+import * as TOOLS from "./tools.js?v=20261023e";
+import * as LEARN from "./learn.js?v=20261023e";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -470,6 +470,7 @@ const autoDedupe = debounce(() => dedupe(false), 1200);
 // [id, PCの表示, キー, スマホの表示, アイコン]
 const NAV = [
   ["sec", "セクション検索", "S", "検索", "search"],
+  ["dict", "品番辞書", "D", "辞書", "book"],
   ["kata", "型式 → 車種", "K", "型式", "car"],
   ["memo", "メモ", "M", "メモ", "note"],
   ["learn", "学び（発見・復習）", "L", "学び", "book"],
@@ -527,6 +528,7 @@ function go(view, opt = {}) {
   const m = $("#main");
   m.scrollTop = 0;
   if (view === "sec") renderSec();
+  else if (view === "dict") renderDict();
   else if (view === "kata") renderKata();
   else if (view === "memo") renderMemo(true);
   else if (view === "learn") {
@@ -2611,6 +2613,7 @@ function rebuildCat() {
 function refreshCat() {
   if (!st.booted) return;
   if (st.view === "sec") renderResults();
+  if (st.view === "dict" && $("#cattbl")) editCatTable();
   if (st.view === "edit" && st.editTab === "cat" && $("#cattbl")) editCatTable();
 }
 // 自分で書いたあとは、手元の控えと版数をそろえる（全件の取り直しをしないため）
@@ -2729,13 +2732,15 @@ function toastAction(msg, label, fn) {
 }
 
 // データ編集 → 品番辞書
-function editCat() {
-  $("#ebody").innerHTML =
-    `<div class="toolbar"><input class="inp" id="cq" placeholder="品番・部品名・メモで絞り込み" value="${esc(st.catQ)}" data-live="1">
+// 品番辞書の検索・一覧（左ナビの「品番辞書」と、データ編集→品番辞書の、両方から使う）
+function catBodyHtml() {
+  return `<div class="toolbar"><input class="inp" id="cq" placeholder="品番・部品名・メモで絞り込み" value="${esc(st.catQ)}" data-live="1">
     <span class="stat" id="cstat"></span><span class="sp"></span>
     <input type="file" id="fcat" accept=".xlsx,.xlsm,.xls,.csv" hidden><button class="btn" data-pick="fcat">Excelから取り込み</button>
     <button class="btn" id="cat-csv">CSVで保存</button><button class="btn pri" data-cedit="">＋ 品番を追加</button></div>
     <div id="cattbl"></div>`;
+}
+function wireCatBody() {
   $("#cq").addEventListener("input", (e) => {
     st.catQ = e.target.value;
     st.catEditLimit = 100;
@@ -2746,6 +2751,14 @@ function editCat() {
   );
   $("#cat-csv").addEventListener("click", saveCatCsv);
   editCatTable();
+}
+function editCat() {
+  $("#ebody").innerHTML = catBodyHtml();
+  wireCatBody();
+}
+function renderDict() {
+  $("#main").innerHTML = `<div class="view-head"><div><h1 class="h1">品番辞書</h1><div class="tip">品番・部品名・メモで、すぐに絞り込めます</div></div></div>${catBodyHtml()}`;
+  wireCatBody();
 }
 function editCatTable() {
   const box = $("#cattbl");
@@ -3149,7 +3162,7 @@ document.addEventListener("keydown", (e) => {
     LEARN.openAdd(learnCtx());
     return;
   }
-  const map = { s: "sec", k: "kata", m: "memo", l: "learn", i: "illust", t: "tool", h: "hist", e: "edit" };
+  const map = { s: "sec", d: "dict", k: "kata", m: "memo", l: "learn", i: "illust", t: "tool", h: "hist", e: "edit" };
   if (map[k]) {
     e.preventDefault();
     go(map[k]);
