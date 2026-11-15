@@ -1,21 +1,21 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261023r";
-import { yomiText } from "./yomi.js?v=20261023r";
-import { sphDocsHtml } from "./sphdocs.js?v=20261023r";
-import { docModel } from "./sphxlsx.js?v=20261023r";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261023r";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023r";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023r";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023r";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023r";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023r";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261023r";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261023r";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023r";
-import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023r";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023r";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023r";
+import * as S from "./search.js?v=20261023s";
+import { yomiText } from "./yomi.js?v=20261023s";
+import { sphDocsHtml } from "./sphdocs.js?v=20261023s";
+import { docModel } from "./sphxlsx.js?v=20261023s";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261023s";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023s";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023s";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023s";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023s";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023s";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261023s";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261023s";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023s";
+import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023s";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023s";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023s";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -806,7 +806,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261023r")
+    : fetch("pitbulbs.json?v=20261023s")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2728,7 +2728,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023r`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023s`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2831,7 +2831,7 @@ function renderCo() {
     <div class="tacts"><button class="chip ${prot ? "on" : ""}" data-co="prot" title="できるExcelのシートに保護をかける（パスワードなし）">シート保護 ${prot ? "ON" : "OFF"}</button></div></div>
     <div class="co-cards">${CO_KINDS.map(
       (k) => `<div class="co-card"><div class="co-ct"><b>${esc(k.name)}</b></div><div class="co-d">${esc(k.desc)}</div><small>足されるシート：${esc(k.sheets)}</small>
-        <div class="tacts"><button class="btn pri" data-co="base" data-k="${k.id}">会社のExcelに追加</button><button class="btn" data-co="new" data-k="${k.id}" title="見本データ入りの、新しいExcelを作る（試すとき用）">新しいExcelで試す</button></div></div>`,
+        <div class="tacts"><button class="btn pri" data-co="base" data-k="${k.id}">たまごに追加</button><button class="btn" data-co="new" data-k="${k.id}" title="見本データ入りの、新しいExcelを作る（試すとき用）">新しいExcelで試す</button></div></div>`,
     ).join("")}</div>
     <input type="file" id="fcobase" accept=".xlsx,.xlsm" hidden>`
   let pick = "";
@@ -2856,7 +2856,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261023r")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261023s")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
@@ -3649,7 +3649,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261023r";
+const APP_VER = "20261023s";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
