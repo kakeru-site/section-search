@@ -38,14 +38,20 @@ function obfuscateJsFiles(dir) {
       controlFlowFlattening: false,
       deadCodeInjection: false,
       stringArray: true,
-      stringArrayThreshold: 0.75,
+      stringArrayThreshold: 1, // 文字列（日本語を含む）を、もれなく表から引く形にする
+      stringArrayEncoding: ["rc4"], // 表の中身も、平文のまま置かない
       rotateStringArray: true,
+      unicodeEscapeSequence: true, // 表に入らない文字列も、\u escapeにして見た目で読めなくする
       identifierNamesGenerator: "hexadecimal",
       renameGlobals: false,
       selfDefending: false,
       target: "browser",
     });
-    writeFileSync(p, result.getObfuscatedCode());
+    // 正規表現リテラル（ /.../ ）の中身は、難読化ツールが手を付けないため、
+    // 残ってしまう日本語（ひらがな・カタカナ・漢字）だけ、ここで \uXXXX に変換する
+    // （正規表現・文字列・テンプレート文字列のどこに出てきても、意味は変わらない）
+    const code = result.getObfuscatedCode().replace(/[぀-ヿ一-鿿＀-￯]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+    writeFileSync(p, code);
   }
 }
 
