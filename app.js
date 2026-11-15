@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023l";
-import * as S from "./search.js?v=20261023l";
-import * as FID from "./faceid.js?v=20261023l";
-import * as IMG from "./imgtools.js?v=20261023l";
-import * as CAT from "./catalog.js?v=20261023l";
-import * as TOOLS from "./tools.js?v=20261023l";
-import * as LEARN from "./learn.js?v=20261023l";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023m";
+import * as S from "./search.js?v=20261023m";
+import * as FID from "./faceid.js?v=20261023m";
+import * as IMG from "./imgtools.js?v=20261023m";
+import * as CAT from "./catalog.js?v=20261023m";
+import * as TOOLS from "./tools.js?v=20261023m";
+import * as LEARN from "./learn.js?v=20261023m";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -271,11 +271,6 @@ function deviceId() {
     return "unknown";
   }
 }
-// ログインに成功した端末を「知っている端末」として覚える（次回以降、見慣れない端末と区別するため）
-function rememberDevice() {
-  if (DEMO) return;
-  store.set(`knownDevices/${deviceId()}`, true).catch(() => {});
-}
 // このページを開いている間、使い回す情報（IPアドレス取得は1回だけでよいため）
 let currentDeviceKnown = true; // 「見慣れない端末」かどうか（楽観的にtrueからはじめる）
 let ipInfo = null; // { ip, loc } をキャッシュ
@@ -348,7 +343,6 @@ function showLogin() {
       st.pwLogin = true;
       if (!preCheckOk) st.loginWarn = "この回のログインでは、右下の確認ボタンが押されていません。心当たりがなければ、パスワードの変更をおすすめします。";
       await store.login(f.email.value.trim(), f.pw.value);
-      rememberDevice();
     } catch (err) {
       st.pwLogin = false;
       st.loginWarn = null;
@@ -1519,7 +1513,7 @@ function renderAccessLog() {
   const main = $("#main");
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">アクセスログ</h1><div class="tip">ログイン画面に来た人を記録（IPアドレス・時刻・端末・だいたいの場所）</div></div>
     <button class="btn danger sm" id="alclear">すべて削除</button></div>
-    <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。<br>「⚠ 見慣れない端末」は、一度もログインに成功したことがない端末からのアクセスです（ログインに成功すると、その端末は自動で「知っている端末」になります）。</p>
+    <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。<br>「⚠ 見慣れない端末」は、まだ「この端末を登録する」をしていない端末です（ログインに成功しただけでは、自動では「知っている端末」になりません。手動で登録してください）。</p>
     <div id="allist"></div>
     <h3 class="ln-h">ログイン失敗の記録</h3><div class="co-note" style="margin:0 0 12px">入力されたメールアドレスだけを記録します（パスワードの中身は記録しません）。</div><div id="alfail"></div>
     <h3 class="ln-h">見慣れない端末の操作履歴</h3><div class="co-note" style="margin:0 0 12px">見慣れない端末が、どの画面を開いたか。知っている端末の操作は記録されません。</div><div id="alact"></div>`;
