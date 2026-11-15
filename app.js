@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023g";
-import * as S from "./search.js?v=20261023g";
-import * as FID from "./faceid.js?v=20261023g";
-import * as IMG from "./imgtools.js?v=20261023g";
-import * as CAT from "./catalog.js?v=20261023g";
-import * as TOOLS from "./tools.js?v=20261023g";
-import * as LEARN from "./learn.js?v=20261023g";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023h";
+import * as S from "./search.js?v=20261023h";
+import * as FID from "./faceid.js?v=20261023h";
+import * as IMG from "./imgtools.js?v=20261023h";
+import * as CAT from "./catalog.js?v=20261023h";
+import * as TOOLS from "./tools.js?v=20261023h";
+import * as LEARN from "./learn.js?v=20261023h";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -243,10 +243,16 @@ function route() {
     if (!st.booted) {
       st.booted = true;
       renderShell();
+      if (st.loginWarn) {
+        toast(st.loginWarn, true);
+        st.loginWarn = null;
+      }
     }
   }
 }
+let preCheckOk = false; // ログイン前の確認ボタンを押したか（不正ログイン予防の合図）
 function showLogin() {
+  preCheckOk = false;
   const g = $("#gate");
   g.innerHTML = `<div class="stripe"></div><div class="gate-body"><form class="gate-card" id="login-form" autocomplete="on">
     <div class="gate-logo">${IC.logo}<span>店頭業務<b>ツール</b></span></div>
@@ -257,8 +263,14 @@ function showLogin() {
     <div class="gate-err" id="lg-err"></div>
     <button class="btn pri wide" type="submit">ログイン</button>
     <div style="margin-top:14px;text-align:right"><button class="linkbtn" type="button" id="lg-reset">パスワードを忘れた</button></div>
-  </form></div>`;
+  </form>
+  <button type="button" id="pre-check" aria-label="確認" style="position:fixed;right:18px;bottom:16px;width:14px;height:14px;border-radius:50%;border:1px solid var(--ln2);background:transparent;opacity:.35;cursor:pointer;padding:0"></button></div>`;
   route();
+  $("#pre-check").addEventListener("click", (e) => {
+    preCheckOk = true;
+    e.currentTarget.style.opacity = "1";
+    e.currentTarget.style.background = "var(--ac)";
+  });
   const f = $("#login-form");
   f.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -267,9 +279,11 @@ function showLogin() {
     $("#lg-err").textContent = "";
     try {
       st.pwLogin = true;
+      if (!preCheckOk) st.loginWarn = "この回のログインでは、右下の確認ボタンが押されていません。心当たりがなければ、パスワードの変更をおすすめします。";
       await store.login(f.email.value.trim(), f.pw.value);
     } catch (err) {
       st.pwLogin = false;
+      st.loginWarn = null;
       $("#lg-err").textContent = err.message;
     } finally {
       btn.disabled = false;
