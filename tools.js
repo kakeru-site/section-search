@@ -1,21 +1,21 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261023q";
-import { yomiText } from "./yomi.js?v=20261023q";
-import { sphDocsHtml } from "./sphdocs.js?v=20261023q";
-import { docModel } from "./sphxlsx.js?v=20261023q";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261023q";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023q";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023q";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023q";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023q";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023q";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261023q";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261023q";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023q";
-import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023q";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023q";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023q";
+import * as S from "./search.js?v=20261023r";
+import { yomiText } from "./yomi.js?v=20261023r";
+import { sphDocsHtml } from "./sphdocs.js?v=20261023r";
+import { docModel } from "./sphxlsx.js?v=20261023r";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261023r";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023r";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023r";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023r";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023r";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023r";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261023r";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261023r";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023r";
+import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023r";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023r";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023r";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -175,7 +175,7 @@ const TABS = [
   ["inn", "部品検索(内装・機関)"],
   ["pit", "エレメント互換表"],
   ["co", "会社Excelへ"],
-  ["xfer", "ファイル受け渡し"],
+  ["xfer", "たまご"],
   ["text", "テキストコピペ"],
 ];
 export function render(main) {
@@ -806,7 +806,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261023q")
+    : fetch("pitbulbs.json?v=20261023r")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2500,9 +2500,9 @@ async function xKey(pass, salt) {
 const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(n / 1024)) + "KB");
 function renderXfer() {
   const box = fresh();
-  box.innerHTML = `<div class="xf-drop" id="xdrop"><div class="xf-dt">ここにファイルをドラッグ、または</div><button class="btn pri" id="xpick">ファイルを選ぶ</button><input type="file" id="xfile" multiple hidden>
+  box.innerHTML = `<div class="xf-drop" id="xdrop"><div class="xf-dt">ここにたまごをドラッグ、または</div><button class="btn pri" id="xpick">たまごを選ぶ</button><input type="file" id="xfile" multiple hidden>
       <div class="xf-pw"><label>パスワード（任意）</label><input class="inp" id="xpw" type="password" autocomplete="new-password" placeholder="かけると、パスワードを知っている人だけ開けます"></div></div>
-    <h3 class="ln-h">預けているファイル</h3><div id="xlist"></div>`;
+    <h3 class="ln-h">預けているたまご</h3><div id="xlist"></div>`;
   const input = $("#xfile", box);
   $("#xpick", box).addEventListener("click", () => input.click());
   input.addEventListener("change", () => xferUpload([...input.files]).finally(() => (input.value = "")));
@@ -2532,7 +2532,7 @@ function renderXferList() {
         return `<div class="xf-row"><div class="xf-main"><b>${esc(m.name)}</b>${m.enc ? '<span class="xf-lock">🔒 パスワードつき</span>' : ""}<small>${fmtSize(m.size || 0)}　${new Date(m.at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} に預けた　あと${left}日で自動削除</small></div>
         <div class="xf-acts"><button class="btn pri" data-xget="${esc(m.id)}">取り出す</button><button class="btn sm" data-xdel="${esc(m.id)}">削除</button></div></div>`;
       })
-      .join("") || '<p class="empty">預けているファイルはありません</p>';
+      .join("") || '<p class="empty">預けているたまごはありません</p>';
 }
 async function xferUpload(files) {
   const pw = ($("#xpw")?.value || "").trim();
@@ -2597,7 +2597,7 @@ async function xferDownload(id) {
 }
 async function xferRemove(id, quiet = false) {
   const m = C.st.xferMeta?.[id];
-  if (!quiet && !(await C.confirmBox(`「${m?.name || "このファイル"}」を削除しますか？`, "削除", true))) return;
+  if (!quiet && !(await C.confirmBox(`「${m?.name || "このたまご"}」を削除しますか？`, "削除", true))) return;
   await C.store.remove(`xferMeta/${id}`).catch(() => {});
   await C.store.remove(`xferData/${id}`).catch(() => {});
   if (!quiet) C.toast("削除しました");
@@ -2728,7 +2728,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023q`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023r`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2856,7 +2856,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261023q")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261023r")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
@@ -3649,7 +3649,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261023q";
+const APP_VER = "20261023r";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
