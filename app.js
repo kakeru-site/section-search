@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023k";
-import * as S from "./search.js?v=20261023k";
-import * as FID from "./faceid.js?v=20261023k";
-import * as IMG from "./imgtools.js?v=20261023k";
-import * as CAT from "./catalog.js?v=20261023k";
-import * as TOOLS from "./tools.js?v=20261023k";
-import * as LEARN from "./learn.js?v=20261023k";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023l";
+import * as S from "./search.js?v=20261023l";
+import * as FID from "./faceid.js?v=20261023l";
+import * as IMG from "./imgtools.js?v=20261023l";
+import * as CAT from "./catalog.js?v=20261023l";
+import * as TOOLS from "./tools.js?v=20261023l";
+import * as LEARN from "./learn.js?v=20261023l";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -276,6 +276,19 @@ function rememberDevice() {
   if (DEMO) return;
   store.set(`knownDevices/${deviceId()}`, true).catch(() => {});
 }
+// このページを開いている間、使い回す情報（IPアドレス取得は1回だけでよいため）
+let currentDeviceKnown = true; // 「見慣れない端末」かどうか（楽観的にtrueからはじめる）
+let ipInfo = null; // { ip, loc } をキャッシュ
+async function getIpInfo() {
+  if (ipInfo) return ipInfo;
+  ipInfo = { ip: "不明", loc: "" };
+  try {
+    const r = await fetch("https://ipapi.co/json/");
+    const j = await r.json();
+    ipInfo = { ip: j.ip || "不明", loc: [j.city, j.region, j.country_name].filter(Boolean).join("、") };
+  } catch {}
+  return ipInfo;
+}
 // ログイン画面に来たとき・自動ログインされたとき、どちらも1回だけ記録する
 // （自動ログインの端末は、ログイン画面自体が表示されないため、別のタイミングでも呼べるようにしている）
 let visitLogged = false;
@@ -287,15 +300,19 @@ async function logVisit() {
   try {
     known = !!(await store.get(`knownDevices/${did}`));
   } catch {}
-  const entry = { ip: "不明", at: Date.now(), known, did, ua: (navigator.userAgent || "").slice(0, 200) };
-  try {
-    const r = await fetch("https://ipapi.co/json/");
-    const j = await r.json();
-    entry.ip = j.ip || "不明";
-    entry.loc = [j.city, j.region, j.country_name].filter(Boolean).join("、");
-  } catch {}
+  currentDeviceKnown = known;
+  const { ip, loc } = await getIpInfo();
+  const entry = { ip, loc, at: Date.now(), known, did, ua: (navigator.userAgent || "").slice(0, 200) };
   try {
     await store.push("visitLog", entry);
+  } catch {}
+}
+// ログインに失敗したときの記録（メールアドレスと状況だけ。パスワードの中身は一切記録しない）
+async function logFailedLogin(email) {
+  if (DEMO) return;
+  try {
+    const { ip, loc } = await getIpInfo();
+    await store.push("loginFailLog", { email: String(email || "").slice(0, 200), at: Date.now(), ip, loc, did: deviceId(), ua: (navigator.userAgent || "").slice(0, 200) });
   } catch {}
 }
 let preCheckOk = false; // ログイン前の確認ボタンを押したか（不正ログイン予防の合図）
@@ -336,6 +353,7 @@ function showLogin() {
       st.pwLogin = false;
       st.loginWarn = null;
       $("#lg-err").textContent = err.message;
+      logFailedLogin(f.email.value.trim());
     } finally {
       btn.disabled = false;
     }
@@ -392,7 +410,7 @@ function showLock() {
 }
 // ロック中、DevToolsなどで中身を見られないよう、手元のメモリからも実際にデータを消しておく
 // （保存先はFirebase側のまま。解除したら、startData()でもう一度読み直すだけ）
-const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs", "visitLog"];
+const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs", "visitLog", "loginFailLog", "activityLog"];
 function lockNow() {
   if (!FID.registered() || !st.user || st.locked) return;
   document.activeElement?.blur(); // 入力中のものを、消す前に保存させる（blurで各エディタのdebounce保存を走らせる）
@@ -440,6 +458,8 @@ function startData() {
   sub("xferMeta", "xferMeta");
   sub("textXferMeta", "textXferMeta");
   sub("visitLog", "visitLog");
+  sub("loginFailLog", "loginFailLog");
+  sub("activityLog", "activityLog");
   sub("learnLog", "learnLog");
   sub("oils", "oils");
   sub("spheres", "spheres");
@@ -475,7 +495,7 @@ function onData(key) {
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
-  else if (v === "alog" && key === "visitLog") renderAccessLog();
+  else if (v === "alog" && ["visitLog", "loginFailLog", "activityLog"].includes(key)) renderAccessLog();
   else if (v === "learn") LEARN.onData(key);
   else if (v === "tool") TOOLS.onData(key);
   else if (v === "illust" && ["images", "parts"].includes(key) && !modalOpen()) renderIllust(false);
@@ -597,9 +617,15 @@ async function renderFid() {
     c.innerHTML = `${IC.face}<div><b>生体認証ロック OFF</b>${av ? "押して設定する" : "この端末では使えません"}</div>`;
   }
 }
+// 見慣れない端末のときだけ、どの画面を見たかを記録する（知っている端末は記録しない）
+function logActivity(view) {
+  if (DEMO || currentDeviceKnown) return;
+  store.push("activityLog", { did: deviceId(), view, at: Date.now() }).catch(() => {});
+}
 function go(view, opt = {}) {
   const prev = st.view;
   st.view = view;
+  if (view !== prev) logActivity(view);
   if (opt.editTab) st.editTab = opt.editTab;
   renderNav();
   const m = $("#main");
@@ -1488,15 +1514,18 @@ async function openMemoForKata(code) {
 }
 
 // ---- 検索履歴 ----
+const fmtWhen2 = (at) => new Date(at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 function renderAccessLog() {
   const main = $("#main");
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">アクセスログ</h1><div class="tip">ログイン画面に来た人を記録（IPアドレス・時刻・端末・だいたいの場所）</div></div>
     <button class="btn danger sm" id="alclear">すべて削除</button></div>
     <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。<br>「⚠ 見慣れない端末」は、一度もログインに成功したことがない端末からのアクセスです（ログインに成功すると、その端末は自動で「知っている端末」になります）。</p>
-    <div id="allist"></div>`;
+    <div id="allist"></div>
+    <h3 class="ln-h">ログイン失敗の記録</h3><div class="co-note" style="margin:0 0 12px">入力されたメールアドレスだけを記録します（パスワードの中身は記録しません）。</div><div id="alfail"></div>
+    <h3 class="ln-h">見慣れない端末の操作履歴</h3><div class="co-note" style="margin:0 0 12px">見慣れない端末が、どの画面を開いたか。知っている端末の操作は記録されません。</div><div id="alact"></div>`;
   $("#alclear").addEventListener("click", async () => {
-    if (!(await confirmBox("アクセスログをすべて削除します。元に戻せません。", "すべて削除", true))) return;
-    await store.remove("visitLog");
+    if (!(await confirmBox("アクセスログ（アクセス・ログイン失敗・操作履歴）をすべて削除します。元に戻せません。", "すべて削除", true))) return;
+    await Promise.all([store.remove("visitLog"), store.remove("loginFailLog"), store.remove("activityLog")]);
     toast("削除しました");
   });
   const list = Object.entries(st.visitLog || {})
@@ -1506,7 +1535,7 @@ function renderAccessLog() {
   $("#allist").innerHTML =
     list
       .map(
-        (v) => `<div class="xf-row"${v.known ? "" : ' style="border-color:var(--ng);border-width:2px"'}><div class="xf-main">${v.known ? "" : '<span style="color:var(--ng);font-weight:700">⚠ 見慣れない端末　</span>'}<b>${esc(v.ip || "不明")}</b><small>${new Date(v.at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}　${esc(deviceLabel(v.ua))}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
+        (v) => `<div class="xf-row"${v.known ? "" : ' style="border-color:var(--ng);border-width:2px"'}><div class="xf-main">${v.known ? "" : '<span style="color:var(--ng);font-weight:700">⚠ 見慣れない端末　</span>'}<b>${esc(v.ip || "不明")}</b><small>${fmtWhen2(v.at)}　${esc(deviceLabel(v.ua))}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
       <div class="xf-acts">${!v.known && v.did ? `<button class="btn sm" data-altrust="${esc(v.id)}" data-did="${esc(v.did)}">この端末を登録する</button>` : ""}<button class="btn sm" data-aldel="${esc(v.id)}">削除</button></div></div>`,
       )
       .join("") || '<p class="empty">まだ記録がありません</p>';
@@ -1518,6 +1547,37 @@ function renderAccessLog() {
       await store.set(`knownDevices/${btn.dataset.did}`, true).catch((err) => toast(err.message, true));
       toast("この端末を「知っている端末」として登録しました");
     }
+  });
+  const failList = Object.entries(st.loginFailLog || {})
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, 300);
+  $("#alfail").innerHTML =
+    failList
+      .map(
+        (v) => `<div class="xf-row"><div class="xf-main"><b>${esc(v.email || "（空欄）")}</b><small>${fmtWhen2(v.at)}　${esc(deviceLabel(v.ua))}${v.ip ? "　" + esc(v.ip) : ""}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
+      <div class="xf-acts"><button class="btn sm" data-fdel="${esc(v.id)}">削除</button></div></div>`,
+      )
+      .join("") || '<p class="empty">まだ記録がありません</p>';
+  $("#alfail").addEventListener("click", (e) => {
+    const id = e.target.closest("[data-fdel]")?.dataset.fdel;
+    if (id) store.remove(`loginFailLog/${id}`);
+  });
+  const viewLabel = (v) => NAV.find((n) => n[0] === v)?.[1] || v;
+  const actList = Object.entries(st.activityLog || {})
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, 500);
+  $("#alact").innerHTML =
+    actList
+      .map(
+        (v) => `<div class="xf-row"><div class="xf-main"><b>${esc(viewLabel(v.view))}</b><small>${fmtWhen2(v.at)}　端末：${esc((v.did || "").slice(0, 8))}…</small></div>
+      <div class="xf-acts"><button class="btn sm" data-vdel="${esc(v.id)}">削除</button></div></div>`,
+      )
+      .join("") || '<p class="empty">まだ記録がありません</p>';
+  $("#alact").addEventListener("click", (e) => {
+    const id = e.target.closest("[data-vdel]")?.dataset.vdel;
+    if (id) store.remove(`activityLog/${id}`);
   });
 }
 function renderHist() {

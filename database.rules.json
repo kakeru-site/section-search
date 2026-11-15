@@ -28,6 +28,13 @@
           ".write": "auth != null && auth.uid === 'ここに自分のUIDを貼る'",
           ".validate": "newData.isBoolean() && newData.val() === true"
         }
+      },
+      "loginFailLog": {
+        ".read": "auth != null && auth.uid === 'ここに自分のUIDを貼る'",
+        "$id": {
+          ".write": "!data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['email', 'at']) && newData.child('email').isString() && newData.child('email').val().length <= 200 && newData.child('at').isNumber() && (!newData.hasChild('ip') || (newData.child('ip').isString() && newData.child('ip').val().length <= 45)) && (!newData.hasChild('ua') || (newData.child('ua').isString() && newData.child('ua').val().length <= 200)) && (!newData.hasChild('loc') || (newData.child('loc').isString() && newData.child('loc').val().length <= 120)) && (!newData.hasChild('did') || (newData.child('did').isString() && newData.child('did').val().length <= 64))"
+        }
       }
     }
   }

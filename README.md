@@ -27,7 +27,7 @@ GitHub Pages（画面）＋ Firebase（ログインとデータ）で動きま�
 3. **Realtime Database → データベースを作成**
    - ロケーション：`asia-southeast1（シンガポール）`
    - 「ロックモードで開始」
-4. **Realtime Database → ルール** に `database.rules.json` の中身を貼り、`ここに自分のUIDを貼る`（4か所）を手順2のUIDに置き換えて「公開」
+4. **Realtime Database → ルール** に `database.rules.json` の中身を貼り、`ここに自分のUIDを貼る`（5か所）を手順2のUIDに置き換えて「公開」
 5. **プロジェクトの設定 → マイアプリ → ウェブアプリを追加**（名前は「セクション検索」など）
    - 表示された `firebaseConfig` の値を `js/config.js` の `FIREBASE` に貼る
    - `databaseURL` が無い場合は、Realtime Database の画面上部に出ているURLを入れる
@@ -101,4 +101,6 @@ sectionApp/
   stats/sections/{sec}  sec, n
   visitLog/{id}   ip, loc, ua, at, known, did（ログイン画面に来た人・自動ログインされた人の記録。ログイン前でも書き込める特別な場所）
   knownDevices/{端末の目印}  true（ログインに成功したことがある端末。ログイン前でも読める特別な場所）
+  loginFailLog/{id}  email, at, ip, loc, ua, did（ログイン失敗の記録。パスワードの中身は記録しない。ログイン前でも書き込める特別な場所）
+  activityLog/{id}   did, view, at（見慣れない端末が、どの画面を開いたかの記録。ログイン済みのみ）
 ```
