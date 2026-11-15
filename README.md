@@ -99,6 +99,6 @@ sectionApp/
   history/{id}    type(part|kata), q, hits, at
   settings/       googlePrefix, cseId, synonyms
   stats/sections/{sec}  sec, n
-  visitLog/{id}   ip, loc, ua, at, known（ログイン画面に来た人の記録。ログイン前でも書き込める特別な場所）
+  visitLog/{id}   ip, loc, ua, at, known, did（ログイン画面に来た人・自動ログインされた人の記録。ログイン前でも書き込める特別な場所）
   knownDevices/{端末の目印}  true（ログインに成功したことがある端末。ログイン前でも読める特別な場所）
 ```

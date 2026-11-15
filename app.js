@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023j";
-import * as S from "./search.js?v=20261023j";
-import * as FID from "./faceid.js?v=20261023j";
-import * as IMG from "./imgtools.js?v=20261023j";
-import * as CAT from "./catalog.js?v=20261023j";
-import * as TOOLS from "./tools.js?v=20261023j";
-import * as LEARN from "./learn.js?v=20261023j";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023k";
+import * as S from "./search.js?v=20261023k";
+import * as FID from "./faceid.js?v=20261023k";
+import * as IMG from "./imgtools.js?v=20261023k";
+import * as CAT from "./catalog.js?v=20261023k";
+import * as TOOLS from "./tools.js?v=20261023k";
+import * as LEARN from "./learn.js?v=20261023k";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -225,6 +225,7 @@ async function boot() {
       st.locked = !!FID.registered() && !st.pwLogin;
       st.pwLogin = false;
       startData();
+      logVisit(); // 自動ログイン（覚えた端末）の場合、ログイン画面を経由しないため、ここでも記録する
     }
     route();
   });
@@ -275,15 +276,18 @@ function rememberDevice() {
   if (DEMO) return;
   store.set(`knownDevices/${deviceId()}`, true).catch(() => {});
 }
-// ログイン画面に来た人を、ベストエフォートで記録する（失敗してもログイン自体は止めない）
+// ログイン画面に来たとき・自動ログインされたとき、どちらも1回だけ記録する
+// （自動ログインの端末は、ログイン画面自体が表示されないため、別のタイミングでも呼べるようにしている）
+let visitLogged = false;
 async function logVisit() {
-  if (DEMO) return;
+  if (DEMO || visitLogged) return;
+  visitLogged = true;
   const did = deviceId();
   let known = false;
   try {
     known = !!(await store.get(`knownDevices/${did}`));
   } catch {}
-  const entry = { ip: "不明", at: Date.now(), known, ua: (navigator.userAgent || "").slice(0, 200) };
+  const entry = { ip: "不明", at: Date.now(), known, did, ua: (navigator.userAgent || "").slice(0, 200) };
   try {
     const r = await fetch("https://ipapi.co/json/");
     const j = await r.json();
@@ -297,6 +301,7 @@ async function logVisit() {
 let preCheckOk = false; // ログイン前の確認ボタンを押したか（不正ログイン予防の合図）
 function showLogin() {
   preCheckOk = false;
+  visitLogged = false; // ログアウト→再ログインでも、毎回ちゃんと記録されるように
   logVisit();
   const g = $("#gate");
   g.innerHTML = `<div class="stripe"></div><div class="gate-body"><form class="gate-card" id="login-form" autocomplete="on">
@@ -1502,12 +1507,17 @@ function renderAccessLog() {
     list
       .map(
         (v) => `<div class="xf-row"${v.known ? "" : ' style="border-color:var(--ng);border-width:2px"'}><div class="xf-main">${v.known ? "" : '<span style="color:var(--ng);font-weight:700">⚠ 見慣れない端末　</span>'}<b>${esc(v.ip || "不明")}</b><small>${new Date(v.at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}　${esc(deviceLabel(v.ua))}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
-      <div class="xf-acts"><button class="btn sm" data-aldel="${esc(v.id)}">削除</button></div></div>`,
+      <div class="xf-acts">${!v.known && v.did ? `<button class="btn sm" data-altrust="${esc(v.id)}" data-did="${esc(v.did)}">この端末を登録する</button>` : ""}<button class="btn sm" data-aldel="${esc(v.id)}">削除</button></div></div>`,
       )
       .join("") || '<p class="empty">まだ記録がありません</p>';
-  $("#allist").addEventListener("click", (e) => {
-    const id = e.target.closest("[data-aldel]")?.dataset.aldel;
-    if (id) store.remove(`visitLog/${id}`);
+  $("#allist").addEventListener("click", async (e) => {
+    const delId = e.target.closest("[data-aldel]")?.dataset.aldel;
+    if (delId) return store.remove(`visitLog/${delId}`);
+    const btn = e.target.closest("[data-altrust]");
+    if (btn) {
+      await store.set(`knownDevices/${btn.dataset.did}`, true).catch((err) => toast(err.message, true));
+      toast("この端末を「知っている端末」として登録しました");
+    }
   });
 }
 function renderHist() {
