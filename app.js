@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023e";
-import * as S from "./search.js?v=20261023e";
-import * as FID from "./faceid.js?v=20261023e";
-import * as IMG from "./imgtools.js?v=20261023e";
-import * as CAT from "./catalog.js?v=20261023e";
-import * as TOOLS from "./tools.js?v=20261023e";
-import * as LEARN from "./learn.js?v=20261023e";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023f";
+import * as S from "./search.js?v=20261023f";
+import * as FID from "./faceid.js?v=20261023f";
+import * as IMG from "./imgtools.js?v=20261023f";
+import * as CAT from "./catalog.js?v=20261023f";
+import * as TOOLS from "./tools.js?v=20261023f";
+import * as LEARN from "./learn.js?v=20261023f";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -365,6 +365,7 @@ function startData() {
   sub("memos", "memos");
   sub("learn", "learn");
   sub("xferMeta", "xferMeta");
+  sub("textXferMeta", "textXferMeta");
   sub("learnLog", "learnLog");
   sub("oils", "oils");
   sub("spheres", "spheres");

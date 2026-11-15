@@ -1,21 +1,21 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261023e";
-import { yomiText } from "./yomi.js?v=20261023e";
-import { sphDocsHtml } from "./sphdocs.js?v=20261023e";
-import { docModel } from "./sphxlsx.js?v=20261023e";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261023e";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023e";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023e";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023e";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023e";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023e";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261023e";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261023e";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023e";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261023e";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023e";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023e";
+import * as S from "./search.js?v=20261023f";
+import { yomiText } from "./yomi.js?v=20261023f";
+import { sphDocsHtml } from "./sphdocs.js?v=20261023f";
+import { docModel } from "./sphxlsx.js?v=20261023f";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261023f";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023f";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023f";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023f";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023f";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023f";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261023f";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261023f";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023f";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261023f";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023f";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023f";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -176,6 +176,7 @@ const TABS = [
   ["pit", "エレメント互換表"],
   ["co", "会社Excelへ"],
   ["xfer", "ファイル受け渡し"],
+  ["text", "テキストコピペ"],
 ];
 export function render(main) {
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">ツール</h1>
@@ -189,7 +190,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, co: renderCo, xfer: renderXfer })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, co: renderCo, xfer: renderXfer, text: renderText })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -205,6 +206,7 @@ export function context() {
 }
 export function onData(key) {
   if (T.tab === "xfer" && key === "xferMeta" && $("#xlist")) renderXferList();
+  if (T.tab === "text" && key === "textXferMeta" && $("#tlist")) renderTextList();
   if (T.tab === "bulb" && key === "bulbs" && $("#blist")) renderBulbList();
   if (T.tab === "oil" && (key === "oils" || key === "memos") && $("#olist")) renderOilList();
   if (T.tab === "sph" && (key === "spheres" || key === "memos") && $("#slist")) renderSphList();
@@ -804,7 +806,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261023e")
+    : fetch("pitbulbs.json?v=20261023f")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2607,12 +2609,129 @@ async function xferRemove(id, quiet = false) {
 function xferCleanup() {
   for (const [id, m] of Object.entries(C.st.xferMeta || {})) if (m.at && Date.now() - m.at > XFER_DAYS * 86400000) xferRemove(id, true);
 }
+
+// ---- テキストコピペ：スマホで書いた下書きを、会社のパソコンへすぐコピー ----
+const TEXT_DAYS = 7; // 預けてから、この日数がたつと、自動で消える
+const TEXT_MAX = 50000; // 1件の文字数の上限
+function renderText() {
+  const box = fresh();
+  box.innerHTML = `<div class="panel xf-intro"><h3>テキストコピペ</h3>
+    <ol class="co-steps"><li>スマホで文章を書く（メールの下書きなど）→ 下の欄に貼り付けて「預ける」</li><li>会社のパソコンで、このサイトを開く → 一覧から「コピー」→ メールにペースト</li></ol>
+    <p class="co-note" style="margin:0">預けた文章は、あなたのアカウントにだけ保管されます。<b>${TEXT_DAYS}日たつと、自動で消えます</b>。1件 ${TEXT_MAX.toLocaleString()}文字まで。<br>個人情報を含む文章は、必ず「パスワード」をかけてください（パスワードは、サイトにも保存されません。知らない人はコピーできません）。</p></div>
+    <div class="xf-pw" style="max-width:none;margin:12px 0 0">
+      <textarea class="inp" id="tx-body" rows="8" placeholder="ここに文章を貼り付け、または直接入力"></textarea>
+      <div style="margin-top:8px"><label>パスワード（任意）</label><input class="inp" id="tx-pw" type="password" autocomplete="new-password" placeholder="かけると、パスワードを知っている人だけコピーできます"></div>
+      <button class="btn pri" id="tx-save" style="margin-top:10px">預ける</button>
+    </div>
+    <h3 class="ln-h">預けている文章</h3><div id="tlist"></div>`;
+  $("#tx-save", box).addEventListener("click", async () => {
+    const ta = $("#tx-body", box);
+    const text = ta.value;
+    if (!text.trim()) return C.toast("文章が空です", true);
+    const ok = await textUpload(text, ($("#tx-pw", box).value || "").trim());
+    if (ok) {
+      ta.value = "";
+      $("#tx-pw", box).value = "";
+    }
+  });
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.tget) textCopy(b.dataset.tget);
+    else if (b.dataset.tdel) textRemove(b.dataset.tdel);
+  });
+  renderTextList();
+  textCleanup();
+}
+function renderTextList() {
+  const el = $("#tlist");
+  if (!el) return;
+  const list = Object.entries(C.st.textXferMeta || {})
+    .map(([id, m]) => ({ id, ...m }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+  el.innerHTML =
+    list
+      .map((m) => {
+        const left = Math.max(0, Math.ceil((m.at + TEXT_DAYS * 86400000 - Date.now()) / 86400000));
+        const preview = m.enc ? "（パスワードつき）" : esc((m.preview || "").replace(/\s+/g, " ")) || "（空）";
+        return `<div class="xf-row"><div class="xf-main"><b>${preview}</b>${m.enc ? '<span class="xf-lock">🔒 パスワードつき</span>' : ""}<small>${(m.len || 0).toLocaleString()}文字　${new Date(m.at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} に預けた　あと${left}日で自動削除</small></div>
+        <div class="xf-acts"><button class="btn pri" data-tget="${esc(m.id)}">コピー</button><button class="btn sm" data-tdel="${esc(m.id)}">削除</button></div></div>`;
+      })
+      .join("") || '<p class="empty">預けている文章はありません</p>';
+}
+async function textUpload(text, pw) {
+  if (text.length > TEXT_MAX) {
+    C.toast(`長すぎます（${TEXT_MAX.toLocaleString()}文字まで）`, true);
+    return false;
+  }
+  try {
+    C.toast("預けています…");
+    const id = C.localKey();
+    let enc = null;
+    let body = text;
+    if (pw) {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const u8 = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await xKey(pw, salt), new TextEncoder().encode(text)));
+      enc = { salt: toB64(salt), iv: toB64(iv) };
+      body = toB64(u8);
+    }
+    await C.store.set(`textXferMeta/${id}`, { body, enc, preview: enc ? null : text.slice(0, 60), len: text.length, at: Date.now() });
+    C.toast("預けました");
+    return true;
+  } catch (e) {
+    C.toast("預けられませんでした：" + e.message, true);
+    return false;
+  }
+}
+async function textCopy(id) {
+  const m = C.st.textXferMeta?.[id];
+  if (!m) return;
+  try {
+    let text;
+    if (m.enc) {
+      const r = await C.modal(`<h3>パスワード</h3><form><div class="field"><label>この文章のパスワード</label><input class="inp" name="pw" type="password" autocomplete="off" required autofocus></div></form><div class="modal-foot"><button class="btn" data-m="cancel">やめる</button><button class="btn pri" data-m="ok">コピー</button></div>`);
+      if (!r) return;
+      try {
+        const u8 = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(m.enc.iv) }, await xKey(r.data.pw, fromB64(m.enc.salt)), fromB64(m.body)));
+        text = new TextDecoder().decode(u8);
+      } catch {
+        return C.toast("パスワードが違います", true);
+      }
+    } else {
+      text = m.body;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const t = document.createElement("textarea");
+      t.value = text;
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand("copy");
+      t.remove();
+    }
+    C.toast("コピーしました（Ctrl+V で貼り付け）");
+  } catch (e) {
+    C.toast("コピーできませんでした：" + e.message, true);
+  }
+}
+async function textRemove(id, quiet = false) {
+  if (!quiet && !(await C.confirmBox("この文章を削除しますか？", "削除", true))) return;
+  await C.store.remove(`textXferMeta/${id}`).catch(() => {});
+  if (!quiet) C.toast("削除しました");
+}
+// 期限（${TEXT_DAYS}日）が切れたものを消す
+function textCleanup() {
+  for (const [id, m] of Object.entries(C.st.textXferMeta || {})) if (m.at && Date.now() - m.at > TEXT_DAYS * 86400000) textRemove(id, true);
+}
+
 // ---- エレメント互換表（オイル・燃料）：どのメーカーの品番からでも、PITWORK品番を探す ----
 let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023e`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023f`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2745,7 +2864,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261023e")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261023f")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3685,7 +3804,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261023e";
+const APP_VER = "20261023f";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
