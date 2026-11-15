@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023h";
-import * as S from "./search.js?v=20261023h";
-import * as FID from "./faceid.js?v=20261023h";
-import * as IMG from "./imgtools.js?v=20261023h";
-import * as CAT from "./catalog.js?v=20261023h";
-import * as TOOLS from "./tools.js?v=20261023h";
-import * as LEARN from "./learn.js?v=20261023h";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023i";
+import * as S from "./search.js?v=20261023i";
+import * as FID from "./faceid.js?v=20261023i";
+import * as IMG from "./imgtools.js?v=20261023i";
+import * as CAT from "./catalog.js?v=20261023i";
+import * as TOOLS from "./tools.js?v=20261023i";
+import * as LEARN from "./learn.js?v=20261023i";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -250,9 +250,27 @@ function route() {
     }
   }
 }
+// 端末のだいたいの種類を、UAから短く表す
+function deviceLabel(ua) {
+  ua = ua || "";
+  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "不明な端末";
+  const browser = /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /Firefox/.test(ua) ? "Firefox" : /Safari/.test(ua) ? "Safari" : "";
+  return browser ? `${os}（${browser}）` : os;
+}
+// ログイン画面に来た人を、ベストエフォートで記録する（失敗してもログイン自体は止めない）
+async function logVisit() {
+  if (DEMO) return;
+  try {
+    const r = await fetch("https://ipapi.co/json/");
+    const j = await r.json();
+    const loc = [j.city, j.region, j.country_name].filter(Boolean).join("、");
+    await store.push("visitLog", { ip: j.ip || "不明", loc, ua: (navigator.userAgent || "").slice(0, 200), at: Date.now() });
+  } catch {}
+}
 let preCheckOk = false; // ログイン前の確認ボタンを押したか（不正ログイン予防の合図）
 function showLogin() {
   preCheckOk = false;
+  logVisit();
   const g = $("#gate");
   g.innerHTML = `<div class="stripe"></div><div class="gate-body"><form class="gate-card" id="login-form" autocomplete="on">
     <div class="gate-logo">${IC.logo}<span>店頭業務<b>ツール</b></span></div>
@@ -341,7 +359,7 @@ function showLock() {
 }
 // ロック中、DevToolsなどで中身を見られないよう、手元のメモリからも実際にデータを消しておく
 // （保存先はFirebase側のまま。解除したら、startData()でもう一度読み直すだけ）
-const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs"];
+const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs", "visitLog"];
 function lockNow() {
   if (!FID.registered() || !st.user || st.locked) return;
   document.activeElement?.blur(); // 入力中のものを、消す前に保存させる（blurで各エディタのdebounce保存を走らせる）
@@ -388,6 +406,7 @@ function startData() {
   sub("learn", "learn");
   sub("xferMeta", "xferMeta");
   sub("textXferMeta", "textXferMeta");
+  sub("visitLog", "visitLog");
   sub("learnLog", "learnLog");
   sub("oils", "oils");
   sub("spheres", "spheres");
@@ -423,6 +442,7 @@ function onData(key) {
   else if (v === "kata" && ["kata", "memos"].includes(key)) renderKataResult();
   else if (v === "memo" && ["memos", "parts"].includes(key)) renderMemo(false);
   else if (v === "hist" && key === "history") renderHist();
+  else if (v === "alog" && key === "visitLog") renderAccessLog();
   else if (v === "learn") LEARN.onData(key);
   else if (v === "tool") TOOLS.onData(key);
   else if (v === "illust" && ["images", "parts"].includes(key) && !modalOpen()) renderIllust(false);
@@ -500,6 +520,7 @@ const NAV = [
   ["illust", "イラスト帳", "I", "図", "pic"],
   ["tool", "ツール", "T", "ツール", "calc"],
   ["hist", "検索履歴", "H", "履歴", "clock"],
+  ["alog", "アクセスログ", "A", "アクセス", "clock"],
   ["edit", "データ編集", "E", "設定", "gear"],
 ];
 function renderShell() {
@@ -558,6 +579,7 @@ function go(view, opt = {}) {
     if (prev !== "learn") LEARN.reset();
     LEARN.render(m);
   } else if (view === "hist") renderHist();
+  else if (view === "alog") renderAccessLog();
   else if (view === "illust") renderIllust(true);
   else if (view === "edit") renderEdit();
   else if (view === "tool") TOOLS.render(m);
@@ -1433,6 +1455,33 @@ async function openMemoForKata(code) {
 }
 
 // ---- 検索履歴 ----
+function renderAccessLog() {
+  const main = $("#main");
+  main.innerHTML = `<div class="view-head"><div><h1 class="h1">アクセスログ</h1><div class="tip">ログイン画面に来た人を記録（IPアドレス・時刻・端末・だいたいの場所）</div></div>
+    <button class="btn danger sm" id="alclear">すべて削除</button></div>
+    <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。</p>
+    <div id="allist"></div>`;
+  $("#alclear").addEventListener("click", async () => {
+    if (!(await confirmBox("アクセスログをすべて削除します。元に戻せません。", "すべて削除", true))) return;
+    await store.remove("visitLog");
+    toast("削除しました");
+  });
+  const list = Object.entries(st.visitLog || {})
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, 300);
+  $("#allist").innerHTML =
+    list
+      .map(
+        (v) => `<div class="xf-row"><div class="xf-main"><b>${esc(v.ip || "不明")}</b><small>${new Date(v.at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}　${esc(deviceLabel(v.ua))}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
+      <div class="xf-acts"><button class="btn sm" data-aldel="${esc(v.id)}">削除</button></div></div>`,
+      )
+      .join("") || '<p class="empty">まだ記録がありません</p>';
+  $("#allist").addEventListener("click", (e) => {
+    const id = e.target.closest("[data-aldel]")?.dataset.aldel;
+    if (id) store.remove(`visitLog/${id}`);
+  });
+}
 function renderHist() {
   const main = $("#main");
   if (!$("#hlist")) {
@@ -3185,7 +3234,7 @@ document.addEventListener("keydown", (e) => {
     LEARN.openAdd(learnCtx());
     return;
   }
-  const map = { s: "sec", d: "dict", k: "kata", m: "memo", l: "learn", i: "illust", t: "tool", h: "hist", e: "edit" };
+  const map = { s: "sec", d: "dict", k: "kata", m: "memo", l: "learn", i: "illust", t: "tool", h: "hist", a: "alog", e: "edit" };
   if (map[k]) {
     e.preventDefault();
     go(map[k]);
