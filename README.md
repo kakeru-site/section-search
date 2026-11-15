@@ -99,7 +99,7 @@ sectionApp/
   history/{id}    type(part|kata), q, hits, at
   settings/       googlePrefix, cseId, synonyms
   stats/sections/{sec}  sec, n
-  visitLog/{id}   ip, loc, ua, at, known, did（ログイン画面に来た人・自動ログインされた人の記録。ログイン前でも書き込める特別な場所）
+  visitLog/{id}   ip, loc, ua, at, known, did, ack（見慣れない端末の記録。ログイン前でも新規作成できる特別な場所。ackだけは後から本人が更新できる）
   knownDevices/{端末の目印}  true（ログインに成功したことがある端末。ログイン前でも読める特別な場所）
   loginFailLog/{id}  email, at, ip, loc, ua, did（ログイン失敗の記録。パスワードの中身は記録しない。ログイン前でも書き込める特別な場所）
   activityLog/{id}   did, view, at（見慣れない端末が、どの画面を開いたかの記録。ログイン済みのみ）

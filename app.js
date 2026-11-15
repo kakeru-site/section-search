@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023n";
-import * as S from "./search.js?v=20261023n";
-import * as FID from "./faceid.js?v=20261023n";
-import * as IMG from "./imgtools.js?v=20261023n";
-import * as CAT from "./catalog.js?v=20261023n";
-import * as TOOLS from "./tools.js?v=20261023n";
-import * as LEARN from "./learn.js?v=20261023n";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023o";
+import * as S from "./search.js?v=20261023o";
+import * as FID from "./faceid.js?v=20261023o";
+import * as IMG from "./imgtools.js?v=20261023o";
+import * as CAT from "./catalog.js?v=20261023o";
+import * as TOOLS from "./tools.js?v=20261023o";
+import * as LEARN from "./learn.js?v=20261023o";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -590,7 +590,8 @@ function renderShell() {
 function renderNav() {
   const open = vals(st.memos).filter((m) => !m.done).length;
   const due = LEARN.dueCount();
-  const badge = (k) => (k === "memo" && open ? `<span class="badge">${open}</span>` : k === "learn" && due ? `<span class="badge">${due}</span>` : "");
+  const unack = vals(st.visitLog).filter((v) => !v.ack).length;
+  const badge = (k) => (k === "memo" && open ? `<span class="badge">${open}</span>` : k === "learn" && due ? `<span class="badge">${due}</span>` : k === "alog" && unack ? `<span class="badge">${unack}</span>` : "");
   $("#nav").innerHTML = NAV.map(
     ([k, l, key, short, icon]) =>
       `<button class="nav ${st.view === k ? "on" : ""}" data-view="${k}"><span class="nlong">${l}${badge(k)}</span><span class="nshort">${IC[icon]}<i>${short}</i>${badge(k)}</span><kbd>${key}</kbd></button>`,
@@ -1523,6 +1524,13 @@ function renderAccessLog() {
     await Promise.all([store.remove("visitLog"), store.remove("loginFailLog"), store.remove("activityLog")]);
     toast("削除しました");
   });
+  // この画面を開いた時点で「確認した」とみなし、ナビの通知バッジを消す
+  const unacked = Object.entries(st.visitLog || {}).filter(([, v]) => !v.ack);
+  if (unacked.length) {
+    const upd = {};
+    unacked.forEach(([id]) => (upd[`${id}/ack`] = true));
+    store.update("visitLog", upd).catch(() => {});
+  }
   const list = Object.entries(st.visitLog || {})
     .map(([id, v]) => ({ id, ...v }))
     .sort((a, b) => (b.at || 0) - (a.at || 0))
