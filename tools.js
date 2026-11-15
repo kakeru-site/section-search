@@ -1,21 +1,21 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261023o";
-import { yomiText } from "./yomi.js?v=20261023o";
-import { sphDocsHtml } from "./sphdocs.js?v=20261023o";
-import { docModel } from "./sphxlsx.js?v=20261023o";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261023o";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023o";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023o";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023o";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023o";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023o";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261023o";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261023o";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023o";
-import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261023o";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023o";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023o";
+import * as S from "./search.js?v=20261023p";
+import { yomiText } from "./yomi.js?v=20261023p";
+import { sphDocsHtml } from "./sphdocs.js?v=20261023p";
+import { docModel } from "./sphxlsx.js?v=20261023p";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261023p";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023p";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023p";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023p";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023p";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023p";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261023p";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261023p";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023p";
+import { readBase, injectSheets, uniqueName, readSource, renameBody, mentionsSheet, addRowBreaks } from "./xlsxinject.js?v=20261023p";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023p";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023p";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -806,7 +806,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261023o")
+    : fetch("pitbulbs.json?v=20261023p")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2500,10 +2500,7 @@ async function xKey(pass, salt) {
 const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(n / 1024)) + "KB");
 function renderXfer() {
   const box = fresh();
-  box.innerHTML = `<div class="panel xf-intro"><h3>ファイル受け渡し</h3>
-    <ol class="co-steps"><li>会社のパソコンで、このサイトを開く → 下の枠にファイルを入れて「預ける」</li><li>自分のパソコンで、このサイトを開く → 一覧から「取り出す」</li></ol>
-    <p class="co-note" style="margin:0">預けたファイルは、あなたのアカウントにだけ保管されます。<b>${XFER_DAYS}日たつと、自動で消えます</b>。1ファイル ${fmtSize(XFER_MAX)} まで。<br><b>会社のファイルを社外に出してよいかは、社内のルールを確認してください。</b>個人情報が入っているファイルは、必ず「パスワード」をかけてください（パスワードは、サイトにも保存されません）。</p></div>
-    <div class="xf-drop" id="xdrop"><div class="xf-dt">ここにファイルをドラッグ、または</div><button class="btn pri" id="xpick">ファイルを選ぶ</button><input type="file" id="xfile" multiple hidden>
+  box.innerHTML = `<div class="xf-drop" id="xdrop"><div class="xf-dt">ここにファイルをドラッグ、または</div><button class="btn pri" id="xpick">ファイルを選ぶ</button><input type="file" id="xfile" multiple hidden>
       <div class="xf-pw"><label>パスワード（任意）</label><input class="inp" id="xpw" type="password" autocomplete="new-password" placeholder="かけると、パスワードを知っている人だけ開けます"></div></div>
     <h3 class="ln-h">預けているファイル</h3><div id="xlist"></div>`;
   const input = $("#xfile", box);
@@ -2731,7 +2728,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023o`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023p`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2838,7 +2835,7 @@ function renderCo() {
       (k) => `<div class="co-card"><div class="co-ct"><b>${esc(k.name)}</b></div><div class="co-d">${esc(k.desc)}</div><small>足されるシート：${esc(k.sheets)}</small>
         <div class="tacts"><button class="btn pri" data-co="base" data-k="${k.id}">会社のExcelに追加</button><button class="btn" data-co="new" data-k="${k.id}" title="見本データ入りの、新しいExcelを作る（試すとき用）">新しいExcelで試す</button></div></div>`,
     ).join("")}</div>
-    <div class="co-card co-copy"><div class="co-ct"><b>Excelのシートを、会社のExcelにコピー</b></div><div class="co-d">自分で作ったExcelのシートを、中の内容・数式・書式ごと、会社のExcelにコピーします（会社のExcelの今の内容には、手を触れません）。</div><small>コピーできるもの：入力済みの内容・数式・色や罫線・列の幅・プルダウン・条件付き書式・画像</small>
+    <div class="co-card co-copy"><div class="co-ct"><b>Excelのシートを、会社のExcelにコピー</b></div>
       <div class="tacts"><button class="btn pri" data-co="copy">Excelのシートをコピー</button></div></div>
     <input type="file" id="fcobase" accept=".xlsx,.xlsm" hidden>`
   let pick = "";
@@ -2864,7 +2861,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261023o")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261023p")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 // ---- 自分で作ったExcelのシートを、会社のExcelにコピー ----
 async function copyExcelFlow() {
@@ -3804,7 +3801,7 @@ function catView(rows, catOf, order, hintOf, cur, cardFn) {
     .join("");
   return chips + secs;
 }
-const APP_VER = "20261023o";
+const APP_VER = "20261023p";
 const INN_OTHER = ["外装・車体の部品", "その他"];
 const innCatOf = (n) => catOfInn(n) || (metaOf(n) ? INN_OTHER[0] : INN_OTHER[1]);
 const innFigs = (g) => (g.meta ? (g.extMeta ? groupFigs(g.meta) : groupFigsInn(g.meta)) : groupFigsInn({ name: g.name }));
