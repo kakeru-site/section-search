@@ -19,7 +19,14 @@
         ".read": "auth != null && auth.uid === 'ここに自分のUIDを貼る'",
         "$id": {
           ".write": "!data.exists() && newData.exists()",
-          ".validate": "newData.hasChildren(['ip', 'at']) && newData.child('ip').isString() && newData.child('ip').val().length <= 45 && newData.child('at').isNumber() && (!newData.hasChild('ua') || (newData.child('ua').isString() && newData.child('ua').val().length <= 200)) && (!newData.hasChild('loc') || (newData.child('loc').isString() && newData.child('loc').val().length <= 120))"
+          ".validate": "newData.hasChildren(['ip', 'at']) && newData.child('ip').isString() && newData.child('ip').val().length <= 45 && newData.child('at').isNumber() && (!newData.hasChild('ua') || (newData.child('ua').isString() && newData.child('ua').val().length <= 200)) && (!newData.hasChild('loc') || (newData.child('loc').isString() && newData.child('loc').val().length <= 120)) && (!newData.hasChild('known') || newData.child('known').isBoolean())"
+        }
+      },
+      "knownDevices": {
+        "$id": {
+          ".read": true,
+          ".write": "auth != null && auth.uid === 'ここに自分のUIDを貼る'",
+          ".validate": "newData.isBoolean() && newData.val() === true"
         }
       }
     }

@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023i";
-import * as S from "./search.js?v=20261023i";
-import * as FID from "./faceid.js?v=20261023i";
-import * as IMG from "./imgtools.js?v=20261023i";
-import * as CAT from "./catalog.js?v=20261023i";
-import * as TOOLS from "./tools.js?v=20261023i";
-import * as LEARN from "./learn.js?v=20261023i";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023j";
+import * as S from "./search.js?v=20261023j";
+import * as FID from "./faceid.js?v=20261023j";
+import * as IMG from "./imgtools.js?v=20261023j";
+import * as CAT from "./catalog.js?v=20261023j";
+import * as TOOLS from "./tools.js?v=20261023j";
+import * as LEARN from "./learn.js?v=20261023j";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -257,14 +257,41 @@ function deviceLabel(ua) {
   const browser = /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /Firefox/.test(ua) ? "Firefox" : /Safari/.test(ua) ? "Safari" : "";
   return browser ? `${os}（${browser}）` : os;
 }
+// この端末だけの、ランダムな目印（IPと違って、端末が同じなら変わらない）
+function deviceId() {
+  try {
+    let id = localStorage.getItem("secsearch.deviceid.v1");
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem("secsearch.deviceid.v1", id);
+    }
+    return id;
+  } catch {
+    return "unknown";
+  }
+}
+// ログインに成功した端末を「知っている端末」として覚える（次回以降、見慣れない端末と区別するため）
+function rememberDevice() {
+  if (DEMO) return;
+  store.set(`knownDevices/${deviceId()}`, true).catch(() => {});
+}
 // ログイン画面に来た人を、ベストエフォートで記録する（失敗してもログイン自体は止めない）
 async function logVisit() {
   if (DEMO) return;
+  const did = deviceId();
+  let known = false;
+  try {
+    known = !!(await store.get(`knownDevices/${did}`));
+  } catch {}
+  const entry = { ip: "不明", at: Date.now(), known, ua: (navigator.userAgent || "").slice(0, 200) };
   try {
     const r = await fetch("https://ipapi.co/json/");
     const j = await r.json();
-    const loc = [j.city, j.region, j.country_name].filter(Boolean).join("、");
-    await store.push("visitLog", { ip: j.ip || "不明", loc, ua: (navigator.userAgent || "").slice(0, 200), at: Date.now() });
+    entry.ip = j.ip || "不明";
+    entry.loc = [j.city, j.region, j.country_name].filter(Boolean).join("、");
+  } catch {}
+  try {
+    await store.push("visitLog", entry);
   } catch {}
 }
 let preCheckOk = false; // ログイン前の確認ボタンを押したか（不正ログイン予防の合図）
@@ -299,6 +326,7 @@ function showLogin() {
       st.pwLogin = true;
       if (!preCheckOk) st.loginWarn = "この回のログインでは、右下の確認ボタンが押されていません。心当たりがなければ、パスワードの変更をおすすめします。";
       await store.login(f.email.value.trim(), f.pw.value);
+      rememberDevice();
     } catch (err) {
       st.pwLogin = false;
       st.loginWarn = null;
@@ -1459,7 +1487,7 @@ function renderAccessLog() {
   const main = $("#main");
   main.innerHTML = `<div class="view-head"><div><h1 class="h1">アクセスログ</h1><div class="tip">ログイン画面に来た人を記録（IPアドレス・時刻・端末・だいたいの場所）</div></div>
     <button class="btn danger sm" id="alclear">すべて削除</button></div>
-    <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。</p>
+    <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。<br>「⚠ 見慣れない端末」は、一度もログインに成功したことがない端末からのアクセスです（ログインに成功すると、その端末は自動で「知っている端末」になります）。</p>
     <div id="allist"></div>`;
   $("#alclear").addEventListener("click", async () => {
     if (!(await confirmBox("アクセスログをすべて削除します。元に戻せません。", "すべて削除", true))) return;
@@ -1473,7 +1501,7 @@ function renderAccessLog() {
   $("#allist").innerHTML =
     list
       .map(
-        (v) => `<div class="xf-row"><div class="xf-main"><b>${esc(v.ip || "不明")}</b><small>${new Date(v.at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}　${esc(deviceLabel(v.ua))}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
+        (v) => `<div class="xf-row"${v.known ? "" : ' style="border-color:var(--ng);border-width:2px"'}><div class="xf-main">${v.known ? "" : '<span style="color:var(--ng);font-weight:700">⚠ 見慣れない端末　</span>'}<b>${esc(v.ip || "不明")}</b><small>${new Date(v.at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}　${esc(deviceLabel(v.ua))}${v.loc ? "　" + esc(v.loc) : ""}</small></div>
       <div class="xf-acts"><button class="btn sm" data-aldel="${esc(v.id)}">削除</button></div></div>`,
       )
       .join("") || '<p class="empty">まだ記録がありません</p>';
