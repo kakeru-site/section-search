@@ -36,8 +36,11 @@ GitHub Pages（画面）＋ Firebase（ログインとデータ）で動きま�
 
 1. GitHubで新しいリポジトリを作る（例：`section-search`）
 2. このフォルダの中身（`index.html` `css/` `js/` など）をアップロード
-3. **Settings → Pages** で「Deploy from a branch」→ `main` / `(root)` → Save
-4. 数分後に `https://ユーザー名.github.io/section-search/` で開けるようになる
+3. **Settings → Pages** の「Source」で「GitHub Actions」を選ぶ（「Deploy from a branch」ではありません）
+4. `main` へプッシュすると、`.github/workflows/deploy.yml` が自動でビルド（`.js` を難読化）して公開する
+5. 数分後に `https://ユーザー名.github.io/section-search/` で開けるようになる
+
+※ `.js` の中身は、リポジトリの中では今まで通り普通に読める状態のままです。難読化されるのは、公開（ビルド）されたサイトの方だけです。手元でビルドを試すには `npm install && npm run build` → `dist/` の中身ができます。
 
 ### 3. Firebaseにドメインを許可
 

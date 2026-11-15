@@ -1,0 +1,12 @@
+{
+  "name": "section-search-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "公開用（GitHub Pages）のビルドだけに使う。アプリ自体はビルド不要の素のJSで動く",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "5.10.1"
+  }
+}
