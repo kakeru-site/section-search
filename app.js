@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023m";
-import * as S from "./search.js?v=20261023m";
-import * as FID from "./faceid.js?v=20261023m";
-import * as IMG from "./imgtools.js?v=20261023m";
-import * as CAT from "./catalog.js?v=20261023m";
-import * as TOOLS from "./tools.js?v=20261023m";
-import * as LEARN from "./learn.js?v=20261023m";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023n";
+import * as S from "./search.js?v=20261023n";
+import * as FID from "./faceid.js?v=20261023n";
+import * as IMG from "./imgtools.js?v=20261023n";
+import * as CAT from "./catalog.js?v=20261023n";
+import * as TOOLS from "./tools.js?v=20261023n";
+import * as LEARN from "./learn.js?v=20261023n";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -296,6 +296,7 @@ async function logVisit() {
     known = !!(await store.get(`knownDevices/${did}`));
   } catch {}
   currentDeviceKnown = known;
+  if (known) return; // 知っている端末（登録済み）は、そもそも記録しない
   const { ip, loc } = await getIpInfo();
   const entry = { ip, loc, at: Date.now(), known, did, ua: (navigator.userAgent || "").slice(0, 200) };
   try {
@@ -1511,9 +1512,9 @@ async function openMemoForKata(code) {
 const fmtWhen2 = (at) => new Date(at).toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 function renderAccessLog() {
   const main = $("#main");
-  main.innerHTML = `<div class="view-head"><div><h1 class="h1">アクセスログ</h1><div class="tip">ログイン画面に来た人を記録（IPアドレス・時刻・端末・だいたいの場所）</div></div>
+  main.innerHTML = `<div class="view-head"><div><h1 class="h1">アクセスログ</h1><div class="tip">見慣れない端末（未登録の端末）のアクセスだけを記録（IPアドレス・時刻・端末・だいたいの場所）</div></div>
     <button class="btn danger sm" id="alclear">すべて削除</button></div>
-    <p class="co-note" style="margin:0 0 12px">IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。<br>「⚠ 見慣れない端末」は、まだ「この端末を登録する」をしていない端末です（ログインに成功しただけでは、自動では「知っている端末」になりません。手動で登録してください）。</p>
+    <p class="co-note" style="margin:0 0 12px">「この端末を登録する」で登録済みの端末からのアクセスは、そもそも記録されません（ご自身の普段使いの端末を登録しておけば、その端末の利用履歴は一切残りません）。IPアドレスや場所は、回線や端末の設定で変わったり、実際の場所とズレたりします。あくまで参考情報です。</p>
     <div id="allist"></div>
     <h3 class="ln-h">ログイン失敗の記録</h3><div class="co-note" style="margin:0 0 12px">入力されたメールアドレスだけを記録します（パスワードの中身は記録しません）。</div><div id="alfail"></div>
     <h3 class="ln-h">見慣れない端末の操作履歴</h3><div class="co-note" style="margin:0 0 12px">見慣れない端末が、どの画面を開いたか。知っている端末の操作は記録されません。</div><div id="alact"></div>`;
