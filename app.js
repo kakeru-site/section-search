@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023f";
-import * as S from "./search.js?v=20261023f";
-import * as FID from "./faceid.js?v=20261023f";
-import * as IMG from "./imgtools.js?v=20261023f";
-import * as CAT from "./catalog.js?v=20261023f";
-import * as TOOLS from "./tools.js?v=20261023f";
-import * as LEARN from "./learn.js?v=20261023f";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023g";
+import * as S from "./search.js?v=20261023g";
+import * as FID from "./faceid.js?v=20261023g";
+import * as IMG from "./imgtools.js?v=20261023g";
+import * as CAT from "./catalog.js?v=20261023g";
+import * as TOOLS from "./tools.js?v=20261023g";
+import * as LEARN from "./learn.js?v=20261023g";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -307,6 +307,7 @@ function showLock() {
       await FID.verify();
       st.locked = false;
       l.innerHTML = "";
+      startData(); // ロック中に空にしたデータを、もう一度読み直す
       route();
       toast("ロックを解除しました");
     } catch (e) {
@@ -324,8 +325,15 @@ function showLock() {
   });
   setTimeout(() => $("#unlock")?.focus(), 30);
 }
+// ロック中、DevToolsなどで中身を見られないよう、手元のメモリからも実際にデータを消しておく
+// （保存先はFirebase側のまま。解除したら、startData()でもう一度読み直すだけ）
+const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs"];
 function lockNow() {
   if (!FID.registered() || !st.user || st.locked) return;
+  document.activeElement?.blur(); // 入力中のものを、消す前に保存させる（blurで各エディタのdebounce保存を走らせる）
+  teardown(); // 購読を止めて、画面の中身も空にする
+  for (const k of LOCK_CLEAR_KEYS) st[k] = {};
+  st.partList = [];
   st.locked = true;
   route();
 }
