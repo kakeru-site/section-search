@@ -1,21 +1,22 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261023s";
-import { yomiText } from "./yomi.js?v=20261023s";
-import { sphDocsHtml } from "./sphdocs.js?v=20261023s";
-import { docModel } from "./sphxlsx.js?v=20261023s";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261023s";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023s";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023s";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023s";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023s";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023s";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261023s";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261023s";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023s";
-import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023s";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023s";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023s";
+import * as S from "./search.js?v=20261023t";
+import { yomiText } from "./yomi.js?v=20261023t";
+import { sphDocsHtml } from "./sphdocs.js?v=20261023t";
+import { PIT_TOC, pitDocsBody } from "./pitdocs.js?v=20261023t";
+import { docModel } from "./sphxlsx.js?v=20261023t";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261023t";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023t";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023t";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023t";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023t";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023t";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261023t";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261023t";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023t";
+import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023t";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023t";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023t";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -174,6 +175,7 @@ const TABS = [
   ["ext", "外装検索"],
   ["inn", "部品検索(内装・機関)"],
   ["pit", "エレメント互換表"],
+  ["batt", "PITWORKバッテリー"],
   ["co", "会社Excelへ"],
   ["xfer", "たまご"],
   ["text", "テキストコピペ"],
@@ -190,7 +192,7 @@ export function render(main) {
       render(main);
     }),
   );
-  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, co: renderCo, xfer: renderXfer, text: renderText })[T.tab]();
+  ({ sale: renderSale, cost: renderCost, pad: renderPad, bulb: renderBulb, oil: renderOil, sph: renderSph, ext: renderExt, inn: renderInn, pit: renderPit, batt: renderBatt, co: renderCo, xfer: renderXfer, text: renderText })[T.tab]();
 }
 // 描き直すたびにリスナーが重ならないよう、入れ物ごと作り直す
 function fresh() {
@@ -214,6 +216,7 @@ export function onData(key) {
   if (T.tab === "inn" && (key === "inners" || key === "innGroups") && $("#exbody")) renderInnBody();
   if (T.tab === "pad" && key === "settings" && $("#padres") && !document.activeElement?.dataset?.pk)
     renderPad();
+  if (T.tab === "batt" && key === "pitDoc" && !battEditing) renderBatt();
 }
 
 // 表の共通：Enterで下へ、矢印で上下、Excelの貼り付けを下に流す
@@ -806,7 +809,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261023s")
+    : fetch("pitbulbs.json?v=20261023t")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2728,7 +2731,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023s`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023t`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2815,6 +2818,63 @@ function renderPitList() {
       .join("") || `<p class="empty">${nq ? "該当なし（品番を短くして試してください）" : "該当なし"}</p>`) +
     (hits.length > shown.length ? `<button class="btn more-btn" data-pmore="1">さらに表示（残り ${hits.length - shown.length}件）</button>` : "");
 }
+// ---- PITWORKバッテリー：補足資料（サイト上で編集できる） ----
+let battEditing = false;
+function battBody() {
+  const custom = C.st.pitDoc?.html;
+  return typeof custom === "string" && custom.trim() ? custom : pitDocsBody();
+}
+function renderBatt() {
+  const box = fresh();
+  if (battEditing) {
+    box.innerHTML = `<div id="sdoc" class="sdoc">
+      <div class="sd-head"><div><h2>PITWORKバッテリー 補足資料</h2><div class="sd-sub">編集中：文章の中をクリックして書きかえられます（表の行や太字などの飾りは崩れることがあります）</div></div>
+        <div class="tacts"><button class="btn pri" data-pdsave="1">保存する</button><button class="btn" data-pdcancel="1">やめる</button><button class="btn danger" data-pdreset="1">元の内容に戻す</button></div></div>
+      <div id="pd-body" class="pd-editing" contenteditable="true">${battBody()}</div></div>`;
+    box.addEventListener("click", async (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      const d = b.dataset;
+      if (d.pdsave) {
+        const html = $("#pd-body", box).innerHTML;
+        await C.store.set("pitDoc", { html, updatedAt: Date.now() });
+        battEditing = false;
+        C.toast("保存しました");
+        renderBatt();
+      } else if (d.pdcancel) {
+        battEditing = false;
+        renderBatt();
+      } else if (d.pdreset) {
+        if (!confirm("編集した内容を消して、もとの内容に戻しますか？")) return;
+        await C.store.remove("pitDoc");
+        battEditing = false;
+        renderBatt();
+      }
+    });
+    return;
+  }
+  box.innerHTML = `<div id="sdoc" class="sdoc">
+    <div class="sd-head"><div><h2>PITWORKバッテリー 補足資料</h2><div class="sd-sub">お客さんに聞かれたときの説明用（カタログの内容をまとめています）</div></div>
+      <div class="tacts"><button class="btn" data-sdprint="1">印刷する</button><button class="btn" data-pdedit="1">編集する</button></div></div>
+    <nav class="sd-toc">${PIT_TOC.map(([id, t]) => `<button class="chip" data-sdgo="${id}">${t}</button>`).join("")}</nav>
+    <div id="pd-body">${battBody()}</div></div>`;
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+    if (d.sdgo) $(`#sd-${d.sdgo}`, box)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else if (d.sdprint) {
+      document.body.classList.add("print-sdoc");
+      const off = () => (document.body.classList.remove("print-sdoc"), removeEventListener("afterprint", off));
+      addEventListener("afterprint", off);
+      print();
+    } else if (d.pdedit) {
+      battEditing = true;
+      renderBatt();
+    }
+  });
+}
+
 // ---- 会社Excelへ：ユーザーコード検索・部品番号検索の、Excelを作る（サイトには、データを載せない） ----
 const CO_KINDS = [
   { id: "user", kinds: ["user"], name: "ユーザーコード検索", desc: "名前・電話番号・コード・特記で、ユーザーコード・担当・特記を探す。電話の折り返し、問い合わせ、売り上げの時に。", sheets: "ユーザー検索・ユーザーデータ" },
@@ -2856,7 +2916,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261023s")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261023t")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {

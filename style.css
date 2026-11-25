@@ -3427,6 +3427,12 @@ img.blur {
   content: "A. ";
   font-weight: 800;
 }
+.pd-editing {
+  outline: 2px dashed var(--ac);
+  outline-offset: 4px;
+  border-radius: var(--r);
+  cursor: text;
+}
 @media print {
   body.print-sdoc * {
     visibility: hidden !important;
@@ -3444,6 +3450,7 @@ img.blur {
     color: #000;
   }
   body.print-sdoc .sd-toc,
+  body.print-sdoc .sd-head .tacts,
   body.print-sdoc [data-sdprint] {
     display: none !important;
   }

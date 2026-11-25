@@ -103,4 +103,5 @@ sectionApp/
   knownDevices/{端末の目印}  true（ログインに成功したことがある端末。ログイン前でも読める特別な場所）
   loginFailLog/{id}  email, at, ip, loc, ua, did（ログイン失敗の記録。パスワードの中身は記録しない。ログイン前でも書き込める特別な場所）
   activityLog/{id}   did, view, at（見慣れない端末が、どの画面を開いたかの記録。ログイン済みのみ）
+  pitDoc/         html, updatedAt（ツール「PITWORKバッテリー」の補足資料。サイト上で編集すると、ここに保存される）
 ```

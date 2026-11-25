@@ -1,11 +1,11 @@
 // 店頭業務ツール main
-import { createStore, DEMO, localKey } from "./store.js?v=20261023s";
-import * as S from "./search.js?v=20261023s";
-import * as FID from "./faceid.js?v=20261023s";
-import * as IMG from "./imgtools.js?v=20261023s";
-import * as CAT from "./catalog.js?v=20261023s";
-import * as TOOLS from "./tools.js?v=20261023s";
-import * as LEARN from "./learn.js?v=20261023s";
+import { createStore, DEMO, localKey } from "./store.js?v=20261023t";
+import * as S from "./search.js?v=20261023t";
+import * as FID from "./faceid.js?v=20261023t";
+import * as IMG from "./imgtools.js?v=20261023t";
+import * as CAT from "./catalog.js?v=20261023t";
+import * as TOOLS from "./tools.js?v=20261023t";
+import * as LEARN from "./learn.js?v=20261023t";
 
 // ---- utils ----
 const $ = (s, r = document) => r.querySelector(s);
@@ -85,6 +85,7 @@ const st = {
   memos: {},
   oils: {},
   spheres: {},
+  pitDoc: {},
   exteriors: {},
   extGroups: {},
   inners: {},
@@ -405,7 +406,7 @@ function showLock() {
 }
 // ロック中、DevToolsなどで中身を見られないよう、手元のメモリからも実際にデータを消しておく
 // （保存先はFirebase側のまま。解除したら、startData()でもう一度読み直すだけ）
-const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs", "visitLog", "loginFailLog", "activityLog"];
+const LOCK_CLEAR_KEYS = ["parts", "kata", "memos", "learn", "xferMeta", "textXferMeta", "learnLog", "oils", "spheres", "exteriors", "extGroups", "inners", "innGroups", "history", "settings", "stats", "images", "bulbs", "visitLog", "loginFailLog", "activityLog", "pitDoc"];
 function lockNow() {
   if (!FID.registered() || !st.user || st.locked) return;
   document.activeElement?.blur(); // 入力中のものを、消す前に保存させる（blurで各エディタのdebounce保存を走らせる）
@@ -469,6 +470,7 @@ function startData() {
   sub("stats", "stats");
   sub("images", "images");
   sub("bulbs", "bulbs");
+  sub("pitDoc", "pitDoc");
   // 品番辞書は版数だけ見張って、変わったら取り直す
   unsubs.push(
     store.sub(
