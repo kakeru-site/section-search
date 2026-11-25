@@ -1,22 +1,22 @@
 // 店頭ツール：売価計算・原価計算・パッドローター・バルブ検索・オイル／ケミカル検索
 // 計算は全部整数でやる（Excelの小数のずれを出さないため）
-import * as S from "./search.js?v=20261023t";
-import { yomiText } from "./yomi.js?v=20261023t";
-import { sphDocsHtml } from "./sphdocs.js?v=20261023t";
-import { PIT_TOC, pitDocsBody } from "./pitdocs.js?v=20261023t";
-import { docModel } from "./sphxlsx.js?v=20261023t";
-import { quickModel, quickHtml } from "./sphquick.js?v=20261023t";
-import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023t";
-import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023t";
-import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023t";
-import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023t";
-import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023t";
-import { buildPitWorkbook } from "./pitxlsx.js?v=20261023t";
-import { buildPartWorkbook } from "./partxlsx.js?v=20261023t";
-import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023t";
-import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023t";
-import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023t";
-import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023t";
+import * as S from "./search.js?v=20261023u";
+import { yomiText } from "./yomi.js?v=20261023u";
+import { sphDocsHtml } from "./sphdocs.js?v=20261023u";
+import { PIT_TOC, pitDocsBody } from "./pitdocs.js?v=20261023u";
+import { docModel } from "./sphxlsx.js?v=20261023u";
+import { quickModel, quickHtml } from "./sphquick.js?v=20261023u";
+import { bulbGuideHtml, bulbGuideModel, guideFigs } from "./bulbdocs.js?v=20261023u";
+import { EXT_GROUPS, SMALL_RE, AREAS, AREA_HINTS, metaOf, groupFigs, carFront } from "./extdocs.js?v=20261023u";
+import { INN_GROUPS, INN_CATS, catOfInn, catIndexInn, metaOfInn, groupFigsInn } from "./inndocs.js?v=20261023u";
+import { buildOilWorkbook, KINDS } from "./oilxlsx.js?v=20261023u";
+import { buildLookupWorkbook } from "./lookupxlsx.js?v=20261023u";
+import { buildPitWorkbook } from "./pitxlsx.js?v=20261023u";
+import { buildPartWorkbook } from "./partxlsx.js?v=20261023u";
+import { buildCalcWorkbook } from "./calcxlsx.js?v=20261023u";
+import { readBase, injectSheets, uniqueName, addRowBreaks } from "./xlsxinject.js?v=20261023u";
+import { buildLabelWorkbook } from "./labelxlsx.js?v=20261023u";
+import { buildAtenaWorkbook, atenaBatchBreakRows } from "./atenaxlsx.js?v=20261023u";
 
 let C = null; // app.js から道具を受け取る
 export function setup(ctx) {
@@ -175,7 +175,7 @@ const TABS = [
   ["ext", "外装検索"],
   ["inn", "部品検索(内装・機関)"],
   ["pit", "エレメント互換表"],
-  ["batt", "PITWORKバッテリー"],
+  ["batt", "バッテリー資料"],
   ["co", "会社Excelへ"],
   ["xfer", "たまご"],
   ["text", "テキストコピペ"],
@@ -809,7 +809,7 @@ let bulbAll = null;
 const loadPitBulbs = () =>
   pitBulbs
     ? Promise.resolve(pitBulbs)
-    : fetch("pitbulbs.json?v=20261023t")
+    : fetch("pitbulbs.json?v=20261023u")
         .then((r) => r.json())
         .then((j) => ((bulbAll = null), (pitBulbs = j)))
         .catch(() => ((bulbAll = null), (pitBulbs = [])));
@@ -2731,7 +2731,7 @@ let pitData = null;
 const loadPit = () =>
   pitData
     ? Promise.resolve(pitData)
-    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023t`).then((r) => r.json())))
+    : Promise.all(["pitelements.json", "pitpages.json"].map((f) => fetch(`${f}?v=20261023u`).then((r) => r.json())))
         .then(([rows, pages]) => {
           const M = ["日産", "トヨタ", "ダイハツ", "三菱", "スズキ", "マツダ", "ホンダ", "スバル", "いすゞ", "日野/UD", "東洋エレメント", "日東工業"];
           const clean = (x) => x.replace(/\((※\d|日野|UD)\)/g, "").trim();
@@ -2828,7 +2828,7 @@ function renderBatt() {
   const box = fresh();
   if (battEditing) {
     box.innerHTML = `<div id="sdoc" class="sdoc">
-      <div class="sd-head"><div><h2>PITWORKバッテリー 補足資料</h2><div class="sd-sub">編集中：文章の中をクリックして書きかえられます（表の行や太字などの飾りは崩れることがあります）</div></div>
+      <div class="sd-head"><div><h2>バッテリー 補足資料（PITWORK・Vシリーズ）</h2><div class="sd-sub">編集中：文章の中をクリックして書きかえられます（表の行や太字などの飾りは崩れることがあります）</div></div>
         <div class="tacts"><button class="btn pri" data-pdsave="1">保存する</button><button class="btn" data-pdcancel="1">やめる</button><button class="btn danger" data-pdreset="1">元の内容に戻す</button></div></div>
       <div id="pd-body" class="pd-editing" contenteditable="true">${battBody()}</div></div>`;
     box.addEventListener("click", async (e) => {
@@ -2854,7 +2854,7 @@ function renderBatt() {
     return;
   }
   box.innerHTML = `<div id="sdoc" class="sdoc">
-    <div class="sd-head"><div><h2>PITWORKバッテリー 補足資料</h2><div class="sd-sub">お客さんに聞かれたときの説明用（カタログの内容をまとめています）</div></div>
+    <div class="sd-head"><div><h2>バッテリー 補足資料（PITWORK・Vシリーズ）</h2><div class="sd-sub">お客さんに聞かれたときの説明用（カタログの内容をまとめています）</div></div>
       <div class="tacts"><button class="btn" data-sdprint="1">印刷する</button><button class="btn" data-pdedit="1">編集する</button></div></div>
     <nav class="sd-toc">${PIT_TOC.map(([id, t]) => `<button class="chip" data-sdgo="${id}">${t}</button>`).join("")}</nav>
     <div id="pd-body">${battBody()}</div></div>`;
@@ -2916,7 +2916,7 @@ function renderCo() {
     if (k) exportLookupIntoBase(k, e.target.files[0]).finally(() => (e.target.value = ""));
   });
 }
-const pitRows = async () => (await fetch("pitelements.json?v=20261023t")).json();
+const pitRows = async () => (await fetch("pitelements.json?v=20261023u")).json();
 const buildCo = async (X, k, o) => (k.pit ? buildPitWorkbook(X, { ...o, rows: await pitRows() }) : k.label ? buildLabelWorkbook(X, o) : k.atena ? buildAtenaWorkbook(X, o) : buildLookupWorkbook(X, { ...o, kinds: k.kinds }));
 async function exportLookupXlsx(k) {
   try {
